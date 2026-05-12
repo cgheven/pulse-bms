@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Pulse BMS — Senior-friendly high-contrast light palette ──────── */
+    --background:    0 0% 100%;       /* #FFFFFF */
+    --foreground:    220 30% 12%;     /* near-black for max contrast */
+
+    --card:          0 0% 100%;
+    --card-foreground: 220 30% 12%;
+
+    --popover:       0 0% 100%;
+    --popover-foreground: 220 30% 12%;
+
+    --primary:       220 85% 38%;     /* deep blue — trust + readable */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:     220 14% 96%;
+    --secondary-foreground: 220 30% 12%;
+
+    --muted:         220 14% 96%;
+    --muted-foreground: 220 15% 40%;
+
+    --accent:        220 14% 94%;
+    --accent-foreground: 220 30% 12%;
+
+    --destructive:   0 75% 45%;       /* darker red — readable on white */
+    --destructive-foreground: 0 0% 100%;
+
+    --success:       151 70% 32%;     /* deeper green */
+    --warning:       38 95% 45%;      /* amber */
+    --info:          200 90% 40%;     /* sky */
+
+    --border:        220 14% 88%;
+    --input:         220 14% 88%;
+    --ring:          220 85% 38%;
+
+    --radius: 0.75rem;
+
+    --sidebar:       220 30% 98%;
+    --sidebar-foreground: 220 30% 12%;
+    --sidebar-border: 220 14% 88%;
+    --sidebar-accent: 220 85% 38%;
+    --sidebar-accent-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { color-scheme: light; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    /* Senior-friendly base font size — 18px instead of 16px */
+    font-size: 18px;
+    line-height: 1.55;
+  }
+  /* Bigger headings, generous spacing */
+  h1 { @apply text-4xl font-bold tracking-tight; }
+  h2 { @apply text-3xl font-semibold; }
+  h3 { @apply text-2xl font-semibold; }
+  /* Forms — taller inputs by default */
+  input, select, textarea, button { font-size: 1rem; }
+}
+
+@layer utilities {
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  /* Big action button — primary CTAs use this */
+  .btn-big {
+    @apply h-14 px-8 text-lg font-semibold rounded-xl shadow-sm transition-all;
+  }
+  .btn-big:active { transform: scale(0.98); }
+
+  /* Status pills */
+  .status-paid      { @apply bg-[hsl(151_70%_32%/0.12)] text-[hsl(151_70%_28%)] border border-[hsl(151_70%_32%/0.25)]; }
+  .status-pending   { @apply bg-[hsl(38_95%_45%/0.12)] text-[hsl(38_95%_35%)] border border-[hsl(38_95%_45%/0.25)]; }
+  .status-overdue   { @apply bg-[hsl(0_75%_45%/0.12)] text-[hsl(0_75%_40%)] border border-[hsl(0_75%_45%/0.25)]; }
+  .status-defaulter { @apply bg-[hsl(0_75%_45%/0.15)] text-[hsl(0_75%_40%)] border border-[hsl(0_75%_45%/0.3)] font-semibold; }
+  .status-info      { @apply bg-[hsl(200_90%_40%/0.12)] text-[hsl(200_90%_35%)] border border-[hsl(200_90%_40%/0.25)]; }
+
+  .card-soft {
+    @apply rounded-xl border border-border bg-card p-6 shadow-sm;
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes fade-up {
+    0%   { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@media print {
+  body * { visibility: hidden !important; }
+  #print-area, #print-area * { visibility: visible !important; }
+  #print-area { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; padding: 1.5cm !important; }
+  .no-print { display: none !important; }
+  @page { margin: 0; size: A4; }
+}

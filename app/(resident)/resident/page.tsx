@@ -1,0 +1,274 @@
+import Link from "next/link";
+import { requireRole } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { formatCurrency, formatDate, formatLakh } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { StatusPill } from "@/components/resident/status-pill";
+import {
+  ArrowRight,
+  CreditCard,
+  FileText,
+  MessageSquare,
+  Home as HomeIcon,
+  PiggyBank,
+  Megaphone,
+} from "lucide-react";
+
+export default async function ResidentHomePage() {
+  const { profile } = await requireRole("resident");
+  const supabase = await createClient();
+
+  const firstName = (profile.full_name ?? profile.email ?? "Resident").split(/\s+/)[0];
+
+  // building
+  let building: {
+    id: string;
+    name: string;
+    fund_balance: number | null;
+    address: string | null;
+    city: string | null;
+  } | null = null;
+  if (profile.building_id) {
+    const { data } = await supabase
+      .from("bms_buildings")
+      .select("id, name, fund_balance, address, city")
+      .eq("id", profile.building_id)
+      .maybeSingle();
+    building = data ?? null;
+  }
+
+  // resident's flats
+  const { data: residentRows } = await supabase
+    .from("bms_residents")
+    .select("id, flat_id, is_primary, relationship, bms_flats(id, flat_number, ownership_type, outstanding_dues, monthly_fee, floor, block)")
+    .eq("profile_id", profile.id)
+    .eq("is_active", true)
+    .order("is_primary", { ascending: false });
+
+  type FlatRow = {
+    id: string;
+    flat_number: string;
+    ownership_type: "owner" | "tenant" | "vacant" | null;
+    outstanding_dues: number | null;
+    monthly_fee: number | null;
+    floor: number | null;
+    block: string | null;
+  };
+  type ResidentRow = {
+    id: string;
+    flat_id: string;
+    is_primary: boolean | null;
+    relationship: string | null;
+    bms_flats: FlatRow | FlatRow[] | null;
+  };
+  const rows = (residentRows ?? []) as unknown as ResidentRow[];
+  const flats: FlatRow[] = rows
+    .map((r) => (Array.isArray(r.bms_flats) ? r.bms_flats[0] : r.bms_flats))
+    .filter((f): f is FlatRow => !!f);
+  const primaryFlat = flats[0] ?? null;
+
+  // current month's invoice for primary flat
+  const today = new Date();
+  const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+  let currentInvoice: {
+    id: string;
+    billing_month: string;
+    amount: number;
+    status: string | null;
+    due_date: string | null;
+    invoice_number: string;
+  } | null = null;
+  if (primaryFlat) {
+    const { data } = await supabase
+      .from("bms_invoices")
+      .select("id, billing_month, amount, status, due_date, invoice_number")
+      .eq("flat_id", primaryFlat.id)
+      .eq("billing_month", monthStart)
+      .maybeSingle();
+    currentInvoice = data ?? null;
+  }
+
+  // recent notices (last 3)
+  const { data: notices } = profile.building_id
+    ? await supabase
+        .from("bms_notices")
+        .select("id, title, notice_type, pinned, created_at, body")
+        .eq("building_id", profile.building_id)
+        .order("pinned", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(3)
+    : { data: [] as { id: string; title: string; notice_type: string | null; pinned: boolean | null; created_at: string; body: string }[] };
+
+  const totalOutstanding = flats.reduce((s, f) => s + (Number(f.outstanding_dues) || 0), 0);
+
+  return (
+    <div className="space-y-8 animate-fade-up">
+      {/* Greeting */}
+      <div>
+        <h1 className="text-4xl font-bold">Hello, {firstName}</h1>
+        <p className="text-lg text-muted-foreground mt-2">
+          Welcome to your building portal{building ? ` — ${building.name}` : ""}.
+        </p>
+      </div>
+
+      {/* Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* My Flat */}
+        <div className="card-soft">
+          <div className="flex items-center gap-2 text-muted-foreground text-base mb-3">
+            <HomeIcon className="w-5 h-5" />
+            <span>My Flat</span>
+          </div>
+          {primaryFlat ? (
+            <>
+              <div className="text-3xl font-bold">Flat {primaryFlat.flat_number}</div>
+              <div className="text-base text-muted-foreground mt-1 capitalize">
+                {primaryFlat.ownership_type ?? "—"}
+                {primaryFlat.floor != null ? ` · Floor ${primaryFlat.floor}` : ""}
+                {primaryFlat.block ? ` · Block ${primaryFlat.block}` : ""}
+              </div>
+              <div className="mt-5 border-t pt-4">
+                <div className="text-sm text-muted-foreground">Outstanding Dues</div>
+                <div
+                  className={`text-4xl font-extrabold mt-1 ${
+                    totalOutstanding > 0 ? "text-destructive" : "text-[hsl(151_70%_28%)]"
+                  }`}
+                >
+                  {formatCurrency(totalOutstanding)}
+                </div>
+                {flats.length > 1 && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Across {flats.length} flats
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="text-base text-muted-foreground">No flat linked yet. Please contact admin.</div>
+          )}
+        </div>
+
+        {/* This Month's Bill */}
+        <div className="card-soft">
+          <div className="flex items-center gap-2 text-muted-foreground text-base mb-3">
+            <FileText className="w-5 h-5" />
+            <span>This Month&apos;s Bill</span>
+          </div>
+          {currentInvoice ? (
+            <>
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="text-4xl font-extrabold">{formatCurrency(Number(currentInvoice.amount))}</div>
+                <StatusPill status={currentInvoice.status} />
+              </div>
+              <div className="text-base text-muted-foreground mt-2">
+                {formatDate(currentInvoice.billing_month)}
+                {currentInvoice.due_date ? ` · Due ${formatDate(currentInvoice.due_date)}` : ""}
+              </div>
+              <Link href="/resident/dues" className="inline-block mt-5">
+                <Button variant="outline" className="btn-big">
+                  View Bill <ArrowRight className="w-5 h-5" />
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <div className="text-base text-muted-foreground">
+              No bill generated for {formatDate(monthStart)} yet.
+            </div>
+          )}
+        </div>
+
+        {/* Recent Notices */}
+        <div className="card-soft">
+          <div className="flex items-center gap-2 text-muted-foreground text-base mb-3">
+            <Megaphone className="w-5 h-5" />
+            <span>Recent Notices</span>
+          </div>
+          {notices && notices.length > 0 ? (
+            <ul className="space-y-3">
+              {notices.map((n) => (
+                <li key={n.id} className="border-b last:border-b-0 pb-2 last:pb-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-semibold text-lg">{n.title}</div>
+                    {n.pinned && (
+                      <span className="text-xs status-info px-2 py-0.5 rounded-full">Pinned</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{formatDate(n.created_at)}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-base text-muted-foreground">No notices yet.</div>
+          )}
+          <Link href="/resident/notices" className="inline-block mt-4 text-primary font-semibold text-base">
+            See all notices →
+          </Link>
+        </div>
+
+        {/* Building Fund Balance */}
+        <div className="card-soft">
+          <div className="flex items-center gap-2 text-muted-foreground text-base mb-3">
+            <PiggyBank className="w-5 h-5" />
+            <span>Building Fund Balance</span>
+          </div>
+          <div className="text-5xl font-extrabold text-[hsl(151_70%_28%)]">
+            {formatLakh(Number(building?.fund_balance ?? 0))}
+          </div>
+          <div className="text-base text-muted-foreground mt-2">
+            Total money in the building&apos;s common account.
+          </div>
+          <Link href="/resident/transparency" className="inline-block mt-4 text-primary font-semibold text-base">
+            See where money goes →
+          </Link>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Link href="#pay-now" scroll className="block">
+          <Button className="btn-big w-full">
+            <CreditCard className="w-5 h-5" />
+            Pay Now
+          </Button>
+        </Link>
+        <Link href="/resident/dues" className="block">
+          <Button variant="outline" className="btn-big w-full">
+            <FileText className="w-5 h-5" />
+            View My Dues
+          </Button>
+        </Link>
+        <Link href="/resident/complaints" className="block">
+          <Button variant="outline" className="btn-big w-full">
+            <MessageSquare className="w-5 h-5" />
+            Raise Complaint
+          </Button>
+        </Link>
+      </div>
+
+      {/* Pay Now Card / Instructions */}
+      <div id="pay-now" className="card-soft scroll-mt-24">
+        <h2 className="text-2xl font-semibold">How to Pay</h2>
+        <p className="text-base text-muted-foreground mt-1">
+          Online payment is coming soon. For now, please pay using one of the methods below
+          and share the reference number with the admin.
+        </p>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="rounded-xl border p-4 bg-secondary/50">
+            <div className="text-sm text-muted-foreground">Bank Transfer</div>
+            <div className="text-lg font-semibold mt-1">{building?.name ?? "Building"} Welfare Account</div>
+            <div className="text-base text-muted-foreground mt-1">
+              Please contact admin for current bank details and IBAN.
+            </div>
+          </div>
+          <div className="rounded-xl border p-4 bg-secondary/50">
+            <div className="text-sm text-muted-foreground">Cash / Cheque</div>
+            <div className="text-lg font-semibold mt-1">Hand over to Admin Office</div>
+            <div className="text-base text-muted-foreground mt-1">
+              Always collect a receipt — you can also download receipts from the Payments page.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
