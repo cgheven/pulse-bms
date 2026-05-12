@@ -122,11 +122,11 @@ export default async function BuildingDetailPage({
               value={`${building.utility_cutoff_after_months ?? 3} months unpaid`}
             />
             <Row
-              label="Entry Fee (Owner)"
+              label="Entry Fee for Flat Purchase"
               value={formatCurrency(Number(building.entry_fee_owner ?? 0))}
             />
             <Row
-              label="Entry Fee (Tenant)"
+              label="Entry Fee for Rent"
               value={formatCurrency(Number(building.entry_fee_tenant ?? 0))}
             />
             <Row

@@ -261,13 +261,23 @@ export async function executeProposal(id: string) {
 
   let linked_expense_id: string | null = null;
 
-  // If expense type and amount is set, create an expense row.
-  if (prop.proposal_type === "expense" && prop.amount) {
+  // Map proposal_type → bms_expenses.category (CHECK: utilities|repairs|salaries|supplies|other).
+  const categoryFor: Record<string, string> = {
+    expense: "other",
+    repair:  "repairs",
+    hiring:  "salaries",
+    policy:  "other",
+    other:   "other",
+  };
+
+  // If expense-like and amount set, create an expense row.
+  if (prop.amount && prop.proposal_type !== "policy") {
+    const category = categoryFor[prop.proposal_type as string] ?? "other";
     const { data: exp, error: expErr } = await supabase
       .from("bms_expenses")
       .insert({
         building_id: profile.building_id,
-        category: "approved_proposal",
+        category,
         subcategory: prop.proposal_type,
         description: prop.title,
         amount: prop.amount,

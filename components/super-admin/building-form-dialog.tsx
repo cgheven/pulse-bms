@@ -192,7 +192,7 @@ export function BuildingFormDialog({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="entry_fee_owner" className="text-base">
-                Entry Fee (Owner)
+                Entry Fee for Flat Purchase
               </Label>
               <Input
                 id="entry_fee_owner"
@@ -205,7 +205,7 @@ export function BuildingFormDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="entry_fee_tenant" className="text-base">
-                Entry Fee (Tenant)
+                Entry Fee for Rent
               </Label>
               <Input
                 id="entry_fee_tenant"

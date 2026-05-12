@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,16 +22,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { inviteAdmin } from "@/app/actions/super-admin";
+import { createAdmin } from "@/app/actions/super-admin";
 
 type BuildingOption = { id: string; name: string };
+
+function generatePassword(length = 12) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*";
+  let pw = "";
+  const arr = new Uint32Array(length);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < length; i++) pw += chars[arr[i] % chars.length];
+  return pw;
+}
 
 export function AdminInviteButton({ buildings }: { buildings: BuildingOption[] }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button className="btn-big" onClick={() => setOpen(true)}>
-        + Invite Admin
+        + Create Admin
       </Button>
       <AdminInviteDialog
         buildings={buildings}
@@ -55,6 +65,8 @@ export function AdminInviteDialog({
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [buildingId, setBuildingId] = useState<string>(buildings[0]?.id ?? "");
   const [isPending, startTransition] = useTransition();
 
@@ -64,6 +76,10 @@ export function AdminInviteDialog({
       toast({ title: "Email is required", variant: "destructive" });
       return;
     }
+    if (password.length < 8) {
+      toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+      return;
+    }
     if (!buildingId) {
       toast({ title: "Please select a building", variant: "destructive" });
       return;
@@ -71,25 +87,28 @@ export function AdminInviteDialog({
 
     startTransition(async () => {
       try {
-        const res = await inviteAdmin({
+        const res = await createAdmin({
           email,
+          password,
           full_name: fullName,
           phone,
           building_id: buildingId,
         });
         toast({
-          title: res.invited
-            ? "Invitation email sent"
-            : "Existing user assigned as admin",
+          title: res.created
+            ? "Admin account created"
+            : "Existing user updated and assigned as admin",
+          description: `${email} can sign in now with the password you set.`,
         });
         setEmail("");
         setFullName("");
         setPhone("");
+        setPassword("");
         onOpenChange(false);
         router.refresh();
       } catch (err) {
         toast({
-          title: "Could not invite admin",
+          title: "Could not create admin",
           description: err instanceof Error ? err.message : "Unknown error",
           variant: "destructive",
         });
@@ -101,9 +120,9 @@ export function AdminInviteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Invite New Admin</DialogTitle>
+          <DialogTitle>Create Admin Account</DialogTitle>
           <DialogDescription>
-            We will email an invite link. After they sign in, they will be made the admin for the selected building.
+            Set an email and password for the new building admin. They can sign in immediately — no email confirmation needed. Share the password with them privately.
           </DialogDescription>
         </DialogHeader>
 
@@ -121,6 +140,47 @@ export function AdminInviteDialog({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-base">
+              Password <span className="text-destructive">*</span>
+            </Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  placeholder="At least 8 characters"
+                  className="h-12 text-base pr-12"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-2"
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 px-4"
+                onClick={() => { setPassword(generatePassword()); setShowPassword(true); }}
+              >
+                Generate
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The admin can change this themselves after first sign-in.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -179,7 +239,7 @@ export function AdminInviteDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isPending} className="btn-big">
-              {isPending ? "Sending..." : "Send Invite"}
+              {isPending ? "Creating..." : "Create Admin"}
             </Button>
           </DialogFooter>
         </form>

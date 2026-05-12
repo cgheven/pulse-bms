@@ -147,8 +147,9 @@ export async function setBuildingActive(id: string, isActive: boolean) {
 /* Admins                                                       */
 /* ────────────────────────────────────────────────────────────── */
 
-export async function inviteAdmin(data: {
+export async function createAdmin(data: {
   email: string;
+  password: string;
   full_name?: string | null;
   phone?: string | null;
   building_id: string;
@@ -156,7 +157,9 @@ export async function inviteAdmin(data: {
   const { profile, user } = await requireRole("super_admin");
 
   const email = data.email?.trim().toLowerCase();
+  const password = data.password?.trim() ?? "";
   if (!email) throw new Error("Email is required");
+  if (password.length < 8) throw new Error("Password must be at least 8 characters");
   if (!data.building_id) throw new Error("Building is required");
 
   const admin = createAdminClient();
@@ -171,18 +174,27 @@ export async function inviteAdmin(data: {
   if (lookupErr) throw new Error(lookupErr.message);
 
   let userId: string;
+  let createdNew = false;
 
   if (existing) {
+    // User already exists — update their password and reuse the account.
     userId = existing.id;
+    const { error: pwErr } = await admin.auth.admin.updateUserById(userId, { password });
+    if (pwErr) throw new Error(pwErr.message);
   } else {
-    // Invite a new user via Supabase Auth
-    const { data: invited, error: inviteErr } =
-      await admin.auth.admin.inviteUserByEmail(email);
-
-    if (inviteErr || !invited?.user) {
-      throw new Error(inviteErr?.message || "Failed to invite user");
+    // Create a brand-new auth user with the chosen password, email pre-confirmed
+    // so they can sign in immediately (no verification email).
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: data.full_name?.trim() || null },
+    });
+    if (createErr || !created?.user) {
+      throw new Error(createErr?.message || "Failed to create user");
     }
-    userId = invited.user.id;
+    userId = created.user.id;
+    createdNew = true;
   }
 
   // Upsert profile with admin role + building
@@ -207,7 +219,7 @@ export async function inviteAdmin(data: {
     actor_email: user.email,
     actor_role: profile.role,
     building_id: data.building_id,
-    action: existing ? "admin.assign" : "admin.invite",
+    action: createdNew ? "admin.create" : "admin.assign",
     entity: "profile",
     entity_id: userId,
     meta: { email, building_id: data.building_id, full_name: data.full_name ?? null },
@@ -215,7 +227,7 @@ export async function inviteAdmin(data: {
 
   revalidatePath("/super-admin/admins");
   revalidatePath("/super-admin");
-  return { id: userId, invited: !existing };
+  return { id: userId, created: createdNew };
 }
 
 export async function reassignAdmin(profileId: string, buildingId: string) {

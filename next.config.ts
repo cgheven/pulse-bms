@@ -21,7 +21,23 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     // Tree-shake icon and chart imports — ships only what's used
-    optimizePackageImports: ["lucide-react", "recharts", "@radix-ui/react-dialog", "@radix-ui/react-select", "@radix-ui/react-label"],
+    optimizePackageImports: [
+      "lucide-react",
+      "recharts",
+      "date-fns",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-label",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-select",
+      "@radix-ui/react-separator",
+      "@radix-ui/react-slot",
+      "@radix-ui/react-tabs",
+      "@radix-ui/react-toast",
+    ],
+    // Keep client-side route data cached so back/forward + nav don't re-fetch.
+    staleTimes: { dynamic: 30, static: 180 },
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
