@@ -24,6 +24,7 @@ export type InvoiceRow = {
   invoice_number: string;
   flat_id: string;
   flat_number: string;
+  resident_name: string | null;
   billing_month: string;
   amount: number;
   status: string;
@@ -152,6 +153,9 @@ export function InvoicesList({
                       <Link href={`/admin/flats/${inv.flat_id}`} className="text-primary hover:underline tabular-nums font-semibold">
                         {inv.flat_number}
                       </Link>
+                      {inv.resident_name && (
+                        <div className="text-xs text-muted-foreground mt-0.5 font-normal">{inv.resident_name}</div>
+                      )}
                     </td>
                     <td className="px-3 py-3">{formatDate(inv.billing_month)}</td>
                     <td className="px-4 py-3">{inv.due_date ? formatDate(inv.due_date) : "—"}</td>

@@ -262,16 +262,22 @@ export async function executeProposal(id: string) {
   let linked_expense_id: string | null = null;
 
   // Map proposal_type → bms_expenses.category (CHECK: utilities|repairs|salaries|supplies|other).
+  // NOTE: hiring/policy proposals do NOT create an expense — they're decisions.
+  // Hiring's actual cost flows through /admin/staff (bms_salary_payments) once
+  // the staff member is created. Policy proposals have no monetary side effect.
   const categoryFor: Record<string, string> = {
     expense: "other",
     repair:  "repairs",
-    hiring:  "salaries",
-    policy:  "other",
     other:   "other",
   };
 
-  // If expense-like and amount set, create an expense row.
-  if (prop.amount && prop.proposal_type !== "policy") {
+  // Only expense/repair/other proposals roll up into bms_expenses on execution.
+  const createsExpense =
+    prop.proposal_type !== "policy" &&
+    prop.proposal_type !== "hiring" &&
+    !!prop.amount;
+
+  if (createsExpense) {
     const category = categoryFor[prop.proposal_type as string] ?? "other";
     const { data: exp, error: expErr } = await supabase
       .from("bms_expenses")

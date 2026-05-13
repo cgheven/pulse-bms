@@ -98,7 +98,6 @@ export function PaymentsList({
             <thead className="bg-secondary border-b border-border">
               <tr className="text-left">
                 <th className="px-3 py-3 font-semibold">Flat</th>
-                <th className="px-3 py-3 font-semibold">Resident</th>
                 <th className="px-3 py-3 font-semibold">Date</th>
                 <th className="px-3 py-3 font-semibold">Category</th>
                 <th className="px-3 py-3 font-semibold">Mode</th>
@@ -110,7 +109,7 @@ export function PaymentsList({
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-3 py-12 text-center text-muted-foreground">
                     No payments match the filters.
                   </td>
                 </tr>
@@ -121,8 +120,10 @@ export function PaymentsList({
                     <Link href={`/admin/flats/${p.flat_id}`} className="text-primary hover:underline tabular-nums font-semibold">
                       {p.flat_number}
                     </Link>
+                    {p.resident_name && (
+                      <div className="text-xs text-muted-foreground mt-0.5 font-normal">{p.resident_name}</div>
+                    )}
                   </td>
-                  <td className="px-3 py-3">{p.resident_name ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-3 py-3 whitespace-nowrap">{p.payment_date ? formatDate(p.payment_date) : "—"}</td>
                   <td className="px-3 py-3 capitalize">{p.category}</td>
                   <td className="px-3 py-3 capitalize">{p.payment_mode}</td>

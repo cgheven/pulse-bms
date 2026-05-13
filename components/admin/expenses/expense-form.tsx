@@ -28,24 +28,51 @@ import {
   type ExpenseRecurrence,
 } from "@/app/actions/expenses";
 
-const CATEGORIES: Record<ExpenseCategory, string> = {
+// Salaries are NOT here — they live in /admin/staff (bms_salary_payments).
+// Keeping them separate avoids double-entry and lets us track per-staff slips.
+const CATEGORIES: Record<Exclude<ExpenseCategory, "salaries">, string> = {
   utilities: "Utilities",
   repairs: "Repairs",
-  salaries: "Salaries",
   supplies: "Supplies",
   other: "Other",
 };
 
-const SUBCATEGORY_PRESETS = [
-  "electricity_corridor",
-  "water_motor",
-  "lift_service",
-  "generator_diesel",
-  "generator_oil",
-  "bulbs",
-  "wiring",
-  "plumbing",
-];
+const CUSTOM_SENTINEL = "__custom__";
+
+// Subcategory presets per category. Values are kebab-case slugs (saved to DB);
+// labels are shown to user.
+const SUBCATS_BY_CATEGORY: Record<ExpenseCategory, { value: string; label: string }[]> = {
+  utilities: [
+    { value: "corridor_electricity", label: "Corridor Electricity (K-Electric)" },
+    { value: "water_motor",          label: "Water Motor" },
+    { value: "lift_service",         label: "Lift Service / AMC" },
+    { value: "generator_diesel",     label: "Generator Diesel" },
+    { value: "generator_oil",        label: "Generator Oil" },
+    { value: "internet",             label: "Internet / Wi-Fi" },
+    { value: "gas",                  label: "Gas" },
+    { value: "water_supply",         label: "Water Supply / Tanker" },
+  ],
+  repairs: [
+    { value: "bulbs",         label: "Bulbs / LEDs" },
+    { value: "wiring",        label: "Electrical Wiring" },
+    { value: "plumbing",      label: "Plumbing" },
+    { value: "led_panels",    label: "LED Panels" },
+    { value: "painting",      label: "Painting" },
+    { value: "lift_repair",   label: "Lift Repair" },
+    { value: "generator",     label: "Generator Service" },
+    { value: "pest_control",  label: "Pest Control" },
+    { value: "carpentry",     label: "Carpentry / Woodwork" },
+    { value: "roof_leak",     label: "Roof / Tank Leak" },
+  ],
+  salaries: [],  // unused — kept to satisfy type; salaries managed in /admin/staff
+  supplies: [
+    { value: "cleaning",   label: "Cleaning Supplies" },
+    { value: "paint",      label: "Paint Supplies" },
+    { value: "stationery", label: "Stationery / Office" },
+    { value: "hardware",   label: "Hardware / Tools" },
+  ],
+  other: [],
+};
 
 export function ExpenseForm({
   open,
@@ -69,7 +96,6 @@ export function ExpenseForm({
     is_recurring: expense?.is_recurring ?? false,
     recurrence: (expense?.recurrence as ExpenseRecurrence) ?? null,
     vendor: expense?.vendor ?? "",
-    receipt_url: expense?.receipt_url ?? "",
   });
 
   const submit = () => {
@@ -101,9 +127,10 @@ export function ExpenseForm({
             <Label>Category</Label>
             <Select
               value={form.category}
-              onValueChange={(v) =>
-                setForm({ ...form, category: v as ExpenseCategory })
-              }
+              onValueChange={(v) => {
+                // Category changed — reset subcategory so user picks fresh
+                setForm({ ...form, category: v as ExpenseCategory, subcategory: "" });
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -118,23 +145,59 @@ export function ExpenseForm({
             </Select>
           </div>
 
-          <div>
-            <Label htmlFor="sub">Subcategory</Label>
-            <Input
-              id="sub"
-              list="subcat-presets"
-              value={form.subcategory ?? ""}
-              onChange={(e) =>
-                setForm({ ...form, subcategory: e.target.value })
-              }
-              placeholder="e.g. electricity_corridor"
-            />
-            <datalist id="subcat-presets">
-              {SUBCATEGORY_PRESETS.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-          </div>
+          {(() => {
+            const presets = SUBCATS_BY_CATEGORY[form.category] ?? [];
+            const currentValue = form.subcategory ?? "";
+            const isPreset = presets.some((p) => p.value === currentValue);
+            const showCustom =
+              presets.length === 0 || (currentValue !== "" && !isPreset);
+            const selectValue = showCustom ? CUSTOM_SENTINEL : currentValue;
+
+            return (
+              <div>
+                <Label htmlFor="sub">Subcategory</Label>
+                {presets.length > 0 ? (
+                  <Select
+                    value={selectValue}
+                    onValueChange={(v) => {
+                      if (v === CUSTOM_SENTINEL) {
+                        // switch to custom: clear so the input is empty + focusable
+                        setForm({ ...form, subcategory: "" });
+                      } else {
+                        setForm({ ...form, subcategory: v });
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose subcategory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {presets.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={CUSTOM_SENTINEL}>
+                        Other (specify…)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : null}
+                {showCustom && (
+                  <Input
+                    id="sub"
+                    className={presets.length > 0 ? "mt-2" : ""}
+                    value={currentValue}
+                    onChange={(e) =>
+                      setForm({ ...form, subcategory: e.target.value })
+                    }
+                    placeholder="Type custom subcategory"
+                    autoFocus={presets.length > 0}
+                  />
+                )}
+              </div>
+            );
+          })()}
 
           <div className="sm:col-span-2">
             <Label htmlFor="desc">Description</Label>
@@ -181,17 +244,6 @@ export function ExpenseForm({
             />
           </div>
 
-          <div>
-            <Label htmlFor="receipt">Receipt URL (optional)</Label>
-            <Input
-              id="receipt"
-              value={form.receipt_url ?? ""}
-              onChange={(e) =>
-                setForm({ ...form, receipt_url: e.target.value })
-              }
-              placeholder="https://..."
-            />
-          </div>
 
           <div className="sm:col-span-2 flex items-center gap-2">
             <input

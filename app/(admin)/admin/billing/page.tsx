@@ -53,11 +53,22 @@ export default async function BillingPage() {
   }
 
   const flatMap = new Map((flats ?? []).map((f) => [f.id, f.flat_number]));
+
+  // Primary-resident name per flat for the combined Flat cell
+  const { data: primaries } = await supabase
+    .from("bms_residents")
+    .select("flat_id, full_name")
+    .eq("building_id", profile.building_id)
+    .eq("is_active", true)
+    .eq("is_primary", true);
+  const primaryByFlat = new Map((primaries ?? []).map((r) => [r.flat_id, r.full_name]));
+
   const rows: InvoiceRow[] = (invoices ?? []).map((inv) => ({
     id: inv.id,
     invoice_number: inv.invoice_number,
     flat_id: inv.flat_id,
     flat_number: flatMap.get(inv.flat_id) ?? "—",
+    resident_name: primaryByFlat.get(inv.flat_id) ?? null,
     billing_month: inv.billing_month,
     amount: Number(inv.amount),
     status: inv.status ?? "pending",
