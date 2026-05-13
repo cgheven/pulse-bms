@@ -13,6 +13,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/hooks/use-toast";
 import { createUnionNotice, deleteUnionNotice } from "@/app/actions/union-notices";
@@ -76,17 +83,17 @@ export function NoticeForm() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="n-type">Type</Label>
-              <select
-                id="n-type"
-                value={type}
-                onChange={(e) => setType(e.target.value as NoticeType)}
-                className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-              >
-                <option value="general">General</option>
-                <option value="urgent">Urgent</option>
-                <option value="maintenance">Maintenance</option>
-                <option value="event">Event</option>
-              </select>
+              <Select value={type} onValueChange={(v) => setType(v as NoticeType)}>
+                <SelectTrigger id="n-type" className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">General</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="event">Event</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <label className="flex items-center gap-2 cursor-pointer">
               <input

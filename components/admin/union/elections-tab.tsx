@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CalendarPlus, Loader2, Lock, Unlock, Trash2 } from "lucide-react";
+import { CalendarPlus, Loader2, Lock, Unlock, Trash2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,10 +31,19 @@ type Election = {
   results: Record<string, unknown> | null;
 };
 
+// Dark-theme tone pills mapped to status (was light-theme amber-100 etc)
 const STATUS_PILL: Record<string, string> = {
-  scheduled: "bg-amber-100 text-amber-800 border border-amber-300",
-  open: "bg-blue-100 text-blue-800 border border-blue-300",
-  closed: "bg-gray-200 text-gray-700 border border-gray-300",
+  scheduled: "status-pending",
+  open:      "status-info",
+  closed:    "status-paid",
+  cancelled: "status-overdue",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  scheduled: "Scheduled",
+  open:      "Open",
+  closed:    "Closed",
+  cancelled: "Cancelled",
 };
 
 export function ElectionsTab({ elections }: { elections: Election[] }) {
@@ -63,8 +72,11 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
         setCycle("");
         setDate("");
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to schedule";
-        toast({ title: "Could not schedule", description: msg, variant: "destructive" });
+        toast({
+          title: "Could not schedule",
+          description: e instanceof Error ? e.message : "Failed",
+          variant: "destructive",
+        });
       }
     });
   }
@@ -75,8 +87,11 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
         await openElection(id);
         toast({ title: "Voting opened" });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed";
-        toast({ title: "Could not open", description: msg, variant: "destructive" });
+        toast({
+          title: "Could not open",
+          description: e instanceof Error ? e.message : "Failed",
+          variant: "destructive",
+        });
       }
     });
   }
@@ -85,11 +100,8 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
     if (!closingId) return;
     let results: Record<string, unknown> = {};
     if (closeText.trim()) {
-      try {
-        results = JSON.parse(closeText);
-      } catch {
-        results = { notes: closeText.trim() };
-      }
+      try { results = JSON.parse(closeText); }
+      catch { results = { notes: closeText.trim() }; }
     }
     startClose(async () => {
       try {
@@ -98,8 +110,11 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
         setClosingId(null);
         setCloseText("");
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed";
-        toast({ title: "Could not close", description: msg, variant: "destructive" });
+        toast({
+          title: "Could not close",
+          description: e instanceof Error ? e.message : "Failed",
+          variant: "destructive",
+        });
       }
     });
   }
@@ -112,106 +127,116 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
         toast({ title: "Election deleted" });
         setRemoveId(null);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed";
-        toast({ title: "Could not delete", description: msg, variant: "destructive" });
+        toast({
+          title: "Could not delete",
+          description: e instanceof Error ? e.message : "Failed",
+          variant: "destructive",
+        });
       }
     });
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-muted-foreground">
-          Schedule election cycles and record outcomes.
-        </p>
-        <Button
-          onClick={() => setOpen(true)}
-          className="btn-big bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <CalendarPlus className="w-5 h-5" />
-          New election
+    <div className="space-y-3">
+      {/* Sub-header inside the tab: small CTA on the right */}
+      <div className="flex items-center justify-end">
+        <Button onClick={() => setOpen(true)} className="shrink-0 gap-1.5">
+          <CalendarPlus className="w-4 h-4" />
+          New Election
         </Button>
       </div>
 
-      <div className="card-soft p-0 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-secondary text-sm uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3">Cycle</th>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Results</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {elections.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  No elections scheduled.
-                </td>
+      {/* Table */}
+      <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary border-b border-border">
+              <tr className="text-left">
+                <th className="px-3 py-3 font-semibold">Cycle</th>
+                <th className="px-3 py-3 font-semibold">Date</th>
+                <th className="px-3 py-3 font-semibold">Status</th>
+                <th className="px-3 py-3 font-semibold">Results</th>
+                <th className="px-3 py-3 text-right font-semibold">Actions</th>
               </tr>
-            ) : (
-              elections.map((e) => {
-                const status = e.status ?? "scheduled";
-                return (
-                  <tr key={e.id} className="border-t border-border">
-                    <td className="px-4 py-3 font-medium">{e.cycle_label}</td>
-                    <td className="px-4 py-3">{formatDate(e.scheduled_date)}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          STATUS_PILL[status] ?? STATUS_PILL.scheduled
-                        }`}
-                      >
-                        {status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {e.results ? (
-                        <code className="text-xs bg-secondary px-2 py-0.5 rounded">recorded</code>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="inline-flex gap-2">
-                        {status === "scheduled" && (
-                          <Button size="sm" variant="outline" onClick={() => doOpen(e.id)} disabled={pending}>
-                            <Unlock className="w-4 h-4" />
-                            Open voting
-                          </Button>
+            </thead>
+            <tbody>
+              {elections.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-12 text-center text-muted-foreground">
+                    No elections yet. Click <span className="text-foreground font-medium">New Election</span> to schedule one.
+                  </td>
+                </tr>
+              ) : (
+                elections.map((e) => {
+                  const status = e.status ?? "scheduled";
+                  return (
+                    <tr key={e.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
+                      <td className="px-3 py-3 whitespace-nowrap font-semibold tabular-nums">
+                        {e.cycle_label}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap text-muted-foreground tabular-nums">
+                        {formatDate(e.scheduled_date)}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                            STATUS_PILL[status] ?? STATUS_PILL.scheduled
+                          }`}
+                        >
+                          {STATUS_LABEL[status] ?? status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {e.results ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <FileText className="w-3 h-3" />
+                            Recorded
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
-                        {status === "open" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setClosingId(e.id)}
-                            disabled={closePending}
-                          >
-                            <Lock className="w-4 h-4" />
-                            Close
-                          </Button>
-                        )}
-                        {status !== "open" && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setRemoveId(e.id)}
-                            disabled={removePending}
-                            aria-label="Delete election"
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <div className="inline-flex gap-1">
+                          {status === "scheduled" && (
+                            <Button size="sm" variant="outline" onClick={() => doOpen(e.id)} disabled={pending} className="gap-1.5">
+                              <Unlock className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Open voting</span>
+                              <span className="sm:hidden">Open</span>
+                            </Button>
+                          )}
+                          {status === "open" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setClosingId(e.id)}
+                              disabled={closePending}
+                              className="gap-1.5"
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                              Close
+                            </Button>
+                          )}
+                          {status !== "open" && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setRemoveId(e.id)}
+                              disabled={removePending}
+                              aria-label="Delete election"
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={(o) => { if (!pending) setOpen(o); }}>
@@ -226,7 +251,7 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
                 id="e-cycle"
                 value={cycle}
                 onChange={(e) => setCycle(e.target.value)}
-                placeholder="2026 Spring Committee"
+                placeholder="e.g. 2026-2028"
                 className="h-11"
               />
             </div>
@@ -247,9 +272,7 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
             </Button>
             <Button onClick={create} disabled={pending}>
               {pending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Saving…
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
               ) : (
                 "Schedule"
               )}
@@ -282,9 +305,7 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
             </Button>
             <Button onClick={doClose} disabled={closePending}>
               {closePending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Closing…
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" /> Closing…</>
               ) : (
                 "Close election"
               )}

@@ -13,6 +13,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { paySalary } from "@/app/actions/staff";
 import { Download } from "lucide-react";
@@ -235,17 +242,18 @@ export function SalaryPanel({
           <div className="grid gap-4">
             <div>
               <Label>Pay month</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-              >
-                {months.map((m) => (
-                  <option key={m} value={m}>
-                    {monthLabel(m)} {paidMap.has(m) ? "(already paid)" : ""}
-                  </option>
-                ))}
-              </select>
+              <Select value={month} onValueChange={setMonth}>
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {monthLabel(m)}{paidMap.has(m) ? " (already paid)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="amt">Amount (Rs.)</Label>
@@ -258,15 +266,17 @@ export function SalaryPanel({
             </div>
             <div>
               <Label>Payment mode</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={mode}
-                onChange={(e) => setMode(e.target.value)}
-              >
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="cheque">Cheque</option>
-              </select>
+              <Select value={mode} onValueChange={setMode}>
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="online">Online</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="slip">Slip number (optional)</Label>

@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MembersTab } from "@/components/admin/union/members-tab";
+import { AddMemberButton } from "@/components/admin/union/add-member-button";
 import { ElectionsTab } from "@/components/admin/union/elections-tab";
 
 export const dynamic = "force-dynamic";
@@ -42,28 +43,29 @@ export default async function AdminUnionPage() {
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <header className="flex items-end justify-between">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1>Union management</h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Manage committee members and election cycles for this building.
           </p>
         </div>
+        <AddMemberButton candidates={candidates ?? []} />
       </header>
 
       <Tabs defaultValue="members">
-        <TabsList className="text-base p-1.5">
-          <TabsTrigger value="members" className="text-base px-4 py-2">
+        <TabsList>
+          <TabsTrigger value="members">
             Members ({members?.filter((m) => m.is_active).length ?? 0})
           </TabsTrigger>
-          <TabsTrigger value="elections" className="text-base px-4 py-2">
+          <TabsTrigger value="elections">
             Elections ({elections?.length ?? 0})
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="members">
-          <MembersTab members={members ?? []} candidates={candidates ?? []} />
+        <TabsContent value="members" className="mt-4">
+          <MembersTab members={members ?? []} />
         </TabsContent>
-        <TabsContent value="elections">
+        <TabsContent value="elections" className="mt-4">
           <ElectionsTab elections={(elections ?? []) as never} />
         </TabsContent>
       </Tabs>

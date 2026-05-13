@@ -14,6 +14,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import {
   createProposal,
@@ -148,15 +155,15 @@ export function ProposeButton({
 
             <div className="space-y-2">
               <Label htmlFor="prop-rule">Voting rule</Label>
-              <select
-                id="prop-rule"
-                className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-                value={votingRule}
-                onChange={(e) => setVotingRule(e.target.value as VotingRule)}
-              >
-                <option value="majority">Majority — more than half approve</option>
-                <option value="unanimous">Unanimous — all must approve</option>
-              </select>
+              <Select value={votingRule} onValueChange={(v) => setVotingRule(v as VotingRule)}>
+                <SelectTrigger id="prop-rule" className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="majority">Majority — more than half approve</SelectItem>
+                  <SelectItem value="unanimous">Unanimous — all must approve</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
