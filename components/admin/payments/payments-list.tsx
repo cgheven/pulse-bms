@@ -11,13 +11,9 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Download, Plus } from "lucide-react";
+import { Download } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { downloadReceiptPdf } from "@/components/admin/billing/receipt-pdf";
-import {
-  RecordPaymentDialog,
-  type FlatPickerOption,
-} from "./record-payment-dialog";
 
 export type PaymentRow = {
   id: string;
@@ -37,17 +33,14 @@ export type PaymentRow = {
 
 export function PaymentsList({
   payments,
-  flats,
   buildingName,
 }: {
   payments: PaymentRow[];
-  flats: FlatPickerOption[];
   buildingName: string;
 }) {
   const [q, setQ] = useState("");
   const [modeFilter, setModeFilter] = useState("all");
   const [catFilter, setCatFilter] = useState("all");
-  const [addOpen, setAddOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -97,57 +90,45 @@ export function PaymentsList({
             <SelectItem value="other">Other</SelectItem>
           </SelectContent>
         </Select>
-        <div className="ml-auto">
-          <Button className="btn-big" onClick={() => setAddOpen(true)}>
-            <Plus className="w-5 h-5" />
-            Record Payment
-          </Button>
-        </div>
-        <RecordPaymentDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          flats={flats}
-          buildingName={buildingName}
-        />
       </div>
 
-      <div className="card-soft p-0 overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary border-b border-border">
               <tr className="text-left">
-                <th className="px-4 py-3 font-semibold">Date</th>
-                <th className="px-4 py-3 font-semibold">Receipt</th>
-                <th className="px-4 py-3 font-semibold">Flat</th>
-                <th className="px-4 py-3 font-semibold">Resident</th>
-                <th className="px-4 py-3 font-semibold">Category</th>
-                <th className="px-4 py-3 font-semibold">Mode</th>
-                <th className="px-4 py-3 font-semibold text-right">Amount</th>
-                <th className="px-4 py-3" />
+                <th className="px-3 py-3 font-semibold">Flat</th>
+                <th className="px-3 py-3 font-semibold">Resident</th>
+                <th className="px-3 py-3 font-semibold">Date</th>
+                <th className="px-3 py-3 font-semibold">Category</th>
+                <th className="px-3 py-3 font-semibold">Mode</th>
+                <th className="px-3 py-3 font-semibold text-right">Amount</th>
+                <th className="px-3 py-3 font-semibold">Receipt #</th>
+                <th className="px-3 py-3" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
                     No payments match the filters.
                   </td>
                 </tr>
               )}
               {filtered.map((p) => (
                 <tr key={p.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
-                  <td className="px-4 py-3">{p.payment_date ? formatDate(p.payment_date) : "—"}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{p.receipt_no}</td>
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/flats/${p.flat_id}`} className="text-primary hover:underline">
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <Link href={`/admin/flats/${p.flat_id}`} className="text-primary hover:underline tabular-nums font-semibold">
                       {p.flat_number}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">{p.resident_name ?? <span className="text-muted-foreground">—</span>}</td>
-                  <td className="px-4 py-3">{p.category}</td>
-                  <td className="px-4 py-3">{p.payment_mode}</td>
-                  <td className="px-4 py-3 text-right font-semibold">{formatCurrency(Number(p.amount))}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-3 py-3">{p.resident_name ?? <span className="text-muted-foreground">—</span>}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">{p.payment_date ? formatDate(p.payment_date) : "—"}</td>
+                  <td className="px-3 py-3 capitalize">{p.category}</td>
+                  <td className="px-3 py-3 capitalize">{p.payment_mode}</td>
+                  <td className="px-3 py-3 text-right font-semibold">{formatCurrency(Number(p.amount))}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{p.receipt_no}</td>
+                  <td className="px-3 py-3 text-right">
                     <Button
                       variant="ghost"
                       size="sm"

@@ -51,14 +51,14 @@ export function FlatsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <Input
           placeholder="Search flat number / block / resident..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="max-w-md"
+          className="sm:max-w-md"
         />
-        <Button className="btn-big" onClick={() => setAddOpen(true)}>
+        <Button className="btn-big shrink-0" onClick={() => setAddOpen(true)}>
           <Plus className="w-5 h-5" />
           Add Flat
         </Button>
@@ -98,12 +98,12 @@ export function FlatsTable({
                 const fee = f.monthly_fee ?? buildingDefaultFee;
                 return (
                   <tr key={f.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
-                    <td className="px-4 py-3 font-semibold">
-                      <Link href={`/admin/flats/${f.id}`} className="text-primary hover:underline">
+                    <td className="px-4 py-3 font-semibold whitespace-nowrap">
+                      <Link href={`/admin/flats/${f.id}`} className="text-primary hover:underline tabular-nums">
                         {f.flat_number}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {f.floor != null ? `Floor ${f.floor}` : "—"}
                       {f.block ? ` · ${f.block}` : ""}
                     </td>

@@ -51,14 +51,14 @@ export function ResidentsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <Input
           placeholder="Search by name / flat / phone / CNIC..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="max-w-md"
+          className="sm:max-w-md"
         />
-        <Button className="btn-big" onClick={() => setAddOpen(true)}>
+        <Button className="btn-big shrink-0" onClick={() => setAddOpen(true)}>
           <Plus className="w-5 h-5" />
           Add Resident
         </Button>
@@ -68,6 +68,11 @@ export function ResidentsTable({
           flats={flats}
           buildingDefaults={buildingDefaults}
         />
+      </div>
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Star className="w-3 h-3 text-warning fill-warning" />
+        <span>= Main contact for the flat</span>
       </div>
 
       <div className="card-soft p-0 overflow-hidden">
@@ -102,11 +107,13 @@ export function ResidentsTable({
                       {r.full_name}
                     </Link>
                     {r.is_primary && (
-                      <Star className="inline w-3.5 h-3.5 ml-1 text-warning fill-warning" />
+                      <span title="Main contact for this flat" aria-label="Primary contact">
+                        <Star className="inline-block w-3.5 h-3.5 ml-1.5 -mt-0.5 text-warning fill-warning" />
+                      </span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/flats/${r.flat_id}`} className="text-primary hover:underline">
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <Link href={`/admin/flats/${r.flat_id}`} className="text-primary hover:underline tabular-nums">
                       {r.flat_number}
                     </Link>
                   </td>

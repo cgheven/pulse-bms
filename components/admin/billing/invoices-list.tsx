@@ -121,18 +121,18 @@ export function InvoicesList({
         </Select>
       </div>
 
-      <div className="card-soft p-0 overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary border-b border-border">
               <tr className="text-left">
-                <th className="px-4 py-3 font-semibold">Invoice #</th>
-                <th className="px-4 py-3 font-semibold">Flat</th>
-                <th className="px-4 py-3 font-semibold">Month</th>
+                <th className="px-3 py-3 font-semibold">Flat</th>
+                <th className="px-3 py-3 font-semibold">Month</th>
                 <th className="px-4 py-3 font-semibold">Due</th>
                 <th className="px-4 py-3 font-semibold text-right">Amount</th>
                 <th className="px-4 py-3 font-semibold text-right">Paid</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold">Invoice #</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -148,18 +148,20 @@ export function InvoicesList({
                 const remaining = Math.max(0, Number(inv.amount) - Number(inv.paid_total));
                 return (
                   <tr key={inv.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
-                    <td className="px-4 py-3 font-mono text-xs">{inv.invoice_number}</td>
-                    <td className="px-4 py-3">
-                      <Link href={`/admin/flats/${inv.flat_id}`} className="text-primary hover:underline">
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <Link href={`/admin/flats/${inv.flat_id}`} className="text-primary hover:underline tabular-nums font-semibold">
                         {inv.flat_number}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">{formatDate(inv.billing_month)}</td>
+                    <td className="px-3 py-3">{formatDate(inv.billing_month)}</td>
                     <td className="px-4 py-3">{inv.due_date ? formatDate(inv.due_date) : "—"}</td>
                     <td className="px-4 py-3 text-right">{formatCurrency(Number(inv.amount))}</td>
                     <td className="px-4 py-3 text-right">{formatCurrency(Number(inv.paid_total))}</td>
                     <td className="px-4 py-3">
                       <InvoiceStatusPill status={inv.status} due_date={inv.due_date} />
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                      {inv.invoice_number}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {remaining > 0 && inv.status !== "waived" ? (

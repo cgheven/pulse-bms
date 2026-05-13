@@ -50,12 +50,12 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/flats" className="text-muted-foreground hover:text-foreground">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link href="/admin/flats" className="text-muted-foreground hover:text-foreground shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <h1>Flat {flat.flat_number}</h1>
+          <h1 className="whitespace-nowrap">Flat {flat.flat_number}</h1>
           <span className="status-info inline-flex px-2.5 py-1 rounded-full text-sm font-medium">
             {flat.ownership_type}
           </span>

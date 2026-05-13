@@ -45,13 +45,13 @@ export default async function ResidentDetailPage(props: { params: Promise<{ id: 
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/residents" className="text-muted-foreground hover:text-foreground">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link href="/admin/residents" className="text-muted-foreground hover:text-foreground shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <h1>{r.full_name}</h1>
-          {r.is_primary && <Star className="w-5 h-5 text-warning fill-warning" />}
+          {r.is_primary && <Star className="w-5 h-5 text-warning fill-warning shrink-0" />}
         </div>
         <ResidentFormDialog
           initial={{

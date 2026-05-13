@@ -79,12 +79,14 @@ export default async function BillingPage() {
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1>Billing</h1>
           <p className="text-muted-foreground">Maintenance invoices for {ym}.</p>
         </div>
-        <GenerateInvoicesButton defaultMonth={defaultMonth} />
+        <div className="shrink-0">
+          <GenerateInvoicesButton defaultMonth={defaultMonth} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

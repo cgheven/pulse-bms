@@ -298,7 +298,7 @@ export default async function AdminDashboardPage() {
                   <div>
                     <Link
                       href={`/admin/flats/${d.id}`}
-                      className="font-semibold text-primary hover:underline"
+                      className="font-semibold text-primary hover:underline whitespace-nowrap tabular-nums"
                     >
                       Flat {d.flat_number}
                     </Link>

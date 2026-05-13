@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PaymentsList, type PaymentRow } from "@/components/admin/payments/payments-list";
+import { RecordPaymentButton } from "@/components/admin/payments/record-payment-button";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -92,28 +93,26 @@ export default async function PaymentsPage() {
   const monthTotal = rows
     .filter((p) => (p.payment_date ?? "").slice(0, 7) === ym)
     .reduce((s, p) => s + p.amount, 0);
-  const last30 = new Date(today.getTime() - 30 * 86400000).toISOString().slice(0, 10);
-  const last30Total = rows
-    .filter((p) => (p.payment_date ?? "") >= last30)
-    .reduce((s, p) => s + p.amount, 0);
+  const flatOptions = (flats ?? []).map((f) => ({
+    id: f.id,
+    flat_number: f.flat_number,
+    outstanding_dues: Number(f.outstanding_dues ?? 0),
+  }));
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1>Payments</h1>
           <p className="text-muted-foreground">Money received from residents.</p>
         </div>
+        <RecordPaymentButton flats={flatOptions} buildingName={building?.name ?? "Building"} />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div className="card-soft">
           <div className="text-sm text-muted-foreground">This month collected</div>
           <div className="mt-1 text-2xl font-bold">{formatCurrency(monthTotal)}</div>
-        </div>
-        <div className="card-soft">
-          <div className="text-sm text-muted-foreground">Last 30 days</div>
-          <div className="mt-1 text-2xl font-bold">{formatCurrency(last30Total)}</div>
         </div>
         <div className="card-soft">
           <div className="text-sm text-muted-foreground">Total records</div>
@@ -123,11 +122,6 @@ export default async function PaymentsPage() {
 
       <PaymentsList
         payments={rows}
-        flats={(flats ?? []).map((f) => ({
-          id: f.id,
-          flat_number: f.flat_number,
-          outstanding_dues: Number(f.outstanding_dues ?? 0),
-        }))}
         buildingName={building?.name ?? "Building"}
       />
     </div>

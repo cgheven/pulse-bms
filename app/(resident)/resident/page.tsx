@@ -171,7 +171,7 @@ export default async function ResidentHomePage() {
           </div>
           {primaryFlat ? (
             <>
-              <div className="text-3xl font-bold tracking-tight">Flat {primaryFlat.flat_number}</div>
+              <div className="text-3xl font-bold tracking-tight whitespace-nowrap tabular-nums">Flat {primaryFlat.flat_number}</div>
               <div className="text-sm text-muted-foreground mt-1 capitalize">
                 {primaryFlat.ownership_type ?? "—"}
                 {primaryFlat.floor != null ? ` · Floor ${primaryFlat.floor}` : ""}
