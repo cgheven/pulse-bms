@@ -280,22 +280,22 @@ export default async function ResidentHomePage() {
         </div>
       </div>
 
-      {/* Action Buttons */}
+      {/* Action Buttons — resident landing hero CTAs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-up animate-delay-300">
         <Link href="#pay-now" scroll className="block">
-          <Button className="btn-big w-full">
+          <Button className="btn-hero w-full glow-amber">
             <CreditCard className="w-5 h-5" />
             Pay Now
           </Button>
         </Link>
         <Link href="/resident/dues" className="block">
-          <Button variant="outline" className="btn-big w-full">
+          <Button variant="outline" className="btn-hero w-full">
             <FileText className="w-5 h-5" />
             View My Dues
           </Button>
         </Link>
         <Link href="/resident/complaints" className="block">
-          <Button variant="outline" className="btn-big w-full">
+          <Button variant="outline" className="btn-hero w-full">
             <MessageSquare className="w-5 h-5" />
             Raise Complaint
           </Button>

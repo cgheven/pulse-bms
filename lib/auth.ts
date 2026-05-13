@@ -1,27 +1,65 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile, Role } from "@/types";
 import { ROLE_HOME } from "@/types";
 
 /**
  * Session resolver.
  *
- * Wrapped in React.cache() so layout + page + nested components share ONE
- * Supabase round-trip per request. Uses auth.getUser() (validates the token
- * with Supabase's auth server) — matches Supabase's recommended SSR pattern.
- * The cache ensures we don't repeat the network call within a single render.
+ * - `auth.getUser()` always runs (JWT validation must not be cached).
+ * - The PROFILE row is cached cross-request via `unstable_cache` for 5 min,
+ *   tagged per-user so we can invalidate on profile updates. This kills the
+ *   per-nav round-trip to fetch the profile.
+ * - React.cache() dedupes within a single request (layout + page share one).
+ *
+ * Use admin client inside unstable_cache because the cache callback runs
+ * outside the request scope (no cookies).
  */
 export const getSession = cache(async () => {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: profile } = await supabase
-    .from("bms_profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-  return profile ? { user, profile: profile as Profile } : null;
+
+  const profile = await unstable_cache(
+    async (uid: string) => {
+      const admin = createAdminClient();
+      const { data } = await admin
+        .from("bms_profiles")
+        .select("*")
+        .eq("id", uid)
+        .single();
+      return data as Profile | null;
+    },
+    ["bms-profile", user.id],
+    { revalidate: 300, tags: [`bms-profile-${user.id}`] },
+  )(user.id);
+
+  return profile ? { user, profile } : null;
+});
+
+/**
+ * Per-user cached lookup for the current user's building name.
+ * Building names change rarely — 5 min TTL is safe.
+ */
+export const getCurrentBuildingName = cache(async (): Promise<string | null> => {
+  const s = await getSession();
+  if (!s?.profile.building_id) return null;
+  return unstable_cache(
+    async (id: string) => {
+      const admin = createAdminClient();
+      const { data } = await admin
+        .from("bms_buildings")
+        .select("name")
+        .eq("id", id)
+        .single();
+      return data?.name ?? null;
+    },
+    ["bms-building-name", s.profile.building_id],
+    { revalidate: 300, tags: [`bms-building-${s.profile.building_id}`] },
+  )(s.profile.building_id);
 });
 
 export async function requireSession() {

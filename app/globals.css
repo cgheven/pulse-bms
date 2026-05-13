@@ -131,15 +131,28 @@
     animation: fade-in 0.3s ease-out both;
   }
 
-  /* Big action button — BMS primary CTAs use this */
+  /* Primary action button — desktop-friendly size, still tappable on mobile.
+     Previously h-14 / px-8 / text-lg which dominated desktop layouts.
+     New default: h-10 px-5 text-sm — matches Linear / Vercel admin density. */
   .btn-big {
-    @apply h-14 px-8 text-lg font-semibold rounded-xl shadow-sm transition-all;
+    @apply h-10 px-5 text-sm font-semibold rounded-lg shadow-sm transition-all;
   }
   .btn-big:hover {
+    box-shadow: 0 0 0 1px hsl(var(--amber) / 0.2),
+                0 6px 20px hsl(var(--amber) / 0.12);
+  }
+  .btn-big:active { transform: scale(0.98); }
+
+  /* Truly large hero CTA — use only for landing-page emphasis (Pay Now,
+     "Try demo", etc). Restraint required: max ONE per page. */
+  .btn-hero {
+    @apply h-12 px-6 text-base font-semibold rounded-xl shadow-md transition-all;
+  }
+  .btn-hero:hover {
     box-shadow: 0 0 0 1px hsl(var(--amber) / 0.25),
                 0 12px 40px hsl(var(--amber) / 0.18);
   }
-  .btn-big:active { transform: scale(0.98); }
+  .btn-hero:active { transform: scale(0.98); }
 
   /* Soft card surface — BMS dashboards use this */
   .card-soft {
