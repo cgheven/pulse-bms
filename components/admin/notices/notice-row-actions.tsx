@@ -35,17 +35,25 @@ export function NoticeRowActions({
   };
 
   return (
-    <div className="flex items-center gap-1">
-      <Button variant="ghost" size="sm" onClick={() => setEdit(true)}>
-        <Pencil className="w-4 h-4 mr-1" /> Edit
+    <div className="flex items-center gap-0.5 shrink-0">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setEdit(true)}
+        aria-label="Edit notice"
+        title="Edit"
+      >
+        <Pencil className="w-4 h-4" />
       </Button>
       <Button
         variant="ghost"
-        size="sm"
+        size="icon"
         onClick={() => setDel(true)}
+        aria-label="Delete notice"
+        title="Delete"
         className="text-destructive hover:text-destructive"
       >
-        <Trash2 className="w-4 h-4 mr-1" /> Delete
+        <Trash2 className="w-4 h-4" />
       </Button>
       <NoticeForm
         open={edit}

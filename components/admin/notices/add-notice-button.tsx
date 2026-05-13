@@ -13,8 +13,9 @@ export function AddNoticeButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button onClick={() => setOpen(true)} className="btn-big">
-        <Plus className="w-5 h-5 mr-2" /> New Notice
+      <Button onClick={() => setOpen(true)} className="shrink-0 self-start gap-1.5">
+        <Plus className="w-4 h-4" />
+        New Notice
       </Button>
       <NoticeForm
         open={open}

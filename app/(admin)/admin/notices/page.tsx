@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { AddNoticeButton } from "@/components/admin/notices/add-notice-button";
 import { NoticeRowActions } from "@/components/admin/notices/notice-row-actions";
-import { Pin } from "lucide-react";
+import { Pin, Megaphone } from "lucide-react";
 import type { NoticeInput, NoticeType } from "@/app/actions/notices";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +17,11 @@ const TYPE_LABELS: Record<NoticeType, string> = {
 };
 
 const TYPE_PILL: Record<NoticeType, string> = {
-  general: "bg-secondary border",
+  general:       "bg-secondary text-muted-foreground border border-border",
   dues_reminder: "status-pending",
-  meeting: "status-info",
-  election: "status-info",
-  emergency: "status-overdue",
+  meeting:       "status-info",
+  election:      "status-info",
+  emergency:     "status-overdue",
 };
 
 export default async function NoticesPage() {
@@ -46,13 +46,9 @@ export default async function NoticesPage() {
   let defaulterTemplate: string | undefined;
   if (defaulters && defaulters.length > 0) {
     const lines = defaulters.map(
-      (d) =>
-        `- Flat ${d.flat_number}: ${formatCurrency(Number(d.outstanding_dues))}`,
+      (d) => `- Flat ${d.flat_number}: ${formatCurrency(Number(d.outstanding_dues))}`,
     );
-    const total = defaulters.reduce(
-      (a, d) => a + Number(d.outstanding_dues),
-      0,
-    );
+    const total = defaulters.reduce((a, d) => a + Number(d.outstanding_dues), 0);
     defaulterTemplate = [
       "Dear Residents,",
       "",
@@ -71,69 +67,122 @@ export default async function NoticesPage() {
   const list = notices ?? [];
   const pinned = list.filter((n) => n.pinned);
   const others = list.filter((n) => !n.pinned);
+  const activeCount = list.filter(
+    (n) => !n.expires_at || new Date(n.expires_at) > new Date(),
+  ).length;
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1>Notices</h1>
-          <p className="text-muted-foreground mt-1">
-            {list.length} notice{list.length === 1 ? "" : "s"} ·{" "}
-            {pinned.length} pinned
+          <p className="text-muted-foreground mt-1 text-sm flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-1.5">
+              <Megaphone className="w-3.5 h-3.5" />
+              {list.length} notice{list.length === 1 ? "" : "s"}
+            </span>
+            {pinned.length > 0 && (
+              <>
+                <span className="hidden sm:inline">·</span>
+                <span className="inline-flex items-center gap-1.5 text-primary">
+                  <Pin className="w-3.5 h-3.5" />
+                  {pinned.length} pinned
+                </span>
+              </>
+            )}
+            {activeCount < list.length && (
+              <>
+                <span className="hidden sm:inline">·</span>
+                <span className="text-muted-foreground/70">
+                  {list.length - activeCount} expired
+                </span>
+              </>
+            )}
           </p>
         </div>
         <AddNoticeButton defaulterTemplate={defaulterTemplate} />
       </div>
 
+      {/* Empty state */}
       {list.length === 0 && (
-        <div className="card-soft text-center py-12 text-muted-foreground">
-          No notices yet. Click "New Notice" to publish your first announcement.
+        <div className="rounded-xl border border-dashed border-border bg-card/30 p-12 text-center">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-3">
+            <Megaphone className="w-6 h-6 text-primary" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground">No notices yet</h3>
+          <p className="text-muted-foreground text-sm mt-1">
+            Click <span className="text-foreground font-medium">New Notice</span> to publish your first announcement.
+          </p>
         </div>
       )}
 
-      <div className="space-y-4">
+      {/* Notice cards */}
+      <div className="space-y-3">
         {[...pinned, ...others].map((n) => {
-          const isExpired =
-            n.expires_at && new Date(n.expires_at) < new Date();
+          const isExpired = n.expires_at && new Date(n.expires_at) < new Date();
+          const type = (n.notice_type ?? "general") as NoticeType;
           return (
-            <div
+            <article
               key={n.id}
-              className={`card-soft ${n.pinned ? "border-primary/40 bg-primary/5" : ""} ${isExpired ? "opacity-60" : ""}`}
+              className={`group relative rounded-xl border bg-card shadow-lg transition-all hover:shadow-xl overflow-hidden ${
+                n.pinned ? "border-primary/30" : "border-border"
+              } ${isExpired ? "opacity-60" : ""}`}
             >
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="flex-1 min-w-[200px]">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {n.pinned && (
-                      <Pin className="w-4 h-4 text-primary" />
-                    )}
-                    <h2 className="text-2xl">{n.title}</h2>
-                    <span
-                      className={`${TYPE_PILL[n.notice_type as NoticeType] ?? "bg-secondary border"} px-2 py-0.5 rounded-full text-xs`}
-                    >
-                      {TYPE_LABELS[n.notice_type as NoticeType] ??
-                        n.notice_type}
-                    </span>
-                    {isExpired && (
-                      <span className="status-overdue px-2 py-0.5 rounded-full text-xs">
-                        Expired
+              {/* Pinned left accent bar */}
+              {n.pinned && (
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
+              )}
+
+              <div className="p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-3">
+                  {/* Title + meta */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {n.pinned && (
+                        <Pin className="w-4 h-4 text-primary -rotate-45 shrink-0" />
+                      )}
+                      <h2 className="text-xl sm:text-2xl font-semibold tracking-tight leading-tight">
+                        {n.title}
+                      </h2>
+                    </div>
+                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PILL[type]}`}
+                      >
+                        {TYPE_LABELS[type] ?? n.notice_type}
                       </span>
-                    )}
+                      {isExpired && (
+                        <span className="status-overdue inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium">
+                          Expired
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {n.created_at ? formatDate(n.created_at) : "—"}
+                      </span>
+                      {n.expires_at && !isExpired && (
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          · expires {formatDate(n.expires_at)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Posted {n.created_at ? formatDate(n.created_at) : "—"}
-                    {n.expires_at &&
-                      ` · Expires ${formatDate(n.expires_at)}`}
+
+                  {/* Actions — icon-only, top-right, low-emphasis until hover */}
+                  <div className="opacity-60 group-hover:opacity-100 transition-opacity">
+                    <NoticeRowActions
+                      notice={n as NoticeInput & { id: string }}
+                      defaulterTemplate={defaulterTemplate}
+                    />
                   </div>
                 </div>
-                <NoticeRowActions
-                  notice={n as NoticeInput & { id: string }}
-                  defaulterTemplate={defaulterTemplate}
-                />
+
+                {/* Body */}
+                <div className="mt-4 whitespace-pre-wrap text-sm sm:text-base leading-relaxed text-foreground/85 border-l-2 border-border pl-4">
+                  {n.body}
+                </div>
               </div>
-              <div className="mt-3 whitespace-pre-wrap text-base leading-relaxed">
-                {n.body}
-              </div>
-            </div>
+            </article>
           );
         })}
       </div>
