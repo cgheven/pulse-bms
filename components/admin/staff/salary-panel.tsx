@@ -133,60 +133,91 @@ export function SalaryPanel({
     doc.save(`salary-slip-${staff.full_name.replace(/\s+/g, "_")}-${p.pay_month}.pdf`);
   };
 
+  // Counts for the small KPI strip
+  const paidCount = months.filter((m) => paidMap.has(m)).length;
+  const pendingCount = months.length - paidCount;
+  const totalPaid = months
+    .map((m) => paidMap.get(m))
+    .filter((p): p is Payment => !!p)
+    .reduce((s, p) => s + Number(p.amount ?? 0), 0);
+
   return (
-    <div className="card-soft">
-      <div className="flex items-center justify-between mb-4">
-        <h3>Salary disbursement</h3>
-        <Button onClick={() => setOpen(true)} className="btn-big">
-          Pay Salary
+    <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
+      {/* Header — compact, with KPIs + smaller CTA */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 border-b border-border">
+        <div>
+          <h3 className="text-xl font-semibold">Salary Disbursement</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {paidCount} paid · {pendingCount} pending · {formatCurrency(totalPaid)} paid in last 12 months
+          </p>
+        </div>
+        <Button onClick={() => setOpen(true)} className="shrink-0 gap-1.5">
+          + Pay Salary
         </Button>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="text-left text-sm text-muted-foreground border-b">
-            <tr>
-              <th className="py-2">Month</th>
-              <th className="py-2">Status</th>
-              <th className="py-2">Amount</th>
-              <th className="py-2">Paid on</th>
-              <th className="py-2">Mode</th>
-              <th className="py-2">Slip</th>
+        <table className="w-full text-sm">
+          <thead className="bg-secondary border-b border-border">
+            <tr className="text-left">
+              <th className="px-3 py-3 font-semibold">Month</th>
+              <th className="px-3 py-3 font-semibold">Status</th>
+              <th className="px-3 py-3 font-semibold text-right">Amount</th>
+              <th className="px-3 py-3 font-semibold">Paid on</th>
+              <th className="px-3 py-3 font-semibold">Mode</th>
+              <th className="px-3 py-3 font-semibold text-right">Slip</th>
             </tr>
           </thead>
           <tbody>
             {months.map((m) => {
               const p = paidMap.get(m);
+              const isCurrentMonth = m === monthKey(new Date());
               return (
-                <tr key={m} className="border-b last:border-0">
-                  <td className="py-3 font-medium">{monthLabel(m)}</td>
-                  <td className="py-3">
+                <tr key={m} className="border-b border-border last:border-0 hover:bg-secondary/50">
+                  <td className="px-3 py-3 font-medium whitespace-nowrap">
+                    {monthLabel(m)}
+                    {isCurrentMonth && (
+                      <span className="ml-2 text-[10px] text-primary font-semibold uppercase tracking-wide">
+                        Current
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 whitespace-nowrap">
                     {p ? (
-                      <span className="status-paid px-2 py-0.5 rounded-full text-xs">
+                      <span className="status-paid inline-flex px-2 py-0.5 rounded-full text-xs">
                         Paid
                       </span>
                     ) : (
-                      <span className="status-pending px-2 py-0.5 rounded-full text-xs">
+                      <span className="status-pending inline-flex px-2 py-0.5 rounded-full text-xs">
                         Pending
                       </span>
                     )}
                   </td>
-                  <td className="py-3">
-                    {p ? formatCurrency(p.amount) : formatCurrency(staff.monthly_salary)}
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
+                    {p ? (
+                      <span className="font-semibold">{formatCurrency(p.amount)}</span>
+                    ) : (
+                      <span className="text-muted-foreground">{formatCurrency(staff.monthly_salary)}</span>
+                    )}
                   </td>
-                  <td className="py-3">{p?.payment_date ? formatDate(p.payment_date) : "—"}</td>
-                  <td className="py-3">{p?.payment_mode ?? "—"}</td>
-                  <td className="py-3">
+                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
+                    {p?.payment_date ? formatDate(p.payment_date) : "—"}
+                  </td>
+                  <td className="px-3 py-3 capitalize text-muted-foreground whitespace-nowrap">
+                    {p?.payment_mode ?? "—"}
+                  </td>
+                  <td className="px-3 py-3 text-right">
                     {p ? (
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
+                        aria-label="Download slip"
                         onClick={() => downloadSlip(p)}
                       >
-                        <Download className="w-4 h-4 mr-1" /> Slip
+                        <Download className="w-4 h-4" />
                       </Button>
                     ) : (
-                      "—"
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                 </tr>

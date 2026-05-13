@@ -192,19 +192,9 @@ export default async function ExpensesPage({
                         {formatDate(e.expense_date)}
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-secondary border border-border">
-                            {CATEGORY_LABELS[e.category] ?? e.category}
-                          </span>
-                          {e.is_recurring && (
-                            <span
-                              className="status-info px-2 py-0.5 rounded-full text-[10px] font-medium"
-                              title={`Recurring ${e.recurrence}`}
-                            >
-                              ↻ {e.recurrence}
-                            </span>
-                          )}
-                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-xs bg-secondary border border-border">
+                          {CATEGORY_LABELS[e.category] ?? e.category}
+                        </span>
                         {e.subcategory && (
                           <div className="text-xs text-muted-foreground mt-1">
                             {prettifySubcategory(e.subcategory)}

@@ -9,6 +9,7 @@ import { StaffForm } from "./staff-form";
 import { deleteStaff } from "@/app/actions/staff";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 import type { StaffRole } from "@/types";
+import { buildSlug } from "@/lib/slug";
 
 type StaffRow = {
   id: string;
@@ -43,7 +44,7 @@ export function StaffRowActions({ staff }: { staff: StaffRow }) {
 
   return (
     <div className="flex items-center gap-2 justify-end">
-      <Link href={`/admin/staff/${staff.id}`}>
+      <Link href={`/admin/staff/${buildSlug(staff.full_name, staff.id)}`}>
         <Button variant="ghost" size="sm">
           <Eye className="w-4 h-4 mr-1" /> View
         </Button>
