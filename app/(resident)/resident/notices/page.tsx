@@ -44,7 +44,7 @@ export default async function ResidentNoticesPage() {
   return (
     <div className="space-y-8 animate-fade-up">
       <div>
-        <h1 className="text-4xl font-bold">Notices</h1>
+        <h1>Notices</h1>
         <p className="text-lg text-muted-foreground mt-2">Latest updates from your building admin and union.</p>
       </div>
 

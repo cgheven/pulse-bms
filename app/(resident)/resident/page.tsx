@@ -105,18 +105,18 @@ export default async function ResidentHomePage() {
   const hasDues = totalOutstanding > 0;
 
   return (
-    <div className="space-y-6 animate-fade-up">
+    <div className="space-y-5 animate-fade-up">
       {/* Greeting */}
       <div>
-        <h1 className="text-4xl font-bold tracking-tight">Hello, {firstName}</h1>
-        <p className="text-lg text-muted-foreground mt-2">
+        <h1>Hello, {firstName}</h1>
+        <p className="text-sm text-muted-foreground mt-1">
           Welcome to your building portal{building ? ` · ${building.name}` : ""}.
         </p>
       </div>
 
       {/* Hero: outstanding dues */}
       <div
-        className={`card-hover rounded-2xl border p-6 sm:p-8 animate-count-up ${
+        className={`card-hover rounded-xl border p-5 sm:p-6 animate-count-up ${
           hasDues
             ? "border-destructive/30 bg-gradient-to-br from-destructive/10 via-card to-card"
             : "border-[hsl(151_100%_41%/0.25)] bg-gradient-to-br from-[hsl(151_100%_41%/0.08)] via-card to-card glow-success"
@@ -124,7 +124,7 @@ export default async function ResidentHomePage() {
       >
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               {hasDues ? (
                 <AlertTriangle className="w-4 h-4 text-destructive" />
               ) : (
@@ -133,7 +133,7 @@ export default async function ResidentHomePage() {
               Outstanding Dues
             </div>
             <div
-              className={`mt-2 text-4xl sm:text-5xl font-bold tracking-tight ${
+              className={`mt-1.5 text-3xl sm:text-4xl font-bold tracking-tight tabular-nums ${
                 hasDues ? "text-destructive" : "text-[hsl(151_100%_45%)]"
               }`}
             >
@@ -149,7 +149,7 @@ export default async function ResidentHomePage() {
           {hasDues && (
             <Link href="/resident/dues">
               <Button className="btn-big">
-                <CreditCard className="w-5 h-5" />
+                <CreditCard className="w-4 h-4" />
                 Pay Now
               </Button>
             </Link>
@@ -158,92 +158,92 @@ export default async function ResidentHomePage() {
       </div>
 
       {/* Info cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-up animate-delay-150">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* My Flat */}
-        <div className="card-hover card-soft">
-          <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="card-hover rounded-lg border border-border bg-card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               My Flat
             </span>
-            <div className="flex w-10 h-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <HomeIcon className="w-5 h-5" />
+            <div className="flex w-8 h-8 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
+              <HomeIcon className="w-4 h-4" />
             </div>
           </div>
           {primaryFlat ? (
             <>
-              <div className="text-3xl font-bold tracking-tight whitespace-nowrap tabular-nums">Flat {primaryFlat.flat_number}</div>
+              <div className="mt-1.5 text-2xl font-semibold tracking-tight whitespace-nowrap tabular-nums">Flat {primaryFlat.flat_number}</div>
               <div className="text-sm text-muted-foreground mt-1 capitalize">
                 {primaryFlat.ownership_type ?? "—"}
                 {primaryFlat.floor != null ? ` · Floor ${primaryFlat.floor}` : ""}
                 {primaryFlat.block ? ` · Block ${primaryFlat.block}` : ""}
               </div>
               {primaryFlat.monthly_fee != null && (
-                <div className="mt-4 pt-4 border-t border-border">
+                <div className="mt-3 pt-3 border-t border-border">
                   <div className="text-xs text-muted-foreground">Monthly fee</div>
-                  <div className="text-xl font-semibold mt-1">
+                  <div className="text-sm font-semibold mt-1 tabular-nums">
                     {formatCurrency(Number(primaryFlat.monthly_fee))}
                   </div>
                 </div>
               )}
             </>
           ) : (
-            <div className="text-sm text-muted-foreground">No flat linked yet. Please contact admin.</div>
+            <div className="mt-1.5 text-sm text-muted-foreground">No flat linked yet. Please contact admin.</div>
           )}
         </div>
 
         {/* This Month's Bill */}
-        <div className="card-hover card-soft">
-          <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="card-hover rounded-lg border border-border bg-card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               This Month&apos;s Bill
             </span>
-            <div className="flex w-10 h-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <FileText className="w-5 h-5" />
+            <div className="flex w-8 h-8 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
+              <FileText className="w-4 h-4" />
             </div>
           </div>
           {currentInvoice ? (
             <>
-              <div className="flex items-baseline justify-between gap-3">
-                <div className="text-3xl font-bold tracking-tight">
+              <div className="mt-1.5 flex items-baseline justify-between gap-3">
+                <div className="text-2xl font-semibold tracking-tight tabular-nums">
                   {formatCurrency(Number(currentInvoice.amount))}
                 </div>
                 <StatusPill status={currentInvoice.status} />
               </div>
-              <div className="text-sm text-muted-foreground mt-2">
+              <div className="text-sm text-muted-foreground mt-1">
                 {formatDate(currentInvoice.billing_month)}
                 {currentInvoice.due_date ? ` · Due ${formatDate(currentInvoice.due_date)}` : ""}
               </div>
-              <Link href="/resident/dues" className="inline-block mt-4">
+              <Link href="/resident/dues" className="inline-block mt-3">
                 <Button variant="outline" className="btn-big">
-                  View Bill <ArrowRight className="w-5 h-5" />
+                  View Bill <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
             </>
           ) : (
-            <div className="text-sm text-muted-foreground">
+            <div className="mt-1.5 text-sm text-muted-foreground">
               No bill generated for {formatDate(monthStart)} yet.
             </div>
           )}
         </div>
 
         {/* Recent Notices */}
-        <div className="card-hover card-soft">
-          <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="card-hover rounded-lg border border-border bg-card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Recent Notices
             </span>
-            <div className="flex w-10 h-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Megaphone className="w-5 h-5" />
+            <div className="flex w-8 h-8 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
+              <Megaphone className="w-4 h-4" />
             </div>
           </div>
           {notices && notices.length > 0 ? (
-            <ul className="space-y-3 divide-y divide-border">
+            <ul className="mt-1.5 space-y-2 divide-y divide-border">
               {notices.map((n) => (
-                <li key={n.id} className="pt-3 first:pt-0">
+                <li key={n.id} className="pt-2 first:pt-0">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="font-semibold">{n.title}</div>
+                    <div className="text-sm font-semibold">{n.title}</div>
                     {n.pinned && (
-                      <span className="text-xs status-info px-2 py-0.5 rounded-full">Pinned</span>
+                      <span className="text-[11px] font-medium uppercase tracking-wide status-info px-2 py-0.5 rounded-full">Pinned</span>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">{formatDate(n.created_at)}</div>
@@ -251,30 +251,30 @@ export default async function ResidentHomePage() {
               ))}
             </ul>
           ) : (
-            <div className="text-sm text-muted-foreground">No notices yet.</div>
+            <div className="mt-1.5 text-sm text-muted-foreground">No notices yet.</div>
           )}
-          <Link href="/resident/notices" className="inline-block mt-4 text-primary text-sm font-semibold hover:underline">
+          <Link href="/resident/notices" className="inline-block mt-3 text-primary text-sm font-semibold hover:underline">
             See all notices →
           </Link>
         </div>
 
         {/* Building Fund Balance */}
-        <div className="card-hover card-soft">
-          <div className="flex items-start justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="card-hover rounded-lg border border-border bg-card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Building Fund Balance
             </span>
-            <div className="flex w-10 h-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <PiggyBank className="w-5 h-5" />
+            <div className="flex w-8 h-8 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
+              <PiggyBank className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-bold tracking-tight text-[hsl(151_100%_45%)]">
+          <div className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums text-[hsl(151_100%_45%)]">
             {formatLakh(Number(building?.fund_balance ?? 0))}
           </div>
-          <div className="text-sm text-muted-foreground mt-2">
+          <div className="text-sm text-muted-foreground mt-1">
             Total money in the building&apos;s common account.
           </div>
-          <Link href="/resident/transparency" className="inline-block mt-4 text-primary text-sm font-semibold hover:underline">
+          <Link href="/resident/transparency" className="inline-block mt-3 text-primary text-sm font-semibold hover:underline">
             See where money goes →
           </Link>
         </div>

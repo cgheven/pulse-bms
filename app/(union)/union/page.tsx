@@ -118,7 +118,7 @@ export default async function UnionDashboardPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-up">
+    <div className="space-y-5 animate-fade-up">
       {/* Header */}
       <header className="flex items-end justify-between flex-wrap gap-3">
         <div>
@@ -134,6 +134,7 @@ export default async function UnionDashboardPage() {
             dialogTitle="Propose a new expense"
             dialogDescription="Describe the expense; members will vote before it is recorded."
             showAmount
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
           />
           <ProposeButton
             proposal_type="repair"
@@ -148,28 +149,28 @@ export default async function UnionDashboardPage() {
       </header>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
-          icon={<Vote className="w-5 h-5" />}
+          icon={<Vote className="w-4 h-4" />}
           label="My pending votes"
           value={String(myPendingVotes)}
           href="/union/proposals"
           attention={myPendingVotes > 0}
         />
         <KpiCard
-          icon={<FileText className="w-5 h-5" />}
+          icon={<FileText className="w-4 h-4" />}
           label="Pending proposals"
           value={String(pendingCount ?? 0)}
           href="/union/proposals"
         />
         <KpiCard
-          icon={<CalendarDays className="w-5 h-5" />}
+          icon={<CalendarDays className="w-4 h-4" />}
           label="Meetings this month"
           value={String(meetingsCount ?? 0)}
           href="/union/meetings"
         />
         <KpiCard
-          icon={<Rocket className="w-5 h-5" />}
+          icon={<Rocket className="w-4 h-4" />}
           label="Executed (30 days)"
           value={String(executedCount ?? 0)}
           href="/union/proposals"
@@ -177,11 +178,11 @@ export default async function UnionDashboardPage() {
       </div>
 
       {/* Two-column: proposals + meetings */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up animate-delay-150">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent proposals */}
         <div className="card-soft card-hover">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
-            <h2 className="text-xl font-semibold">Recent proposals</h2>
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+            <h2 className="text-base font-semibold tracking-tight">Recent proposals</h2>
             <Link href="/union/proposals" className="text-primary text-sm font-medium hover:underline">
               View all →
             </Link>
@@ -191,7 +192,7 @@ export default async function UnionDashboardPage() {
           ) : (
             <ul className="divide-y divide-border">
               {(recent ?? []).map((p) => (
-                <li key={p.id} className="py-3">
+                <li key={p.id} className="py-2.5">
                   <Link href={`/union/proposals/${p.id}`} className="flex items-center justify-between gap-3 group">
                     <div className="min-w-0">
                       <div className="font-medium truncate group-hover:text-primary transition-colors">
@@ -202,7 +203,7 @@ export default async function UnionDashboardPage() {
                         {p.amount ? ` · ${formatCurrency(Number(p.amount))}` : ""}
                       </div>
                     </div>
-                    <span className={`${statusPillClass(p.status)} inline-flex px-2.5 py-0.5 rounded-full text-xs uppercase font-semibold tracking-wide`}>
+                    <span className={`${statusPillClass(p.status)} inline-flex px-2 py-0.5 rounded-full text-[11px] uppercase font-medium tracking-wide`}>
                       {p.status}
                     </span>
                   </Link>
@@ -214,8 +215,8 @@ export default async function UnionDashboardPage() {
 
         {/* Upcoming meetings */}
         <div className="card-soft card-hover">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
-            <h2 className="text-xl font-semibold">Upcoming meetings</h2>
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+            <h2 className="text-base font-semibold tracking-tight">Upcoming meetings</h2>
             <Link href="/union/meetings" className="text-primary text-sm font-medium hover:underline">
               View all →
             </Link>
@@ -225,10 +226,10 @@ export default async function UnionDashboardPage() {
           ) : (
             <ul className="divide-y divide-border">
               {(upcoming ?? []).map((m) => (
-                <li key={m.id} className="py-3">
+                <li key={m.id} className="py-2.5">
                   <div className="flex items-start gap-3">
-                    <div className="flex w-10 h-10 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-                      <Users2 className="w-5 h-5" />
+                    <div className="flex w-8 h-8 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
+                      <Users2 className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
                       <div className="font-medium">{m.title}</div>
@@ -252,10 +253,10 @@ export default async function UnionDashboardPage() {
       {!um && (
         <div className="card-soft border-primary/40 bg-primary/5">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-primary mt-1 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-primary mt-1 shrink-0" />
             <div>
-              <h3 className="text-lg font-semibold text-foreground">You are not an active union member</h3>
-              <p className="text-muted-foreground mt-1">
+              <h3 className="text-sm font-semibold text-foreground">You are not an active union member</h3>
+              <p className="text-muted-foreground mt-1 text-sm">
                 Ask your building admin to add you to the union committee so you can vote on proposals.
               </p>
             </div>
@@ -282,16 +283,16 @@ function KpiCard({
   return (
     <Link
       href={href}
-      className={`card-hover rounded-xl border bg-card p-5 block ${
-        attention ? "border-primary/40 glow-amber animate-pulse-glow" : "border-border"
+      className={`card-hover rounded-lg border bg-card p-4 block ${
+        attention ? "border-primary/40 glow-amber" : "border-border"
       }`}
     >
-      <div className="flex items-start justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
         <div
-          className={`flex w-10 h-10 items-center justify-center rounded-lg ${
+          className={`flex w-8 h-8 items-center justify-center rounded-md shrink-0 ${
             attention ? "bg-primary/20 text-primary" : "bg-primary/10 text-primary"
           }`}
         >
@@ -299,7 +300,7 @@ function KpiCard({
         </div>
       </div>
       <div
-        className={`mt-2 text-3xl font-bold tracking-tight ${
+        className={`mt-1.5 text-2xl font-semibold tracking-tight tabular-nums ${
           attention ? "text-primary" : "text-foreground"
         }`}
       >

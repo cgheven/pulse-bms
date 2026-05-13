@@ -65,7 +65,7 @@ export default async function ResidentPaymentsPage() {
   return (
     <div className="space-y-8 animate-fade-up">
       <div>
-        <h1 className="text-4xl font-bold">My Payments</h1>
+        <h1>My Payments</h1>
         <p className="text-lg text-muted-foreground mt-2">
           All payments you have made. Download a receipt for any of them.
         </p>

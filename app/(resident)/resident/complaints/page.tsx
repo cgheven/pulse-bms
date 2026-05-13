@@ -55,7 +55,7 @@ export default async function ResidentComplaintsPage() {
     <div className="space-y-8 animate-fade-up">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-4xl font-bold">My Complaints</h1>
+          <h1>My Complaints</h1>
           <p className="text-lg text-muted-foreground mt-2">
             Raise a complaint for any issue in the building.
           </p>

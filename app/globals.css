@@ -63,16 +63,19 @@
     font-family: var(--font-sans), system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
-    /* Senior-friendly base font size — keep at 18px for BMS */
-    font-size: 18px;
-    line-height: 1.55;
+    /* Modern SaaS density — 14px base, matches Linear / Vercel / Notion */
+    font-size: 14px;
+    line-height: 1.5;
   }
-  /* Bigger headings, generous spacing */
-  h1 { @apply text-4xl font-bold tracking-tight; }
-  h2 { @apply text-3xl font-semibold; }
-  h3 { @apply text-2xl font-semibold; }
-  /* Forms — taller inputs by default */
-  input, select, textarea, button { font-size: 1rem; }
+  /* Tight, confident heading scale */
+  h1 { @apply text-2xl font-semibold tracking-tight; }      /* 24px */
+  h2 { @apply text-lg font-semibold tracking-tight; }        /* 18px */
+  h3 { @apply text-base font-semibold tracking-tight; }      /* 16px */
+  /* iOS focus-zoom prevention — inputs must be ≥16px */
+  input, select, textarea { font-size: 16px; }
+  @media (min-width: 768px) {
+    input, select, textarea { font-size: 14px; }
+  }
 }
 
 @layer utilities {

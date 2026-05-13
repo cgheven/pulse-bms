@@ -115,7 +115,7 @@ export default async function ResidentDuesPage() {
   return (
     <div className="space-y-8 animate-fade-up">
       <div>
-        <h1 className="text-4xl font-bold">My Dues</h1>
+        <h1>My Dues</h1>
         <p className="text-lg text-muted-foreground mt-2">Your maintenance bills and payment status.</p>
       </div>
 

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -18,9 +16,17 @@ export type StatementInput = {
 
 export function MonthlyStatementButton({ data }: { data: StatementInput }) {
   const [busy, setBusy] = useState(false);
-  const onClick = () => {
+  const onClick = async () => {
     setBusy(true);
     try {
+      // Lazy-load jspdf + autotable only on click — keeps them out of the
+      // initial bundle for /admin/finance (saves ~200kB First Load JS).
+      const [{ jsPDF }, autoTableMod] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+      const autoTable = autoTableMod.default;
+
       const doc = new jsPDF({ unit: "mm", format: "a4" });
       doc.setFontSize(18);
       doc.text("Building Financial Statement", 14, 18);

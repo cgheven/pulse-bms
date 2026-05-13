@@ -38,47 +38,51 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
   const start12Iso = start12.toISOString().slice(0, 10);
   const currentMonthYm = ymKey(today);
 
-  const { data: building } = await supabase
-    .from("bms_buildings")
-    .select("fund_balance")
-    .eq("id", profile.building_id)
-    .single();
+  // All 7 queries are independent — run in parallel to cut TTFB by ~6× RTT.
+  const [
+    { data: building },
+    { data: payments },
+    { data: expenses },
+    { data: paymentsYtd },
+    { data: expensesYtd },
+    { data: paymentsAll },
+    { data: expensesAll },
+  ] = await Promise.all([
+    supabase
+      .from("bms_buildings")
+      .select("fund_balance")
+      .eq("id", profile.building_id)
+      .single(),
+    supabase
+      .from("bms_payments")
+      .select("amount, payment_date")
+      .eq("building_id", profile.building_id)
+      .gte("payment_date", start12Iso),
+    supabase
+      .from("bms_expenses")
+      .select("amount, expense_date, category")
+      .eq("building_id", profile.building_id)
+      .gte("expense_date", start12Iso),
+    supabase
+      .from("bms_payments")
+      .select("amount")
+      .eq("building_id", profile.building_id)
+      .gte("payment_date", ytdStart),
+    supabase
+      .from("bms_expenses")
+      .select("amount")
+      .eq("building_id", profile.building_id)
+      .gte("expense_date", ytdStart),
+    supabase
+      .from("bms_payments")
+      .select("amount")
+      .eq("building_id", profile.building_id),
+    supabase
+      .from("bms_expenses")
+      .select("amount")
+      .eq("building_id", profile.building_id),
+  ]);
   const initialFund = Number(building?.fund_balance ?? 0);
-
-  const { data: payments } = await supabase
-    .from("bms_payments")
-    .select("amount, payment_date")
-    .eq("building_id", profile.building_id)
-    .gte("payment_date", start12Iso);
-
-  const { data: expenses } = await supabase
-    .from("bms_expenses")
-    .select("amount, expense_date, category")
-    .eq("building_id", profile.building_id)
-    .gte("expense_date", start12Iso);
-
-  // YTD totals (separate query to be sure)
-  const { data: paymentsYtd } = await supabase
-    .from("bms_payments")
-    .select("amount")
-    .eq("building_id", profile.building_id)
-    .gte("payment_date", ytdStart);
-
-  const { data: expensesYtd } = await supabase
-    .from("bms_expenses")
-    .select("amount")
-    .eq("building_id", profile.building_id)
-    .gte("expense_date", ytdStart);
-
-  // All-time totals for fund balance
-  const { data: paymentsAll } = await supabase
-    .from("bms_payments")
-    .select("amount")
-    .eq("building_id", profile.building_id);
-  const { data: expensesAll } = await supabase
-    .from("bms_expenses")
-    .select("amount")
-    .eq("building_id", profile.building_id);
 
   const sum = (rows: { amount: number | string | null }[] | null) =>
     (rows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);

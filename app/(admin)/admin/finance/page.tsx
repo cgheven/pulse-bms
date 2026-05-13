@@ -2,11 +2,11 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getFinanceSummary } from "@/app/actions/finance";
 import { formatCurrency, formatLakh } from "@/lib/utils";
+import { MonthlyStatementButton } from "@/components/admin/finance/monthly-statement-button";
 import {
   IncomeExpenseChart,
   ExpenseBreakdownChart,
 } from "@/components/admin/finance/finance-charts";
-import { MonthlyStatementButton } from "@/components/admin/finance/monthly-statement-button";
 
 export const dynamic = "force-dynamic";
 

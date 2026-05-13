@@ -172,7 +172,7 @@ export default async function AdminDashboardPage() {
   });
 
   return (
-    <div className="space-y-6 animate-fade-up">
+    <div className="space-y-5 animate-fade-up">
       {/* Header */}
       <div>
         <h1>Admin Dashboard</h1>
@@ -182,19 +182,19 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* Hero: current month invoice status */}
-      <div className="card-hover glow-amber rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-6 sm:p-8 animate-count-up">
+      <div className="card-hover glow-amber rounded-xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:p-6 animate-count-up">
         <div className="flex items-end justify-between flex-wrap gap-4 mb-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Invoices · {monthLabel}
             </p>
-            <p className="mt-2 text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+            <p className="mt-1.5 text-3xl sm:text-4xl font-bold tracking-tight tabular-nums text-foreground">
               {formatCurrency(monthCollected)}
-              <span className="text-lg text-muted-foreground font-medium ml-2">
+              <span className="text-base text-muted-foreground font-medium ml-2">
                 / {formatCurrency(monthTotal)}
               </span>
             </p>
-            <p className="text-sm text-muted-foreground mt-2">Collected this month</p>
+            <p className="text-sm text-muted-foreground mt-1.5">Collected this month</p>
           </div>
           <Link
             href="/admin/billing"
@@ -203,53 +203,53 @@ export default async function AdminDashboardPage() {
             Manage billing →
           </Link>
         </div>
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          <div className="rounded-xl border border-border/60 bg-card/60 p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <CheckCircle2 className="w-4 h-4 text-[hsl(151_100%_45%)]" />
               Paid
             </div>
-            <div className="text-3xl font-bold mt-2 text-[hsl(151_100%_45%)]">{monthPaid}</div>
+            <div className="text-2xl font-semibold tracking-tight tabular-nums mt-1.5 text-[hsl(151_100%_45%)]">{monthPaid}</div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/60 p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <Clock className="w-4 h-4 text-[hsl(38_92%_65%)]" />
               Pending
             </div>
-            <div className="text-3xl font-bold mt-2 text-[hsl(38_92%_65%)]">{monthPending}</div>
+            <div className="text-2xl font-semibold tracking-tight tabular-nums mt-1.5 text-[hsl(38_92%_65%)]">{monthPending}</div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/60 p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <AlertTriangle className="w-4 h-4 text-destructive" />
               Overdue
             </div>
-            <div className="text-3xl font-bold mt-2 text-destructive">{monthOverdue}</div>
+            <div className="text-2xl font-semibold tracking-tight tabular-nums mt-1.5 text-destructive">{monthOverdue}</div>
           </div>
         </div>
       </div>
 
       {/* KPI grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-fade-up animate-delay-150">
-        <Kpi label="Total flats" value={String(flatsCount ?? 0)} icon={<Home className="w-5 h-5" />} />
-        <Kpi label="Occupied" value={`${occupiedFlats} / ${flatsCount ?? 0}`} icon={<CheckCircle2 className="w-5 h-5" />} />
-        <Kpi label="Active residents" value={String(residentsCount ?? 0)} icon={<Users className="w-5 h-5" />} />
-        <Kpi label="Fund balance" value={formatLakh(fundBalance)} icon={<Wallet className="w-5 h-5" />} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Kpi label="Total flats" value={String(flatsCount ?? 0)} icon={<Home className="w-4 h-4" />} />
+        <Kpi label="Occupied" value={`${occupiedFlats} / ${flatsCount ?? 0}`} icon={<CheckCircle2 className="w-4 h-4" />} />
+        <Kpi label="Active residents" value={String(residentsCount ?? 0)} icon={<Users className="w-4 h-4" />} />
+        <Kpi label="Fund balance" value={formatLakh(fundBalance)} icon={<Wallet className="w-4 h-4" />} />
         <Kpi
           label="Outstanding dues"
           value={formatLakh(totalOutstanding)}
-          icon={<AlertTriangle className="w-5 h-5" />}
+          icon={<AlertTriangle className="w-4 h-4" />}
           danger={totalOutstanding > 0}
         />
-        <Kpi label="Collected (month)" value={formatCurrency(monthCollected)} icon={<TrendingUp className="w-5 h-5" />} />
-        <Kpi label="Total billed" value={formatCurrency(monthTotal)} icon={<Receipt className="w-5 h-5" />} />
-        <Kpi label="Pending invoices" value={String(monthPending + monthOverdue)} icon={<Clock className="w-5 h-5" />} />
+        <Kpi label="Collected (month)" value={formatCurrency(monthCollected)} icon={<TrendingUp className="w-4 h-4" />} />
+        <Kpi label="Total billed" value={formatCurrency(monthTotal)} icon={<Receipt className="w-4 h-4" />} />
+        <Kpi label="Pending invoices" value={String(monthPending + monthOverdue)} icon={<Clock className="w-4 h-4" />} />
       </div>
 
       {/* Recent payments + Defaulters */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up animate-delay-300">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-up animate-delay-150">
         <div className="card-soft card-hover">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
-            <h2 className="text-xl font-semibold">Recent payments</h2>
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+            <h2 className="text-base font-semibold tracking-tight">Recent payments</h2>
             <Link href="/admin/payments" className="text-sm text-primary hover:underline">
               View all →
             </Link>
@@ -257,9 +257,9 @@ export default async function AdminDashboardPage() {
           {recentPayments?.length ? (
             <ul className="divide-y divide-border">
               {recentPayments.map((p) => (
-                <li key={p.id} className="py-3 flex items-center justify-between gap-3">
+                <li key={p.id} className="py-2.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-semibold truncate">
+                    <div className="font-semibold truncate text-sm">
                       {p.flat_id ? recentFlatMap.get(p.flat_id) ?? "—" : "—"}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -268,8 +268,8 @@ export default async function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold">{formatCurrency(Number(p.amount))}</div>
-                    <span className="status-paid inline-flex px-2 py-0.5 rounded-full text-xs">
+                    <div className="font-semibold text-sm tabular-nums">{formatCurrency(Number(p.amount))}</div>
+                    <span className="status-paid inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium uppercase tracking-wide">
                       {p.category}
                     </span>
                   </div>
@@ -282,9 +282,9 @@ export default async function AdminDashboardPage() {
         </div>
 
         <div className="card-soft card-hover transition-colors hover:border-destructive/40">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+            <h2 className="text-base font-semibold tracking-tight flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
               Defaulters
             </h2>
             <span className="text-xs text-muted-foreground">
@@ -294,11 +294,11 @@ export default async function AdminDashboardPage() {
           {defaulters.length ? (
             <ul className="divide-y divide-border">
               {defaulters.map((d) => (
-                <li key={d.id} className="py-3 flex items-center justify-between gap-3">
+                <li key={d.id} className="py-2.5 flex items-center justify-between gap-3">
                   <div>
                     <Link
                       href={`/admin/flats/${d.id}`}
-                      className="font-semibold text-primary hover:underline whitespace-nowrap tabular-nums"
+                      className="font-semibold text-sm text-primary hover:underline whitespace-nowrap tabular-nums"
                     >
                       Flat {d.flat_number}
                     </Link>
@@ -307,10 +307,10 @@ export default async function AdminDashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold text-destructive">
+                    <div className="font-semibold text-sm tabular-nums text-destructive">
                       {formatLakh(d.outstanding)}
                     </div>
-                    <span className="status-defaulter inline-flex px-2 py-0.5 rounded-full text-xs">
+                    <span className="status-defaulter inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium uppercase tracking-wide">
                       Defaulter
                     </span>
                   </div>
@@ -320,31 +320,6 @@ export default async function AdminDashboardPage() {
           ) : (
             <p className="text-muted-foreground text-sm">No defaulters. Nicely done.</p>
           )}
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div className="card-soft animate-fade-up animate-delay-300">
-        <h2 className="text-xl font-semibold mb-4">Quick actions</h2>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/admin/billing"
-            className="btn-big inline-flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Receipt className="w-5 h-5" /> Generate invoices
-          </Link>
-          <Link
-            href="/admin/payments"
-            className="btn-big inline-flex items-center gap-2 bg-secondary text-foreground hover:bg-secondary/80"
-          >
-            <Wallet className="w-5 h-5" /> Record payment
-          </Link>
-          <Link
-            href="/admin/residents"
-            className="btn-big inline-flex items-center gap-2 bg-secondary text-foreground hover:bg-secondary/80"
-          >
-            <Users className="w-5 h-5" /> Manage residents
-          </Link>
         </div>
       </div>
     </div>
@@ -363,19 +338,19 @@ function Kpi({
   danger?: boolean;
 }) {
   return (
-    <div className="card-hover rounded-xl border border-border bg-card p-5">
-      <div className="flex items-start justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="card-hover rounded-lg border border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
         {icon && (
-          <div className="flex w-10 h-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div className="flex w-8 h-8 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
             {icon}
           </div>
         )}
       </div>
       <div
-        className={`mt-2 text-3xl font-bold tracking-tight ${
+        className={`mt-1.5 text-2xl font-semibold tracking-tight tabular-nums ${
           danger ? "text-destructive" : "text-foreground"
         }`}
       >

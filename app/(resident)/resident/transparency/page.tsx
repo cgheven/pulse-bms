@@ -131,7 +131,7 @@ export default async function ResidentTransparencyPage() {
   return (
     <div className="space-y-8 animate-fade-up">
       <div>
-        <h1 className="text-4xl font-bold">Where your money goes</h1>
+        <h1>Where your money goes</h1>
         <p className="text-lg text-muted-foreground mt-2">
           Full visibility into the building&apos;s income and expenses.
         </p>
