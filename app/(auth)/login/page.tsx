@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Building2, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2, Building2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,23 +30,39 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-secondary p-4">
-      <div className="w-full max-w-md animate-fade-up">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      {/* Subtle ambient glow */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-primary/5 blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-sm relative animate-fade-up">
+        {/* Logo mark */}
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border-2 border-primary/20 mb-4">
-            <Building2 className="w-8 h-8 text-primary" />
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
+            <Building2 className="w-6 h-6 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Pulse BMS</h1>
-          <p className="mt-1 text-base text-muted-foreground">Building Management System</p>
+          <h1 className="font-serif text-3xl text-foreground tracking-tight">Pulse BMS</h1>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary/70">
+            Manage your building, transparently.
+          </p>
         </div>
 
-        <div className="card-soft">
-          <h2 className="text-2xl font-semibold mb-1">Welcome back</h2>
-          <p className="text-base text-muted-foreground mb-6">Sign in to your account</p>
+        {/* Card */}
+        <div className="rounded-2xl border border-sidebar-border bg-card p-8 shadow-2xl">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-foreground">Welcome back</h2>
+            <p className="text-sm text-muted-foreground mt-1">Sign in to your account</p>
+          </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-base font-medium">Email</Label>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-muted-foreground uppercase tracking-wider"
+              >
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -56,12 +72,17 @@ export default function LoginPage() {
                 required
                 autoComplete="email"
                 disabled={loading}
-                className="h-12 text-base"
+                className="h-11 bg-background/50 border-sidebar-border focus-visible:ring-primary/40 focus-visible:border-primary/50"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-base font-medium">Password</Label>
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="password"
+                className="text-sm font-medium text-muted-foreground uppercase tracking-wider"
+              >
+                Password
+              </Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -72,16 +93,16 @@ export default function LoginPage() {
                   required
                   autoComplete="current-password"
                   disabled={loading}
-                  className="h-12 text-base pr-12"
+                  className="h-11 pr-10 bg-background/50 border-sidebar-border focus-visible:ring-primary/40 focus-visible:border-primary/50"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-2"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   tabIndex={-1}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -89,16 +110,24 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="btn-big w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              className="w-full h-11 mt-2 bg-primary text-white font-semibold hover:bg-primary/90 transition-all duration-200 glow-amber"
             >
-              {loading ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Signing in…</> : "Sign in"}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Signing in…
+                </>
+              ) : (
+                "Sign in"
+              )}
             </Button>
           </form>
-
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            Need help? Contact your building admin.
-          </p>
         </div>
+
+        {/* Help line */}
+        <p className="mt-5 text-center text-xs text-muted-foreground">
+          Need help signing in? Contact your building admin.
+        </p>
       </div>
     </div>
   );

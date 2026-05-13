@@ -166,50 +166,100 @@ export default async function AdminDashboardPage() {
     for (const f of rf ?? []) recentFlatMap.set(f.id, f.flat_number);
   }
 
+  const monthLabel = new Date(`${monthStart}T00:00:00`).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <div className="space-y-6 animate-fade-up">
+      {/* Header */}
       <div>
         <h1>Admin Dashboard</h1>
-        <p className="text-muted-foreground">{building?.name ?? "Your building"} — snapshot for {ym}.</p>
+        <p className="text-muted-foreground mt-1">
+          {building?.name ?? "Your building"} · {monthLabel}
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Hero: current month invoice status */}
+      <div className="card-hover glow-amber rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-6 sm:p-8 animate-count-up">
+        <div className="flex items-end justify-between flex-wrap gap-4 mb-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Invoices · {monthLabel}
+            </p>
+            <p className="mt-2 text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+              {formatCurrency(monthCollected)}
+              <span className="text-lg text-muted-foreground font-medium ml-2">
+                / {formatCurrency(monthTotal)}
+              </span>
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">Collected this month</p>
+          </div>
+          <Link
+            href="/admin/billing"
+            className="text-sm text-primary hover:underline font-medium"
+          >
+            Manage billing →
+          </Link>
+        </div>
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <div className="rounded-xl border border-border/60 bg-card/60 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <CheckCircle2 className="w-4 h-4 text-[hsl(151_100%_45%)]" />
+              Paid
+            </div>
+            <div className="text-3xl font-bold mt-2 text-[hsl(151_100%_45%)]">{monthPaid}</div>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-card/60 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <Clock className="w-4 h-4 text-[hsl(38_92%_65%)]" />
+              Pending
+            </div>
+            <div className="text-3xl font-bold mt-2 text-[hsl(38_92%_65%)]">{monthPending}</div>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-card/60 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+              Overdue
+            </div>
+            <div className="text-3xl font-bold mt-2 text-destructive">{monthOverdue}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-fade-up animate-delay-150">
         <Kpi label="Total flats" value={String(flatsCount ?? 0)} icon={<Home className="w-5 h-5" />} />
         <Kpi label="Occupied" value={`${occupiedFlats} / ${flatsCount ?? 0}`} icon={<CheckCircle2 className="w-5 h-5" />} />
         <Kpi label="Active residents" value={String(residentsCount ?? 0)} icon={<Users className="w-5 h-5" />} />
-        <Kpi label="Fund balance" value={formatLakh(fundBalance)} icon={<Wallet className="w-5 h-5" />} accent="success" />
+        <Kpi label="Fund balance" value={formatLakh(fundBalance)} icon={<Wallet className="w-5 h-5" />} />
+        <Kpi
+          label="Outstanding dues"
+          value={formatLakh(totalOutstanding)}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          danger={totalOutstanding > 0}
+        />
+        <Kpi label="Collected (month)" value={formatCurrency(monthCollected)} icon={<TrendingUp className="w-5 h-5" />} />
+        <Kpi label="Total billed" value={formatCurrency(monthTotal)} icon={<Receipt className="w-5 h-5" />} />
+        <Kpi label="Pending invoices" value={String(monthPending + monthOverdue)} icon={<Clock className="w-5 h-5" />} />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Kpi label="This month total" value={formatCurrency(monthTotal)} icon={<Receipt className="w-5 h-5" />} />
-        <Kpi label="Collected" value={formatCurrency(monthCollected)} icon={<TrendingUp className="w-5 h-5" />} accent="success" />
-        <Kpi label="Paid" value={String(monthPaid)} icon={<CheckCircle2 className="w-5 h-5" />} />
-        <Kpi label="Pending" value={String(monthPending)} icon={<Clock className="w-5 h-5" />} accent="warning" />
-        <Kpi label="Overdue" value={String(monthOverdue)} icon={<AlertTriangle className="w-5 h-5" />} accent="destructive" />
-      </div>
-
-      <div className="card-soft">
-        <div className="flex items-center justify-between mb-2">
-          <h3>Total outstanding dues</h3>
-          <span className="text-xs text-muted-foreground">Across all flats</span>
-        </div>
-        <div className="text-3xl font-bold text-destructive">{formatLakh(totalOutstanding)}</div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card-soft">
-          <div className="flex items-center justify-between mb-3">
-            <h3>Recent payments</h3>
+      {/* Recent payments + Defaulters */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up animate-delay-300">
+        <div className="card-soft card-hover">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+            <h2 className="text-xl font-semibold">Recent payments</h2>
             <Link href="/admin/payments" className="text-sm text-primary hover:underline">
-              View all
+              View all →
             </Link>
           </div>
           {recentPayments?.length ? (
-            <div className="divide-y divide-border">
+            <ul className="divide-y divide-border">
               {recentPayments.map((p) => (
-                <div key={p.id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold">
+                <li key={p.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">
                       {p.flat_id ? recentFlatMap.get(p.flat_id) ?? "—" : "—"}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -219,30 +269,32 @@ export default async function AdminDashboardPage() {
                   </div>
                   <div className="text-right">
                     <div className="font-semibold">{formatCurrency(Number(p.amount))}</div>
-                    <div className="text-xs text-muted-foreground">{p.category}</div>
+                    <span className="status-paid inline-flex px-2 py-0.5 rounded-full text-xs">
+                      {p.category}
+                    </span>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           ) : (
             <p className="text-muted-foreground text-sm">No payments yet.</p>
           )}
         </div>
 
-        <div className="card-soft">
-          <div className="flex items-center justify-between mb-3">
-            <h3>
-              <AlertTriangle className="inline w-5 h-5 mr-1 text-destructive" />
+        <div className="card-soft card-hover transition-colors hover:border-destructive/40">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
               Defaulters
-            </h3>
+            </h2>
             <span className="text-xs text-muted-foreground">
               {cutoff}+ months unpaid
             </span>
           </div>
           {defaulters.length ? (
-            <div className="divide-y divide-border">
+            <ul className="divide-y divide-border">
               {defaulters.map((d) => (
-                <div key={d.id} className="py-3 flex items-center justify-between">
+                <li key={d.id} className="py-3 flex items-center justify-between gap-3">
                   <div>
                     <Link
                       href={`/admin/flats/${d.id}`}
@@ -262,17 +314,18 @@ export default async function AdminDashboardPage() {
                       Defaulter
                     </span>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           ) : (
             <p className="text-muted-foreground text-sm">No defaulters. Nicely done.</p>
           )}
         </div>
       </div>
 
-      <div className="card-soft">
-        <h3 className="mb-3">Quick actions</h3>
+      {/* Quick actions */}
+      <div className="card-soft animate-fade-up animate-delay-300">
+        <h2 className="text-xl font-semibold mb-4">Quick actions</h2>
         <div className="flex flex-wrap gap-3">
           <Link
             href="/admin/billing"
@@ -302,28 +355,32 @@ function Kpi({
   label,
   value,
   icon,
-  accent,
+  danger,
 }: {
   label: string;
   value: string;
   icon?: React.ReactNode;
-  accent?: "success" | "warning" | "destructive";
+  danger?: boolean;
 }) {
-  const accentCls =
-    accent === "success"
-      ? "text-[hsl(151_70%_28%)]"
-      : accent === "warning"
-      ? "text-[hsl(38_95%_35%)]"
-      : accent === "destructive"
-      ? "text-destructive"
-      : "";
   return (
-    <div className="card-soft">
-      <div className="text-sm text-muted-foreground flex items-center gap-1.5">
-        {icon}
-        {label}
+    <div className="card-hover rounded-xl border border-border bg-card p-5">
+      <div className="flex items-start justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+        {icon && (
+          <div className="flex w-10 h-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            {icon}
+          </div>
+        )}
       </div>
-      <div className={`mt-1 text-2xl font-bold ${accentCls}`}>{value}</div>
+      <div
+        className={`mt-2 text-3xl font-bold tracking-tight ${
+          danger ? "text-destructive" : "text-foreground"
+        }`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
