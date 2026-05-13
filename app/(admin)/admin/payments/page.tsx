@@ -1,20 +1,41 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PaymentsList, type PaymentRow } from "@/components/admin/payments/payments-list";
 import { RecordPaymentButton } from "@/components/admin/payments/record-payment-button";
 import { formatCurrency } from "@/lib/utils";
+import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaymentsPage() {
+export default function PaymentsPage() {
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1>Payments</h1>
+          <p className="text-muted-foreground">Money received from residents.</p>
+        </div>
+        <Suspense fallback={null}>
+          <PaymentsHeaderButton />
+        </Suspense>
+      </div>
+
+      <Suspense fallback={<KpiRowSkeleton count={2} />}>
+        <PaymentsKpis />
+      </Suspense>
+
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <PaymentsContent />
+      </Suspense>
+    </div>
+  );
+}
+
+async function loadPaymentsData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) {
-    return (
-      <div className="card-soft">
-        <h1>Payments</h1>
-        <p className="text-muted-foreground mt-2">No building assigned.</p>
-      </div>
-    );
+    return { noBuilding: true as const };
   }
   const supabase = await createClient();
 
@@ -99,31 +120,46 @@ export default async function PaymentsPage() {
     outstanding_dues: Number(f.outstanding_dues ?? 0),
   }));
 
+  return {
+    noBuilding: false as const,
+    rows,
+    monthTotal,
+    flatOptions,
+    buildingName: building?.name ?? "Building",
+  };
+}
+
+async function PaymentsHeaderButton() {
+  const data = await loadPaymentsData();
+  if (data.noBuilding) return null;
+  return <RecordPaymentButton flats={data.flatOptions} buildingName={data.buildingName} />;
+}
+
+async function PaymentsKpis() {
+  const data = await loadPaymentsData();
+  if (data.noBuilding) return null;
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1>Payments</h1>
-          <p className="text-muted-foreground">Money received from residents.</p>
-        </div>
-        <RecordPaymentButton flats={flatOptions} buildingName={building?.name ?? "Building"} />
+    <div className="grid grid-cols-2 gap-4">
+      <div className="card-soft">
+        <div className="text-sm text-muted-foreground">This month collected</div>
+        <div className="mt-1 text-2xl font-bold">{formatCurrency(data.monthTotal)}</div>
       </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="card-soft">
-          <div className="text-sm text-muted-foreground">This month collected</div>
-          <div className="mt-1 text-2xl font-bold">{formatCurrency(monthTotal)}</div>
-        </div>
-        <div className="card-soft">
-          <div className="text-sm text-muted-foreground">Total records</div>
-          <div className="mt-1 text-2xl font-bold">{rows.length}</div>
-        </div>
+      <div className="card-soft">
+        <div className="text-sm text-muted-foreground">Total records</div>
+        <div className="mt-1 text-2xl font-bold">{data.rows.length}</div>
       </div>
-
-      <PaymentsList
-        payments={rows}
-        buildingName={building?.name ?? "Building"}
-      />
     </div>
   );
+}
+
+async function PaymentsContent() {
+  const data = await loadPaymentsData();
+  if (data.noBuilding) {
+    return (
+      <div className="card-soft">
+        <p className="text-muted-foreground mt-2">No building assigned.</p>
+      </div>
+    );
+  }
+  return <PaymentsList payments={data.rows} buildingName={data.buildingName} />;
 }

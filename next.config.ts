@@ -10,9 +10,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: __dirname,
-  },
   compress: true,
   poweredByHeader: false,
   images: {
@@ -36,8 +33,10 @@ const nextConfig: NextConfig = {
       "@radix-ui/react-tabs",
       "@radix-ui/react-toast",
     ],
-    // Keep client-side route data cached so back/forward + nav don't re-fetch.
-    staleTimes: { dynamic: 30, static: 180 },
+    // Keep prefetched route data alive for 5 minutes — covers a typical
+    // admin session of jumping between pages. Without this, prefetches expire
+    // in 30s and clicks re-fetch the RSC payload.
+    staleTimes: { dynamic: 300, static: 600 },
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

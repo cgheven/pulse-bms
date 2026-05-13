@@ -1,13 +1,35 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
 import { AdminInviteButton } from "@/components/super-admin/admin-invite-dialog";
 import { AdminRowActions } from "@/components/super-admin/admin-row-actions";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminsListPage() {
   await requireRole("super_admin");
+
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1>Admins</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage building admins and their assignments.
+          </p>
+        </div>
+      </div>
+
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <AdminsTable />
+      </Suspense>
+    </div>
+  );
+}
+
+async function AdminsTable() {
   const supabase = await createClient();
 
   const [adminsRes, buildingsRes] = await Promise.all([
@@ -29,14 +51,8 @@ export default async function AdminsListPage() {
   const buildingMap = new Map(buildings.map((b) => [b.id, b.name]));
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1>Admins</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage building admins and their assignments.
-          </p>
-        </div>
+    <>
+      <div className="flex justify-end">
         <AdminInviteButton
           buildings={activeBuildings.map((b) => ({ id: b.id, name: b.name }))}
         />
@@ -48,7 +64,7 @@ export default async function AdminsListPage() {
         </div>
       )}
 
-      <div className="card-soft p-0 overflow-hidden">
+      <div className="card-soft p-0 overflow-hidden mt-4">
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead className="bg-secondary text-left">
@@ -118,6 +134,6 @@ export default async function AdminsListPage() {
           </table>
         </div>
       </div>
-    </div>
+    </>
   );
 }

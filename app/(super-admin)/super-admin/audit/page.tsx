@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { AuditFilters } from "@/components/super-admin/audit-filters";
 import { AuditMetaCell } from "@/components/super-admin/audit-row";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +49,6 @@ export default async function AuditLogPage({
 }) {
   await requireRole("super_admin");
   const sp = await searchParams;
-  const supabase = await createClient();
 
   const buildingFilter = pickString(sp, "building");
   const entityFilter = pickString(sp, "entity");
@@ -55,6 +56,70 @@ export default async function AuditLogPage({
   const fromFilter = pickString(sp, "from");
   const toFilter = pickString(sp, "to");
   const page = Math.max(1, Number(pickString(sp, "page") ?? "1") || 1);
+
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <div>
+        <h1>Audit Log</h1>
+        <p className="text-muted-foreground mt-1">
+          Every change in Pulse BMS — searchable, immutable.
+        </p>
+      </div>
+
+      <Suspense fallback={<div className="card-soft h-24 animate-pulse bg-secondary/30" />}>
+        <AuditFiltersAsync />
+      </Suspense>
+
+      <Suspense
+        key={`${buildingFilter ?? ""}|${entityFilter ?? ""}|${actorFilter ?? ""}|${fromFilter ?? ""}|${toFilter ?? ""}|${page}`}
+        fallback={<TableSkeleton rows={8} />}
+      >
+        <AuditTable
+          buildingFilter={buildingFilter}
+          entityFilter={entityFilter}
+          actorFilter={actorFilter}
+          fromFilter={fromFilter}
+          toFilter={toFilter}
+          page={page}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+async function AuditFiltersAsync() {
+  const supabase = await createClient();
+  const [buildingsRes, entitiesRes] = await Promise.all([
+    supabase.from("bms_buildings").select("id, name").order("name"),
+    supabase
+      .from("bms_audit_log")
+      .select("entity")
+      .limit(500)
+      .order("created_at", { ascending: false }),
+  ]);
+  const buildings = buildingsRes.data ?? [];
+  const entities = Array.from(
+    new Set((entitiesRes.data ?? []).map((r: { entity: string }) => r.entity))
+  ).sort();
+  return <AuditFilters buildings={buildings} entities={entities} />;
+}
+
+async function AuditTable({
+  buildingFilter,
+  entityFilter,
+  actorFilter,
+  fromFilter,
+  toFilter,
+  page,
+}: {
+  buildingFilter: string | undefined;
+  entityFilter: string | undefined;
+  actorFilter: string | undefined;
+  fromFilter: string | undefined;
+  toFilter: string | undefined;
+  page: number;
+}) {
+  const supabase = await createClient();
 
   const fromIdx = (page - 1) * PAGE_SIZE;
   const toIdx = fromIdx + PAGE_SIZE - 1;
@@ -74,23 +139,15 @@ export default async function AuditLogPage({
   if (fromFilter) query = query.gte("created_at", `${fromFilter}T00:00:00Z`);
   if (toFilter) query = query.lte("created_at", `${toFilter}T23:59:59Z`);
 
-  const [logsRes, buildingsRes, entitiesRes] = await Promise.all([
+  const [logsRes, buildingsRes] = await Promise.all([
     query,
     supabase.from("bms_buildings").select("id, name").order("name"),
-    supabase
-      .from("bms_audit_log")
-      .select("entity")
-      .limit(500)
-      .order("created_at", { ascending: false }),
   ]);
 
   const logs: AuditEntry[] = (logsRes.data ?? []) as AuditEntry[];
   const total = logsRes.count ?? 0;
   const buildings = buildingsRes.data ?? [];
   const buildingMap = new Map(buildings.map((b) => [b.id, b.name]));
-  const entities = Array.from(
-    new Set((entitiesRes.data ?? []).map((r: { entity: string }) => r.entity))
-  ).sort();
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const baseSP = new URLSearchParams();
@@ -104,16 +161,7 @@ export default async function AuditLogPage({
   const nextHref = page < totalPages ? buildHref(baseSP, page + 1) : null;
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div>
-        <h1>Audit Log</h1>
-        <p className="text-muted-foreground mt-1">
-          Every change in Pulse BMS — searchable, immutable.
-        </p>
-      </div>
-
-      <AuditFilters buildings={buildings} entities={entities} />
-
+    <>
       {logsRes.error && (
         <div className="card-soft border-destructive/40 bg-destructive/5 text-destructive">
           Could not load audit log: {logsRes.error.message}
@@ -206,7 +254,7 @@ export default async function AuditLogPage({
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

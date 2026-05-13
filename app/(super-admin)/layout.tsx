@@ -1,7 +1,18 @@
-import { requireRole } from "@/lib/auth";
-import { AppShell } from "@/components/layout/app-shell";
+import { Suspense } from "react";
+import { AppShell, NavbarUserSkeleton } from "@/components/layout/app-shell";
+import { NavbarUserServer } from "@/components/layout/navbar-user-server";
 
-export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
-  const { profile } = await requireRole("super_admin");
-  return <AppShell profile={profile}>{children}</AppShell>;
+export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AppShell
+      role="super_admin"
+      navbarUser={
+        <Suspense fallback={<NavbarUserSkeleton />}>
+          <NavbarUserServer />
+        </Suspense>
+      }
+    >
+      {children}
+    </AppShell>
+  );
 }

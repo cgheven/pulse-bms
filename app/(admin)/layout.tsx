@@ -1,13 +1,22 @@
-import { requireRole, getCurrentBuildingName } from "@/lib/auth";
-import { AppShell } from "@/components/layout/app-shell";
+import { Suspense } from "react";
+import { AppShell, NavbarUserSkeleton } from "@/components/layout/app-shell";
+import { NavbarUserServer } from "@/components/layout/navbar-user-server";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [{ profile }, buildingName] = await Promise.all([
-    requireRole(["admin", "super_admin"]),
-    getCurrentBuildingName(),
-  ]);
+/**
+ * SYNC layout — renders shell instantly. Profile + building name stream into
+ * the navbar via Suspense. Page-level requireRole runs inside the page's own
+ * Suspense boundary, so the entire shell + sidebar appear in <50ms.
+ */
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AppShell profile={profile} buildingName={buildingName}>
+    <AppShell
+      role="admin"
+      navbarUser={
+        <Suspense fallback={<NavbarUserSkeleton />}>
+          <NavbarUserServer />
+        </Suspense>
+      }
+    >
       {children}
     </AppShell>
   );

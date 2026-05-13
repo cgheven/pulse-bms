@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { formatLakh } from "@/lib/utils";
@@ -6,6 +7,7 @@ import {
   BuildingRowActions,
   CreateBuildingButton,
 } from "@/components/super-admin/building-actions";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -26,17 +28,6 @@ type BuildingRow = {
 
 export default async function BuildingsListPage() {
   await requireRole("super_admin");
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("bms_buildings")
-    .select(
-      "id, name, address, city, total_flats, fund_balance, entry_fee_owner, entry_fee_tenant, monthly_fee_default, voting_rule, utility_cutoff_after_months, is_active"
-    )
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  const buildings: BuildingRow[] = (data ?? []) as BuildingRow[];
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -50,6 +41,28 @@ export default async function BuildingsListPage() {
         <CreateBuildingButton />
       </div>
 
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <BuildingsTable />
+      </Suspense>
+    </div>
+  );
+}
+
+async function BuildingsTable() {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("bms_buildings")
+    .select(
+      "id, name, address, city, total_flats, fund_balance, entry_fee_owner, entry_fee_tenant, monthly_fee_default, voting_rule, utility_cutoff_after_months, is_active"
+    )
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  const buildings: BuildingRow[] = (data ?? []) as BuildingRow[];
+
+  return (
+    <>
       {error && (
         <div className="card-soft border-destructive/40 bg-destructive/5 text-destructive">
           Could not load buildings: {error.message}
@@ -115,6 +128,6 @@ export default async function BuildingsListPage() {
           </table>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -181,6 +181,7 @@ const NavLink = memo(function NavLink({
     <Link
       href={href}
       onClick={onClose}
+      prefetch={true}
       className={cn(
         "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group",
         active

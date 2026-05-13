@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -10,6 +11,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +86,26 @@ function prettifySubcategory(s: string | null | undefined): string {
 
 type SearchParams = Promise<{ category?: string; from?: string; to?: string }>;
 
-export default async function ExpensesPage({
+export default function ExpensesPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <div className="flex items-center justify-between gap-3">
+        <h1>Expenses</h1>
+        <AddExpenseButton />
+      </div>
+
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <ExpensesContent searchParams={searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function ExpensesContent({
   searchParams,
 }: {
   searchParams: SearchParams;
@@ -125,142 +146,135 @@ export default async function ExpensesPage({
   });
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between gap-3">
-        <h1>Expenses</h1>
-        <AddExpenseButton />
-      </div>
+    <Tabs defaultValue="list">
+      <TabsList>
+        <TabsTrigger value="list">All expenses</TabsTrigger>
+        <TabsTrigger value="month">This month by category</TabsTrigger>
+      </TabsList>
 
-      <Tabs defaultValue="list">
-        <TabsList>
-          <TabsTrigger value="list">All expenses</TabsTrigger>
-          <TabsTrigger value="month">This month by category</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="list" className="space-y-3">
-          <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-sm text-muted-foreground mr-1">Filter:</span>
+      <TabsContent value="list" className="space-y-3">
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-sm text-muted-foreground mr-1">Filter:</span>
+          <Link
+            href="/admin/expenses"
+            className={`text-sm px-3 py-1 rounded-full border transition-colors ${
+              !sp.category
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+            }`}
+          >
+            All
+          </Link>
+          {Object.entries(FILTER_CATEGORIES).map(([k, v]) => (
             <Link
-              href="/admin/expenses"
+              key={k}
+              href={`/admin/expenses?category=${k}`}
               className={`text-sm px-3 py-1 rounded-full border transition-colors ${
-                !sp.category
+                sp.category === k
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
               }`}
             >
-              All
+              {v}
             </Link>
-            {Object.entries(FILTER_CATEGORIES).map(([k, v]) => (
-              <Link
-                key={k}
-                href={`/admin/expenses?category=${k}`}
-                className={`text-sm px-3 py-1 rounded-full border transition-colors ${
-                  sp.category === k
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-                }`}
-              >
-                {v}
-              </Link>
-            ))}
-          </div>
+          ))}
+        </div>
 
-          <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-secondary border-b border-border">
-                  <tr className="text-left">
-                    <th className="px-3 py-3 font-semibold">Date</th>
-                    <th className="px-3 py-3 font-semibold">Category</th>
-                    <th className="px-3 py-3 font-semibold">Description</th>
-                    <th className="px-3 py-3 font-semibold">Vendor</th>
-                    <th className="px-3 py-3 font-semibold text-right">Amount</th>
-                    <th className="px-3 py-3" />
+        <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary border-b border-border">
+                <tr className="text-left">
+                  <th className="px-3 py-3 font-semibold">Date</th>
+                  <th className="px-3 py-3 font-semibold">Category</th>
+                  <th className="px-3 py-3 font-semibold">Description</th>
+                  <th className="px-3 py-3 font-semibold">Vendor</th>
+                  <th className="px-3 py-3 font-semibold text-right">Amount</th>
+                  <th className="px-3 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {list.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-12 text-center text-muted-foreground">
+                      No expenses recorded yet.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {list.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-12 text-center text-muted-foreground">
-                        No expenses recorded yet.
-                      </td>
-                    </tr>
-                  )}
-                  {list.map((e) => (
-                    <tr key={e.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        {formatDate(e.expense_date)}
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-secondary border border-border">
-                          {CATEGORY_LABELS[e.category] ?? e.category}
-                        </span>
-                        {e.subcategory && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {prettifySubcategory(e.subcategory)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 min-w-[220px]">{e.description}</td>
-                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                        {e.vendor ?? "—"}
-                      </td>
-                      <td className="px-3 py-3 font-semibold text-right whitespace-nowrap">
-                        {formatCurrency(Number(e.amount))}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <ExpenseRowActions
-                          expense={{
-                            id: e.id,
-                            category: e.category,
-                            subcategory: e.subcategory,
-                            description: e.description,
-                            amount: Number(e.amount),
-                            expense_date: e.expense_date,
-                            is_recurring: e.is_recurring,
-                            recurrence: e.recurrence,
-                            vendor: e.vendor,
-                            receipt_url: e.receipt_url,
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                )}
+                {list.map((e) => (
+                  <tr key={e.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      {formatDate(e.expense_date)}
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-secondary border border-border">
+                        {CATEGORY_LABELS[e.category] ?? e.category}
+                      </span>
+                      {e.subcategory && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {prettifySubcategory(e.subcategory)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 min-w-[220px]">{e.description}</td>
+                    <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
+                      {e.vendor ?? "—"}
+                    </td>
+                    <td className="px-3 py-3 font-semibold text-right whitespace-nowrap">
+                      {formatCurrency(Number(e.amount))}
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <ExpenseRowActions
+                        expense={{
+                          id: e.id,
+                          category: e.category,
+                          subcategory: e.subcategory,
+                          description: e.description,
+                          amount: Number(e.amount),
+                          expense_date: e.expense_date,
+                          is_recurring: e.is_recurring,
+                          recurrence: e.recurrence,
+                          vendor: e.vendor,
+                          receipt_url: e.receipt_url,
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </TabsContent>
+        </div>
+      </TabsContent>
 
-        <TabsContent value="month">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="card-soft">
-              <div className="text-muted-foreground">Total this month</div>
-              <div className="text-3xl font-bold mt-1">
-                {formatCurrency(monthTotal)}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {formatDate(month.start)} – {formatDate(month.end)}
+      <TabsContent value="month">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="card-soft">
+            <div className="text-muted-foreground">Total this month</div>
+            <div className="text-3xl font-bold mt-1">
+              {formatCurrency(monthTotal)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {formatDate(month.start)} – {formatDate(month.end)}
+            </div>
+          </div>
+          {Object.entries(FILTER_CATEGORIES).map(([k, v]) => (
+            <div key={k} className="card-soft">
+              <div className="text-muted-foreground">{v}</div>
+              <div className="text-2xl font-semibold mt-1">
+                {formatCurrency(groups.get(k) ?? 0)}
               </div>
             </div>
-            {Object.entries(FILTER_CATEGORIES).map(([k, v]) => (
-              <div key={k} className="card-soft">
-                <div className="text-muted-foreground">{v}</div>
-                <div className="text-2xl font-semibold mt-1">
-                  {formatCurrency(groups.get(k) ?? 0)}
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-4">
-            Staff salaries are tracked separately in{" "}
-            <Link href="/admin/staff" className="text-primary hover:underline">
-              /admin/staff
-            </Link>
-            .
-          </p>
-        </TabsContent>
-      </Tabs>
-    </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground mt-4">
+          Staff salaries are tracked separately in{" "}
+          <Link href="/admin/staff" className="text-primary hover:underline">
+            /admin/staff
+          </Link>
+          .
+        </p>
+      </TabsContent>
+    </Tabs>
   );
 }

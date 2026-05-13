@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
@@ -11,6 +12,7 @@ import { AddTaskButton } from "@/components/admin/facility/add-task-button";
 import { TaskRowActions } from "@/components/admin/facility/task-row-actions";
 import { ComplaintActions } from "@/components/admin/facility/complaint-actions";
 import { Wrench, AlertCircle, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 import type {
   FacilityTaskInput,
   ComplaintStatus,
@@ -72,7 +74,27 @@ function prettifyCategory(s: string | null | undefined): string {
   return s.split(/[_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
 }
 
-export default async function FacilityPage() {
+export default function FacilityPage() {
+  return (
+    <div className="space-y-6 animate-fade-up">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1>Facility</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+            Scheduled tasks and complaints for this building.
+          </p>
+        </div>
+      </div>
+
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <FacilityContent />
+      </Suspense>
+    </div>
+  );
+}
+
+async function FacilityContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   const supabase = await createClient();
 
@@ -105,32 +127,29 @@ export default async function FacilityPage() {
   const overdueTasks = tasks.filter((t) => t.next_due_date && t.next_due_date < today && t.status !== "done").length;
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* Stats + CTA */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1>Facility</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="inline-flex items-center gap-1.5">
-              <Wrench className="w-3.5 h-3.5" />
-              {tasks.length} scheduled task{tasks.length !== 1 ? "s" : ""}
-            </span>
-            <span className="hidden sm:inline">·</span>
-            <span className="inline-flex items-center gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5" />
-              {openComplaints} open complaint{openComplaints !== 1 ? "s" : ""}
-            </span>
-            {overdueTasks > 0 && (
-              <>
-                <span className="hidden sm:inline">·</span>
-                <span className="inline-flex items-center gap-1.5 text-destructive font-medium">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  {overdueTasks} overdue
-                </span>
-              </>
-            )}
-          </p>
-        </div>
+        <p className="text-muted-foreground mt-1 text-sm sm:text-base flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="inline-flex items-center gap-1.5">
+            <Wrench className="w-3.5 h-3.5" />
+            {tasks.length} scheduled task{tasks.length !== 1 ? "s" : ""}
+          </span>
+          <span className="hidden sm:inline">·</span>
+          <span className="inline-flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5" />
+            {openComplaints} open complaint{openComplaints !== 1 ? "s" : ""}
+          </span>
+          {overdueTasks > 0 && (
+            <>
+              <span className="hidden sm:inline">·</span>
+              <span className="inline-flex items-center gap-1.5 text-destructive font-medium">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                {overdueTasks} overdue
+              </span>
+            </>
+          )}
+        </p>
         <AddTaskButton staff={staff} />
       </div>
 

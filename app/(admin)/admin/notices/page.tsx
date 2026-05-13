@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -5,6 +6,7 @@ import { AddNoticeButton } from "@/components/admin/notices/add-notice-button";
 import { NoticeRowActions } from "@/components/admin/notices/notice-row-actions";
 import { Pin, Megaphone } from "lucide-react";
 import type { NoticeInput, NoticeType } from "@/app/actions/notices";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,30 @@ const TYPE_PILL: Record<NoticeType, string> = {
   emergency:     "status-overdue",
 };
 
-export default async function NoticesPage() {
+export default function NoticesPage() {
+  return (
+    <div className="space-y-6 animate-fade-up">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1>Notices</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Announcements and updates for residents.
+          </p>
+        </div>
+        <Suspense fallback={<AddNoticeButton defaulterTemplate={undefined} />}>
+          <NoticesHeaderButton />
+        </Suspense>
+      </div>
+
+      <Suspense fallback={<TableSkeleton rows={4} />}>
+        <NoticesContent />
+      </Suspense>
+    </div>
+  );
+}
+
+async function loadNoticesData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   const supabase = await createClient();
 
@@ -64,7 +89,16 @@ export default async function NoticesPage() {
     ].join("\n");
   }
 
-  const list = notices ?? [];
+  return { notices: notices ?? [], defaulterTemplate };
+}
+
+async function NoticesHeaderButton() {
+  const { defaulterTemplate } = await loadNoticesData();
+  return <AddNoticeButton defaulterTemplate={defaulterTemplate} />;
+}
+
+async function NoticesContent() {
+  const { notices: list, defaulterTemplate } = await loadNoticesData();
   const pinned = list.filter((n) => n.pinned);
   const others = list.filter((n) => !n.pinned);
   const activeCount = list.filter(
@@ -72,37 +106,31 @@ export default async function NoticesPage() {
   ).length;
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1>Notices</h1>
-          <p className="text-muted-foreground mt-1 text-sm flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="inline-flex items-center gap-1.5">
-              <Megaphone className="w-3.5 h-3.5" />
-              {list.length} notice{list.length === 1 ? "" : "s"}
+    <>
+      {/* Stats sub-row */}
+      <p className="text-muted-foreground -mt-2 text-sm flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="inline-flex items-center gap-1.5">
+          <Megaphone className="w-3.5 h-3.5" />
+          {list.length} notice{list.length === 1 ? "" : "s"}
+        </span>
+        {pinned.length > 0 && (
+          <>
+            <span className="hidden sm:inline">·</span>
+            <span className="inline-flex items-center gap-1.5 text-primary">
+              <Pin className="w-3.5 h-3.5" />
+              {pinned.length} pinned
             </span>
-            {pinned.length > 0 && (
-              <>
-                <span className="hidden sm:inline">·</span>
-                <span className="inline-flex items-center gap-1.5 text-primary">
-                  <Pin className="w-3.5 h-3.5" />
-                  {pinned.length} pinned
-                </span>
-              </>
-            )}
-            {activeCount < list.length && (
-              <>
-                <span className="hidden sm:inline">·</span>
-                <span className="text-muted-foreground/70">
-                  {list.length - activeCount} expired
-                </span>
-              </>
-            )}
-          </p>
-        </div>
-        <AddNoticeButton defaulterTemplate={defaulterTemplate} />
-      </div>
+          </>
+        )}
+        {activeCount < list.length && (
+          <>
+            <span className="hidden sm:inline">·</span>
+            <span className="text-muted-foreground/70">
+              {list.length - activeCount} expired
+            </span>
+          </>
+        )}
+      </p>
 
       {/* Empty state */}
       {list.length === 0 && (
@@ -186,6 +214,6 @@ export default async function NoticesPage() {
           );
         })}
       </div>
-    </div>
+    </>
   );
 }

@@ -1,18 +1,38 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MembersTab } from "@/components/admin/union/members-tab";
 import { AddMemberButton } from "@/components/admin/union/add-member-button";
 import { ElectionsTab } from "@/components/admin/union/elections-tab";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminUnionPage() {
+export default function AdminUnionPage() {
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1>Union management</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+            Manage committee members and election cycles for this building.
+          </p>
+        </div>
+      </header>
+
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <UnionContent />
+      </Suspense>
+    </div>
+  );
+}
+
+async function UnionContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) {
     return (
       <div className="card-soft">
-        <h1>Union management</h1>
         <p className="text-muted-foreground mt-2">No building assigned to your account.</p>
       </div>
     );
@@ -42,16 +62,10 @@ export default async function AdminUnionPage() {
   ]);
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1>Union management</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-            Manage committee members and election cycles for this building.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex justify-end">
         <AddMemberButton candidates={candidates ?? []} />
-      </header>
+      </div>
 
       <Tabs defaultValue="members">
         <TabsList>

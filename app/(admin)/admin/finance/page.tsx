@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getFinanceSummary } from "@/app/actions/finance";
@@ -7,15 +8,39 @@ import {
   IncomeExpenseChart,
   ExpenseBreakdownChart,
 } from "@/components/admin/finance/finance-charts";
+import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
-export default async function FinancePage() {
+export default function FinancePage() {
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1>Finance</h1>
+          <p className="text-muted-foreground">Income, expenses and fund balance.</p>
+        </div>
+      </div>
+
+      <Suspense
+        fallback={
+          <div className="space-y-6">
+            <KpiRowSkeleton count={4} />
+            <TableSkeleton rows={4} />
+          </div>
+        }
+      >
+        <FinanceContent />
+      </Suspense>
+    </div>
+  );
+}
+
+async function FinanceContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) {
     return (
       <div className="card-soft">
-        <h1>Finance</h1>
         <p className="text-muted-foreground mt-2">No building assigned.</p>
       </div>
     );
@@ -30,12 +55,8 @@ export default async function FinancePage() {
     .single();
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1>Finance</h1>
-          <p className="text-muted-foreground">Income, expenses and fund balance.</p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-end flex-wrap gap-3">
         <MonthlyStatementButton
           data={{
             building_name: building?.name ?? "Building",

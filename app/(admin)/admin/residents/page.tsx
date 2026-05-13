@@ -1,18 +1,35 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   ResidentsTable,
   type ResidentRow,
 } from "@/components/admin/residents/residents-table";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
-export default async function ResidentsPage() {
+// SYNC outer — renders shell instantly
+export default function ResidentsPage() {
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <div>
+        <h1>Residents</h1>
+        <p className="text-muted-foreground">Owners, tenants and family members.</p>
+      </div>
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <ResidentsContent />
+      </Suspense>
+    </div>
+  );
+}
+
+// ASYNC inner — does all the fetching
+async function ResidentsContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) {
     return (
       <div className="card-soft">
-        <h1>Residents</h1>
         <p className="text-muted-foreground mt-2">No building assigned.</p>
       </div>
     );
@@ -54,19 +71,13 @@ export default async function ResidentsPage() {
   }));
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div>
-        <h1>Residents</h1>
-        <p className="text-muted-foreground">Owners, tenants and family members.</p>
-      </div>
-      <ResidentsTable
-        residents={rows}
-        flats={(flats ?? []).map((f) => ({ id: f.id, flat_number: f.flat_number }))}
-        buildingDefaults={{
-          entry_fee_owner: Number(building?.entry_fee_owner ?? 10000),
-          entry_fee_tenant: Number(building?.entry_fee_tenant ?? 5000),
-        }}
-      />
-    </div>
+    <ResidentsTable
+      residents={rows}
+      flats={(flats ?? []).map((f) => ({ id: f.id, flat_number: f.flat_number }))}
+      buildingDefaults={{
+        entry_fee_owner: Number(building?.entry_fee_owner ?? 10000),
+        entry_fee_tenant: Number(building?.entry_fee_tenant ?? 5000),
+      }}
+    />
   );
 }

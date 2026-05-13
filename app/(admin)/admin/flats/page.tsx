@@ -1,15 +1,32 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { FlatsTable, type FlatRow } from "@/components/admin/flats/flats-table";
+import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
-export default async function FlatsPage() {
+// SYNC outer — renders shell instantly
+export default function FlatsPage() {
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <div>
+        <h1>Flats</h1>
+        <p className="text-muted-foreground">All units in this building.</p>
+      </div>
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <FlatsContent />
+      </Suspense>
+    </div>
+  );
+}
+
+// ASYNC inner — does all the fetching
+async function FlatsContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) {
     return (
       <div className="card-soft">
-        <h1>Flats</h1>
         <p className="text-muted-foreground mt-2">No building assigned.</p>
       </div>
     );
@@ -60,13 +77,5 @@ export default async function FlatsPage() {
     primary_resident_name: primaryByFlat.get(f.id) ?? null,
   }));
 
-  return (
-    <div className="space-y-6 animate-fade-up">
-      <div>
-        <h1>Flats</h1>
-        <p className="text-muted-foreground">All units in this building.</p>
-      </div>
-      <FlatsTable flats={rows} buildingDefaultFee={Number(building?.monthly_fee_default ?? 0)} />
-    </div>
-  );
+  return <FlatsTable flats={rows} buildingDefaultFee={Number(building?.monthly_fee_default ?? 0)} />;
 }

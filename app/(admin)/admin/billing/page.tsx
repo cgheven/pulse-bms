@@ -1,17 +1,53 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { GenerateInvoicesButton } from "@/components/admin/billing/generate-invoices-button";
 import { InvoicesList, type InvoiceRow } from "@/components/admin/billing/invoices-list";
 import { formatCurrency } from "@/lib/utils";
+import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
-export default async function BillingPage() {
+// SYNC outer — renders shell instantly
+export default function BillingPage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const ym = today.slice(0, 7);
+  const defaultMonth = ym;
+
+  return (
+    <div className="space-y-6 animate-fade-up">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1>Billing</h1>
+          <p className="text-muted-foreground">Maintenance invoices for {ym}.</p>
+        </div>
+        <div className="shrink-0">
+          <GenerateInvoicesButton defaultMonth={defaultMonth} />
+        </div>
+      </div>
+
+      <Suspense
+        fallback={
+          <>
+            <KpiRowSkeleton count={4} />
+            <TableSkeleton rows={6} />
+          </>
+        }
+      >
+        <BillingKpisAndTable />
+      </Suspense>
+    </div>
+  );
+}
+
+// ASYNC inner — does all the fetching for KPIs + table.
+// Kept as a single inner component because KPIs are derived from the same invoice rows
+// as the table; splitting them would force two identical queries.
+async function BillingKpisAndTable() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) {
     return (
       <div className="card-soft">
-        <h1>Billing</h1>
         <p className="text-muted-foreground mt-2">No building assigned.</p>
       </div>
     );
@@ -86,20 +122,8 @@ export default async function BillingPage() {
   const monthOverdue = thisMonthRows.filter((r) => r.status === "pending" && r.due_date && r.due_date < today).length;
   const monthPaid = thisMonthRows.filter((r) => r.status === "paid").length;
 
-  const defaultMonth = ym;
-
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1>Billing</h1>
-          <p className="text-muted-foreground">Maintenance invoices for {ym}.</p>
-        </div>
-        <div className="shrink-0">
-          <GenerateInvoicesButton defaultMonth={defaultMonth} />
-        </div>
-      </div>
-
+    <>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Kpi label="This month total" value={formatCurrency(monthTotal)} />
         <Kpi label="Collected" value={formatCurrency(monthCollected)} accent="success" />
@@ -117,7 +141,7 @@ export default async function BillingPage() {
           outstanding_dues: Number(f.outstanding_dues ?? 0),
         }))}
       />
-    </div>
+    </>
   );
 }
 
