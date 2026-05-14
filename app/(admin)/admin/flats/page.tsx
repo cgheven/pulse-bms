@@ -41,7 +41,7 @@ async function FlatsContent() {
       .order("flat_number"),
     supabase
       .from("bms_buildings")
-      .select("monthly_fee_default")
+      .select("name, monthly_fee_default")
       .eq("id", profile.building_id)
       .single(),
     supabase
@@ -77,5 +77,11 @@ async function FlatsContent() {
     primary_resident_name: primaryByFlat.get(f.id) ?? null,
   }));
 
-  return <FlatsTable flats={rows} buildingDefaultFee={Number(building?.monthly_fee_default ?? 0)} />;
+  return (
+    <FlatsTable
+      flats={rows}
+      buildingDefaultFee={Number(building?.monthly_fee_default ?? 0)}
+      buildingName={building?.name ?? "Building"}
+    />
+  );
 }

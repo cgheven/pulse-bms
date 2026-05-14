@@ -30,9 +30,11 @@ const STATUS_PILL: Record<string, string> = {
 export function FlatsTable({
   flats,
   buildingDefaultFee,
+  buildingName,
 }: {
   flats: FlatRow[];
   buildingDefaultFee: number;
+  buildingName: string;
 }) {
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<FlatRow | null>(null);
@@ -62,12 +64,17 @@ export function FlatsTable({
           <Plus className="w-5 h-5" />
           Add Flat
         </Button>
-        <FlatFormDialog open={addOpen} onOpenChange={setAddOpen} />
+        <FlatFormDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          buildingName={buildingName}
+        />
         {editing && (
           <FlatFormDialog
             initial={editing}
             open={!!editing}
             onOpenChange={(b) => !b && setEditing(null)}
+            buildingName={buildingName}
           />
         )}
       </div>

@@ -2,7 +2,9 @@
 
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { normalizePhone, syntheticEmailFromPhone } from "@/lib/phone";
 import { revalidatePath } from "next/cache";
 
 export type FlatInput = {
@@ -119,4 +121,308 @@ export async function deleteFlat(id: string) {
   revalidatePath("/admin/flats");
   revalidatePath("/admin");
   return { ok: true };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * createFlatWithPeople — atomic flat + owner (+ optional tenant) creation.
+ *
+ * Each person can have either mobile, email, both, or neither. If any contact
+ * info is present we auto-provision a Supabase auth user so they get their own
+ * resident portal. Same mobile across flats reuses the existing account.
+ *
+ * Returns generated logins so the UI can copy/share them with each person.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export type FlatPersonInput = {
+  full_name?: string | null;
+  phone?: string | null; // any human form; normalized server-side
+  email?: string | null;
+  cnic?: string | null;
+};
+
+export type FlatWithPeopleInput = {
+  flat: FlatInput;
+  owner?: FlatPersonInput | null;
+  tenant?: FlatPersonInput | null;
+};
+
+export type CreatedLogin = {
+  resident_id: string;
+  profile_id: string;
+  full_name: string;
+  relationship: "owner" | "tenant";
+  // Username shown to the resident — mobile if available, else real email.
+  username: string;
+  // Whether `username` is a phone (else email). Drives display + share links.
+  username_kind: "phone" | "email";
+  // Present only when a brand-new account was provisioned. Null when an
+  // existing account (e.g. same owner across two flats) was reused.
+  password: string | null;
+};
+
+export type CreateFlatWithPeopleResult = {
+  flat_id: string;
+  logins: CreatedLogin[];
+};
+
+function generatePassword(): string {
+  const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  const arr = new Uint32Array(10);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < 10; i++) out += chars[arr[i] % chars.length];
+  return out;
+}
+
+/**
+ * Ensure a profile exists for this person.
+ *
+ * Lookup order: phone (canonical) → email. If found, we reuse and skip auth
+ * user creation (no new password generated — they already have one).
+ * Otherwise we provision a Supabase auth user with a random 10-char password
+ * and insert a matching bms_profiles row.
+ *
+ * Returns null when neither phone nor email was supplied — caller should
+ * create the resident row without a profile_id (contact-only entry).
+ */
+async function ensureProfile(
+  person: FlatPersonInput,
+  buildingId: string,
+): Promise<{
+  profile_id: string;
+  password: string | null;
+  username: string;
+  username_kind: "phone" | "email";
+} | null> {
+  const phone = normalizePhone(person.phone);
+  const realEmail = person.email?.trim().toLowerCase() || null;
+
+  if (!phone && !realEmail) return null;
+
+  // The auth identifier we hand Supabase. Synthetic when only mobile present.
+  const authEmail = realEmail ?? (phone ? syntheticEmailFromPhone(phone) : null);
+  if (!authEmail) return null;
+
+  const admin = createAdminClient();
+
+  // Reuse path — same mobile across flats = same human = same account.
+  // We always rotate the password so admin walks away from flat creation with
+  // a fresh shareable credential. Old session/password is invalidated.
+  let reuseId: string | null = null;
+  let reuseUsername = "";
+  let reuseKind: "phone" | "email" = "phone";
+  if (phone) {
+    const { data: existingByPhone } = await admin
+      .from("bms_profiles")
+      .select("id")
+      .eq("phone", phone)
+      .maybeSingle();
+    if (existingByPhone) {
+      reuseId = existingByPhone.id;
+      reuseUsername = phone;
+      reuseKind = "phone";
+    }
+  }
+  if (!reuseId && realEmail) {
+    const { data: existingByEmail } = await admin
+      .from("bms_profiles")
+      .select("id")
+      .eq("email", realEmail)
+      .maybeSingle();
+    if (existingByEmail) {
+      reuseId = existingByEmail.id;
+      reuseUsername = realEmail;
+      reuseKind = "email";
+    }
+  }
+
+  const password = generatePassword();
+
+  if (reuseId) {
+    // Rotate password, lift any ban, AND confirm the email. Each of these
+    // produces the same "Invalid login credentials" message at sign-in, so
+    // clear all three on every reissue (revoke ban, old invite never confirmed,
+    // stale password).
+    const { error: pwErr } = await admin.auth.admin.updateUserById(reuseId, {
+      password,
+      ban_duration: "none",
+      email_confirm: true,
+    });
+    if (pwErr) throw new Error(pwErr.message);
+    await admin
+      .from("bms_profiles")
+      .update({ is_active: true })
+      .eq("id", reuseId);
+    return {
+      profile_id: reuseId,
+      password,
+      username: reuseUsername,
+      username_kind: reuseKind,
+    };
+  }
+
+  // Provision new auth user (email pre-confirmed so they can sign in immediately).
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email: authEmail,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: person.full_name?.trim() || null },
+  });
+  if (createErr || !created?.user) {
+    throw new Error(createErr?.message ?? "Could not create login");
+  }
+
+  // Insert the profile row. Phone is stored canonical when present.
+  const { error: profileErr } = await admin.from("bms_profiles").upsert(
+    {
+      id: created.user.id,
+      email: authEmail,
+      full_name: person.full_name?.trim() || null,
+      phone: phone ?? null,
+      role: "resident" as const,
+      building_id: buildingId,
+      is_active: true,
+    },
+    { onConflict: "id" },
+  );
+  if (profileErr) throw new Error(profileErr.message);
+
+  return {
+    profile_id: created.user.id,
+    password,
+    username: phone ?? realEmail!,
+    username_kind: phone ? "phone" : "email",
+  };
+}
+
+export async function createFlatWithPeople(
+  input: FlatWithPeopleInput,
+): Promise<CreateFlatWithPeopleResult> {
+  const { profile, user } = await requireRole(["admin", "super_admin"]);
+  if (!profile.building_id) throw new Error("No building assigned");
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  // 1. Create the flat
+  const flatPayload = {
+    building_id: profile.building_id,
+    flat_number: input.flat.flat_number.trim(),
+    floor: input.flat.floor ?? null,
+    block: input.flat.block?.trim() || null,
+    size_sqft: input.flat.size_sqft ?? null,
+    monthly_fee: input.flat.monthly_fee ?? null,
+    ownership_type: input.flat.ownership_type ?? "owner",
+    notes: input.flat.notes?.trim() || null,
+  };
+  const { data: flat, error: flatErr } = await supabase
+    .from("bms_flats")
+    .insert(flatPayload)
+    .select()
+    .single();
+  if (flatErr) throw new Error(flatErr.message);
+
+  const logins: CreatedLogin[] = [];
+
+  // The resident who actually lives in the flat is primary. For owner-occupied
+  // that's the owner. For tenant-occupied that's the tenant; owner exists for
+  // contact + their own portal view but is not the on-site primary.
+  const ownerIsPrimary = flatPayload.ownership_type !== "tenant";
+
+  // 2. Owner — always processed when any owner info supplied.
+  if (input.owner && hasAnyValue(input.owner)) {
+    const profileResult = await ensureProfile(input.owner, profile.building_id);
+    const { data: residentRow, error: resErr } = await admin
+      .from("bms_residents")
+      .insert({
+        building_id: profile.building_id,
+        flat_id: flat.id,
+        profile_id: profileResult?.profile_id ?? null,
+        full_name: input.owner.full_name?.trim() || "Owner",
+        phone: normalizePhone(input.owner.phone),
+        email: input.owner.email?.trim() || null,
+        cnic: input.owner.cnic?.trim() || null,
+        relationship: "owner" as const,
+        is_primary: ownerIsPrimary,
+        is_active: true,
+      })
+      .select("id, full_name")
+      .single();
+    if (resErr) throw new Error(resErr.message);
+
+    if (profileResult) {
+      logins.push({
+        resident_id: residentRow.id,
+        profile_id: profileResult.profile_id,
+        full_name: residentRow.full_name,
+        relationship: "owner",
+        username: profileResult.username,
+        username_kind: profileResult.username_kind,
+        password: profileResult.password,
+      });
+    }
+  }
+
+  // 3. Tenant — only for rented flats.
+  if (
+    flatPayload.ownership_type === "tenant" &&
+    input.tenant &&
+    hasAnyValue(input.tenant)
+  ) {
+    const profileResult = await ensureProfile(input.tenant, profile.building_id);
+    const { data: residentRow, error: resErr } = await admin
+      .from("bms_residents")
+      .insert({
+        building_id: profile.building_id,
+        flat_id: flat.id,
+        profile_id: profileResult?.profile_id ?? null,
+        full_name: input.tenant.full_name?.trim() || "Tenant",
+        phone: normalizePhone(input.tenant.phone),
+        email: input.tenant.email?.trim() || null,
+        cnic: input.tenant.cnic?.trim() || null,
+        relationship: "tenant" as const,
+        is_primary: true,
+        is_active: true,
+      })
+      .select("id, full_name")
+      .single();
+    if (resErr) throw new Error(resErr.message);
+
+    if (profileResult) {
+      logins.push({
+        resident_id: residentRow.id,
+        profile_id: profileResult.profile_id,
+        full_name: residentRow.full_name,
+        relationship: "tenant",
+        username: profileResult.username,
+        username_kind: profileResult.username_kind,
+        password: profileResult.password,
+      });
+    }
+  }
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    building_id: profile.building_id,
+    action: "flat.create",
+    entity: "flat",
+    entity_id: flat.id,
+    meta: {
+      ...flatPayload,
+      logins_created: logins.length,
+      logins_reused: logins.filter((l) => l.password === null).length,
+    },
+  });
+
+  revalidatePath("/admin/flats");
+  revalidatePath("/admin/residents");
+  revalidatePath("/admin");
+  return { flat_id: flat.id, logins };
+}
+
+function hasAnyValue(p: FlatPersonInput): boolean {
+  return Boolean(
+    p.full_name?.trim() || p.phone?.trim() || p.email?.trim() || p.cnic?.trim(),
+  );
 }

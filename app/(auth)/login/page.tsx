@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
+import { resolveLoginIdentifier } from "@/app/actions/auth-resolve";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,10 +19,33 @@ export default function LoginPage() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+
+    // Resolve mobile -> actual Supabase email server-side. Handles both
+    // synthetic emails (residents created via Add Login) and real emails
+    // (admins/union imported with their real address + phone set).
+    const authEmail = await resolveLoginIdentifier(identifier);
+    if (!authEmail) {
+      toast({
+        title: "Login failed",
+        description:
+          "Enter your mobile number (e.g. 0331-1000006) or email address.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password,
+    });
     if (error) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
+      toast({
+        title: "Login failed",
+        description: error.message,
+        variant: "destructive",
+      });
       setLoading(false);
       return;
     }
@@ -58,19 +82,20 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
               <Label
-                htmlFor="email"
+                htmlFor="identifier"
                 className="text-sm font-medium text-muted-foreground uppercase tracking-wider"
               >
-                Email
+                Mobile or email
               </Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                inputMode="email"
+                placeholder="0331-1000006  or  you@example.com"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
-                autoComplete="email"
+                autoComplete="username"
                 disabled={loading}
                 className="h-11 bg-background/50 border-sidebar-border focus-visible:ring-primary/40 focus-visible:border-primary/50"
               />

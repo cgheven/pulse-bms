@@ -39,7 +39,7 @@ async function ResidentsContent() {
   const [{ data: residents }, { data: flats }, { data: building }] = await Promise.all([
     supabase
       .from("bms_residents")
-      .select("id, flat_id, full_name, phone, email, cnic, relationship, is_primary, is_active, move_in_date")
+      .select("id, flat_id, full_name, phone, email, cnic, relationship, is_primary, is_active, move_in_date, profile_id")
       .eq("building_id", profile.building_id)
       .order("is_primary", { ascending: false })
       .order("full_name"),
@@ -50,7 +50,7 @@ async function ResidentsContent() {
       .order("flat_number"),
     supabase
       .from("bms_buildings")
-      .select("entry_fee_owner, entry_fee_tenant")
+      .select("name, entry_fee_owner, entry_fee_tenant")
       .eq("id", profile.building_id)
       .single(),
   ]);
@@ -68,6 +68,7 @@ async function ResidentsContent() {
     is_primary: !!r.is_primary,
     is_active: !!r.is_active,
     move_in_date: r.move_in_date,
+    profile_id: r.profile_id ?? null,
   }));
 
   return (
@@ -78,6 +79,7 @@ async function ResidentsContent() {
         entry_fee_owner: Number(building?.entry_fee_owner ?? 10000),
         entry_fee_tenant: Number(building?.entry_fee_tenant ?? 5000),
       }}
+      buildingName={building?.name ?? "Building"}
     />
   );
 }
