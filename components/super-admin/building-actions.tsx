@@ -3,12 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, Pencil, Power, PowerOff } from "lucide-react";
+import { Eye, Pencil, Power, PowerOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { BuildingFormDialog, type BuildingFormValues } from "./building-form-dialog";
-import { setBuildingActive } from "@/app/actions/super-admin";
+import { setBuildingActive, deleteBuilding } from "@/app/actions/super-admin";
 
 export function BuildingRowActions({
   building,
@@ -19,6 +19,7 @@ export function BuildingRowActions({
   const { toast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function toggleActive() {
@@ -33,6 +34,23 @@ export function BuildingRowActions({
       } catch (err) {
         toast({
           title: "Could not update",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "destructive",
+        });
+      }
+    });
+  }
+
+  function performDelete() {
+    startTransition(async () => {
+      try {
+        await deleteBuilding(building.id);
+        toast({ title: "Building deleted" });
+        setDeleteOpen(false);
+        router.refresh();
+      } catch (err) {
+        toast({
+          title: "Could not delete",
           description: err instanceof Error ? err.message : "Unknown error",
           variant: "destructive",
         });
@@ -60,7 +78,7 @@ export function BuildingRowActions({
       <Button
         variant="ghost"
         size="sm"
-        className="h-9 text-destructive hover:text-destructive"
+        className="h-9"
         onClick={() => setConfirmOpen(true)}
       >
         {building.is_active ? (
@@ -74,6 +92,16 @@ export function BuildingRowActions({
             Activate
           </>
         )}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+        onClick={() => setDeleteOpen(true)}
+        title="Permanently delete (only allowed when building has no data)"
+      >
+        <Trash2 className="w-4 h-4" />
+        Delete
       </Button>
 
       <BuildingFormDialog
@@ -100,6 +128,15 @@ export function BuildingRowActions({
         }
         onConfirm={toggleActive}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title={`Permanently delete ${building.name}?`}
+        description="This removes the building entirely. The system will refuse to delete if the building still has flats, residents, invoices, payments, expenses, staff, or any other data — Deactivate it first or remove the dependent records."
+        confirmLabel={isPending ? "Deleting..." : "Delete building"}
+        onConfirm={performDelete}
+        onCancel={() => setDeleteOpen(false)}
       />
     </div>
   );

@@ -279,3 +279,169 @@ export async function setAdminActive(profileId: string, isActive: boolean) {
 
   revalidatePath("/super-admin/admins");
 }
+
+/* ────────────────────────────────────────────────────────────── */
+/* Hard deletes (Super Admin only)                              */
+/* ────────────────────────────────────────────────────────────── */
+
+/**
+ * Refuse-if-not-empty building delete.
+ *
+ * We count every dependent table that's scoped by `building_id`. If any has
+ * rows we surface the counts so the Super Admin knows exactly what to clean
+ * up first (e.g. "3 flats, 8 invoices, 2 payments"). This is deliberately
+ * not a cascade: months of billing history must not be wiped by a single
+ * misclick.
+ */
+export async function deleteBuilding(id: string) {
+  const { profile, user } = await requireRole("super_admin");
+  if (!id) throw new Error("Building id required");
+
+  const admin = createAdminClient();
+
+  // Verify the building actually exists before counting — gives a cleaner
+  // error than "0 dependents, deleted nothing".
+  const { data: building, error: bErr } = await admin
+    .from("bms_buildings")
+    .select("id, name")
+    .eq("id", id)
+    .maybeSingle();
+  if (bErr) throw new Error(bErr.message);
+  if (!building) throw new Error("Building not found");
+
+  // Tables whose rows are scoped to this building.
+  const tables = [
+    "bms_flats",
+    "bms_residents",
+    "bms_invoices",
+    "bms_payments",
+    "bms_expenses",
+    "bms_staff",
+    "bms_salary_payments",
+    "bms_complaints",
+    "bms_facility_tasks",
+    "bms_notices",
+    "bms_proposals",
+    "bms_meetings",
+    "bms_elections",
+    "bms_union_members",
+    "bms_profiles",
+  ] as const;
+
+  const counts: Record<string, number> = {};
+  for (const t of tables) {
+    const { count } = await admin
+      .from(t)
+      .select("id", { count: "exact", head: true })
+      .eq("building_id", id);
+    if (count && count > 0) counts[t] = count;
+  }
+
+  if (Object.keys(counts).length > 0) {
+    // Friendly summary using the most relevant tables first
+    const priority: { key: string; label: (n: number) => string }[] = [
+      { key: "bms_flats", label: (n) => `${n} ${n === 1 ? "flat" : "flats"}` },
+      { key: "bms_residents", label: (n) => `${n} ${n === 1 ? "resident" : "residents"}` },
+      { key: "bms_profiles", label: (n) => `${n} ${n === 1 ? "admin/union member" : "admins/union members"}` },
+      { key: "bms_invoices", label: (n) => `${n} ${n === 1 ? "invoice" : "invoices"}` },
+      { key: "bms_payments", label: (n) => `${n} ${n === 1 ? "payment" : "payments"}` },
+      { key: "bms_expenses", label: (n) => `${n} ${n === 1 ? "expense" : "expenses"}` },
+      { key: "bms_staff", label: (n) => `${n} staff` },
+      { key: "bms_complaints", label: (n) => `${n} ${n === 1 ? "complaint" : "complaints"}` },
+    ];
+    const parts: string[] = [];
+    for (const p of priority) {
+      if (counts[p.key]) parts.push(p.label(counts[p.key]));
+    }
+    // Catch anything not in the priority list
+    for (const [k, v] of Object.entries(counts)) {
+      if (!priority.some((p) => p.key === k)) {
+        parts.push(`${v} row${v === 1 ? "" : "s"} in ${k}`);
+      }
+    }
+    throw new Error(
+      `Building has data: ${parts.join(" · ")}. Remove or reassign these first, or use Deactivate to hide the building instead.`,
+    );
+  }
+
+  const { error: delErr } = await admin
+    .from("bms_buildings")
+    .delete()
+    .eq("id", id);
+  if (delErr) throw new Error(delErr.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    building_id: null,
+    action: "building.delete",
+    entity: "building",
+    entity_id: id,
+    meta: { name: building.name },
+  });
+
+  revalidatePath("/super-admin/buildings");
+  revalidatePath("/super-admin");
+}
+
+/**
+ * Hard-delete an admin/union profile.
+ *
+ * Removes the Supabase auth user (which cascades to bms_profiles via the FK
+ * on profile.id -> auth.users.id) AND any bms_union_members links. We refuse
+ * to delete a Super Admin or the caller themselves to avoid lockouts.
+ */
+export async function deleteAdmin(profileId: string) {
+  const { profile, user } = await requireRole("super_admin");
+  if (!profileId) throw new Error("Profile id required");
+  if (profileId === user.id) {
+    throw new Error("You cannot delete your own Super Admin account.");
+  }
+
+  const admin = createAdminClient();
+  const { data: target, error: tErr } = await admin
+    .from("bms_profiles")
+    .select("id, email, full_name, role, building_id")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (tErr) throw new Error(tErr.message);
+  if (!target) throw new Error("User not found");
+  if (target.role === "super_admin") {
+    throw new Error("Super Admin accounts cannot be deleted from here.");
+  }
+
+  // Best-effort: clear any union-members link so we don't leave orphan FK rows.
+  await admin.from("bms_union_members").delete().eq("profile_id", profileId);
+
+  // Detach from residents (keep the resident records, just unlink the auth user)
+  await admin
+    .from("bms_residents")
+    .update({ profile_id: null })
+    .eq("profile_id", profileId);
+
+  // Delete the auth user — bms_profiles row cascades on auth.users delete.
+  const { error: delErr } = await admin.auth.admin.deleteUser(profileId);
+  if (delErr) throw new Error(delErr.message);
+
+  // Defensive: if no cascade exists on the bms_profiles FK, drop the row too.
+  await admin.from("bms_profiles").delete().eq("id", profileId);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    building_id: target.building_id,
+    action: "admin.delete",
+    entity: "profile",
+    entity_id: profileId,
+    meta: {
+      email: target.email,
+      role: target.role,
+      full_name: target.full_name,
+    },
+  });
+
+  revalidatePath("/super-admin/admins");
+  revalidatePath("/super-admin");
+}

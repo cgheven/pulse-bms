@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Power, PowerOff, MoveRight } from "lucide-react";
+import { Power, PowerOff, MoveRight, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { reassignAdmin, setAdminActive } from "@/app/actions/super-admin";
+import { reassignAdmin, setAdminActive, deleteAdmin } from "@/app/actions/super-admin";
 
 type BuildingOption = { id: string; name: string };
 
@@ -43,6 +43,7 @@ export function AdminRowActions({
   const { toast } = useToast();
   const [reassignOpen, setReassignOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [target, setTarget] = useState<string>(admin.building_id ?? "");
   const [isPending, startTransition] = useTransition();
 
@@ -84,6 +85,23 @@ export function AdminRowActions({
     });
   }
 
+  function performDelete() {
+    startTransition(async () => {
+      try {
+        await deleteAdmin(admin.id);
+        toast({ title: "User deleted" });
+        setDeleteOpen(false);
+        router.refresh();
+      } catch (err) {
+        toast({
+          title: "Could not delete",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "destructive",
+        });
+      }
+    });
+  }
+
   return (
     <div className="flex items-center justify-end gap-2">
       <Button
@@ -98,7 +116,7 @@ export function AdminRowActions({
       <Button
         variant="ghost"
         size="sm"
-        className="h-9 text-destructive hover:text-destructive"
+        className="h-9"
         onClick={() => setConfirmOpen(true)}
       >
         {admin.is_active ? (
@@ -112,6 +130,16 @@ export function AdminRowActions({
             Activate
           </>
         )}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+        onClick={() => setDeleteOpen(true)}
+        title="Delete this user permanently"
+      >
+        <Trash2 className="w-4 h-4" />
+        Delete
       </Button>
 
       <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
@@ -166,6 +194,15 @@ export function AdminRowActions({
         }
         onConfirm={toggleActive}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title={`Permanently delete ${admin.full_name || admin.email}?`}
+        description="This removes their login and account entirely. If they were the only admin on a building, that building will have no admin until you re-invite. The audit log will retain a record of this deletion."
+        confirmLabel={isPending ? "Deleting..." : "Delete user"}
+        onConfirm={performDelete}
+        onCancel={() => setDeleteOpen(false)}
       />
     </div>
   );
