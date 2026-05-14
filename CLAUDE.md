@@ -1,4 +1,4 @@
-# Pulse BMS — Building Management System
+# Pulse BMS — Building Management System 
 
 ## Stack
 - Next.js 15 (App Router, Turbopack) + React 19
