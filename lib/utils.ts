@@ -13,9 +13,22 @@ export function formatCurrency(amount: number) {
 }
 
 export function formatLakh(amount: number): string {
-  if (amount >= 10_000_000) return `Rs. ${(amount / 10_000_000).toFixed(1)} Cr`;
-  if (amount >= 100_000)    return `Rs. ${(amount / 100_000).toFixed(1)} Lakh`;
+  const abs = Math.abs(amount);
+  const sign = amount < 0 ? "-" : "";
+  if (abs >= 10_000_000) return `${sign}Rs. ${(abs / 10_000_000).toFixed(1)} Cr`;
+  if (abs >= 100_000)    return `${sign}Rs. ${(abs / 100_000).toFixed(1)} Lakh`;
   return formatCurrency(amount);
+}
+
+export function formatSignedCurrency(amount: number): string {
+  const abs = Math.abs(amount);
+  const formatted = `Rs. ${new Intl.NumberFormat("en-PK", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(abs)}`;
+  if (amount > 0) return `+${formatted}`;
+  if (amount < 0) return `−${formatted}`;
+  return formatted;
 }
 
 export function formatDate(date: string | Date) {
@@ -24,6 +37,16 @@ export function formatDate(date: string | Date) {
     month: "short",
     year: "numeric",
   }).format(new Date(date));
+}
+
+export function formatRelative(date: string | Date): string {
+  const diff = (Date.now() - new Date(date).getTime()) / 1000;
+  if (diff < 60)            return "just now";
+  if (diff < 3600)          return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400)         return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 86400 * 30)    return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 86400 * 365)   return `${Math.floor(diff / (86400 * 30))}mo ago`;
+  return `${Math.floor(diff / (86400 * 365))}y ago`;
 }
 
 export function formatDateInput(date: Date) {

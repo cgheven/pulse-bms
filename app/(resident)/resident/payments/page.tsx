@@ -1,7 +1,11 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate, capitalize } from "@/lib/utils";
 import { ReceiptButton, type ReceiptData } from "@/components/resident/receipt-button";
+import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
+
+export const dynamic = "force-dynamic";
 
 type PaymentRow = {
   id: string;
@@ -14,29 +18,68 @@ type PaymentRow = {
   category: string | null;
   receipt_no: string | null;
   notes: string | null;
-  bms_invoices: { invoice_number: string; billing_month: string } | { invoice_number: string; billing_month: string }[] | null;
+  bms_invoices:
+    | { invoice_number: string; billing_month: string }
+    | { invoice_number: string; billing_month: string }[]
+    | null;
 };
 
 export default async function ResidentPaymentsPage() {
   const { profile } = await requireRole("resident");
+
+  return (
+    <div className="space-y-5 animate-fade-up max-w-5xl">
+      <header>
+        <h1>Payments</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Your payment history. Tap any row to download a receipt.
+        </p>
+      </header>
+
+      <Suspense
+        fallback={
+          <>
+            <KpiRowSkeleton count={2} />
+            <TableSkeleton rows={6} />
+          </>
+        }
+      >
+        <PaymentsContent
+          profileId={profile.id}
+          buildingId={profile.building_id}
+          residentName={profile.full_name}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+async function PaymentsContent({
+  profileId,
+  buildingId,
+  residentName,
+}: {
+  profileId: string;
+  buildingId: string | null;
+  residentName: string | null;
+}) {
   const supabase = await createClient();
 
-  let building: { name: string; address: string | null; city: string | null } | null = null;
-  if (profile.building_id) {
-    const { data } = await supabase
-      .from("bms_buildings")
-      .select("name, address, city")
-      .eq("id", profile.building_id)
-      .maybeSingle();
-    building = data ?? null;
-  }
-
-  const { data: residentRows } = await supabase
-    .from("bms_residents")
-    .select("flat_id, is_primary, bms_flats(id, flat_number)")
-    .eq("profile_id", profile.id)
-    .eq("is_active", true)
-    .order("is_primary", { ascending: false });
+  const [{ data: building }, { data: residentRows }] = await Promise.all([
+    buildingId
+      ? supabase
+          .from("bms_buildings")
+          .select("name, address, city")
+          .eq("id", buildingId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("bms_residents")
+      .select("flat_id, is_primary, bms_flats(id, flat_number)")
+      .eq("profile_id", profileId)
+      .eq("is_active", true)
+      .order("is_primary", { ascending: false }),
+  ]);
 
   type FlatBasic = { id: string; flat_number: string };
   type ResidentRow = {
@@ -49,12 +92,15 @@ export default async function ResidentPaymentsPage() {
     .filter((f): f is FlatBasic => !!f);
   const flatIds = flats.map((f) => f.id);
   const flatNumberById = new Map(flats.map((f) => [f.id, f.flat_number]));
+  const multiFlat = flats.length > 1;
 
   let payments: PaymentRow[] = [];
   if (flatIds.length > 0) {
     const { data } = await supabase
       .from("bms_payments")
-      .select("id, invoice_id, flat_id, amount, payment_date, payment_mode, reference_no, category, receipt_no, notes, bms_invoices(invoice_number, billing_month)")
+      .select(
+        "id, invoice_id, flat_id, amount, payment_date, payment_mode, reference_no, category, receipt_no, notes, bms_invoices(invoice_number, billing_month)",
+      )
       .in("flat_id", flatIds)
       .order("payment_date", { ascending: false });
     payments = (data ?? []) as unknown as PaymentRow[];
@@ -63,54 +109,56 @@ export default async function ResidentPaymentsPage() {
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
 
   return (
-    <div className="space-y-8 animate-fade-up">
-      <div>
-        <h1>My Payments</h1>
-        <p className="text-lg text-muted-foreground mt-2">
-          All payments you have made. Download a receipt for any of them.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div className="card-soft">
-          <div className="text-sm text-muted-foreground">Total Payments</div>
-          <div className="text-3xl font-bold mt-1">{payments.length}</div>
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Payments
+          </div>
+          <div className="mt-1 text-xl sm:text-2xl font-semibold tabular-nums">
+            {payments.length}
+          </div>
         </div>
-        <div className="card-soft">
-          <div className="text-sm text-muted-foreground">Total Paid (all-time)</div>
-          <div className="text-3xl font-bold mt-1 text-[hsl(151_70%_28%)]">{formatCurrency(totalPaid)}</div>
+        <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Total paid
+          </div>
+          <div className="mt-1 text-xl sm:text-2xl font-semibold tabular-nums text-[hsl(151_70%_55%)]">
+            {formatCurrency(totalPaid)}
+          </div>
         </div>
       </div>
 
       {payments.length === 0 ? (
-        <div className="card-soft text-base text-muted-foreground">
+        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
           No payments recorded yet.
         </div>
       ) : (
-        <div className="rounded-xl border bg-card overflow-x-auto">
-          <table className="w-full text-base">
-            <thead className="bg-secondary text-left">
+        <div className="rounded-lg border border-border bg-card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/60 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-4 py-3 font-semibold">Date</th>
-                <th className="px-4 py-3 font-semibold">Flat</th>
-                <th className="px-4 py-3 font-semibold text-right">Amount</th>
-                <th className="px-4 py-3 font-semibold">Mode</th>
-                <th className="px-4 py-3 font-semibold">Reference</th>
-                <th className="px-4 py-3 font-semibold">Category</th>
-                <th className="px-4 py-3 font-semibold">Receipt No</th>
-                <th className="px-4 py-3 font-semibold text-right">Download</th>
+                <th className="px-4 py-2.5 font-medium">Date</th>
+                <th className="px-4 py-2.5 font-medium">Bill</th>
+                {multiFlat && <th className="px-4 py-2.5 font-medium">Flat</th>}
+                <th className="px-4 py-2.5 font-medium text-right">Amount</th>
+                <th className="px-4 py-2.5 font-medium">Method</th>
+                <th className="px-4 py-2.5 font-medium">Ref</th>
+                <th className="px-4 py-2.5 font-medium text-right">Receipt</th>
               </tr>
             </thead>
             <tbody>
               {payments.map((p) => {
-                const invoice = Array.isArray(p.bms_invoices) ? p.bms_invoices[0] : p.bms_invoices;
+                const invoice = Array.isArray(p.bms_invoices)
+                  ? p.bms_invoices[0]
+                  : p.bms_invoices;
                 const flatNum = p.flat_id ? flatNumberById.get(p.flat_id) ?? "—" : "—";
                 const data: ReceiptData = {
                   building_name: building?.name ?? "Building",
-                  building_address: building?.address,
-                  building_city: building?.city,
+                  building_address: building?.address ?? null,
+                  building_city: building?.city ?? null,
                   flat_number: flatNum,
-                  resident_name: profile.full_name,
+                  resident_name: residentName,
                   receipt_no: p.receipt_no,
                   invoice_number: invoice?.invoice_number ?? null,
                   payment_date: p.payment_date,
@@ -121,19 +169,28 @@ export default async function ResidentPaymentsPage() {
                   amount: Number(p.amount),
                   notes: p.notes,
                 };
+                const billLabel = invoice?.billing_month
+                  ? formatDate(invoice.billing_month)
+                  : capitalize(p.category ?? "—");
+                const ref = p.receipt_no ?? p.reference_no ?? "—";
                 return (
-                  <tr key={p.id} className="border-t hover:bg-secondary/40">
-                    <td className="px-4 py-4 font-semibold">
+                  <tr key={p.id} className="border-t border-border hover:bg-secondary/40">
+                    <td className="px-4 py-3 font-medium tabular-nums">
                       {p.payment_date ? formatDate(p.payment_date) : "—"}
                     </td>
-                    <td className="px-4 py-4">{flatNum}</td>
-                    <td className="px-4 py-4 text-right font-semibold">{formatCurrency(Number(p.amount))}</td>
-                    <td className="px-4 py-4">{p.payment_mode ? capitalize(p.payment_mode) : "—"}</td>
-                    <td className="px-4 py-4 text-muted-foreground">{p.reference_no ?? "—"}</td>
-                    <td className="px-4 py-4">{p.category ? capitalize(p.category) : "Maintenance"}</td>
-                    <td className="px-4 py-4">{p.receipt_no ?? "—"}</td>
-                    <td className="px-4 py-4 text-right">
-                      <ReceiptButton data={data} label="Receipt PDF" />
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                      {billLabel}
+                    </td>
+                    {multiFlat && <td className="px-4 py-3 tabular-nums">{flatNum}</td>}
+                    <td className="px-4 py-3 text-right tabular-nums font-medium">
+                      {formatCurrency(Number(p.amount))}
+                    </td>
+                    <td className="px-4 py-3 capitalize">{p.payment_mode ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
+                      {ref}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <ReceiptButton data={data} label="PDF" />
                     </td>
                   </tr>
                 );
@@ -142,6 +199,6 @@ export default async function ResidentPaymentsPage() {
           </table>
         </div>
       )}
-    </div>
+    </>
   );
 }

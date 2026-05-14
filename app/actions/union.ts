@@ -260,3 +260,79 @@ export async function deleteElection(id: string) {
   });
   revalidatePath("/admin/union");
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Building settings — owned by the Union (and Admin/Super Admin on their behalf)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export type BuildingSettingsInput = {
+  entry_fee_owner: number;
+  entry_fee_tenant: number;
+  monthly_fee_default: number;
+  utility_cutoff_after_months: number;
+  voting_rule: "majority" | "unanimous";
+  expose_defaulter_names: boolean;
+};
+
+export async function updateBuildingSettings(input: BuildingSettingsInput) {
+  // Super Admin is intentionally excluded — this surface is owned by the building.
+  const { profile, user } = await requireRole(["union", "admin"]);
+  if (!profile.building_id) throw new Error("No building assigned");
+
+  // App-layer guard rails. The RPC re-validates server-side, but bailing here
+  // returns a friendlier error to the form.
+  const entry_fee_owner = Number(input.entry_fee_owner);
+  const entry_fee_tenant = Number(input.entry_fee_tenant);
+  const monthly_fee_default = Number(input.monthly_fee_default);
+  const utility_cutoff_after_months = Number(input.utility_cutoff_after_months);
+
+  if (!Number.isFinite(entry_fee_owner) || entry_fee_owner < 0)
+    throw new Error("Entry fee (owner) must be a non-negative number");
+  if (!Number.isFinite(entry_fee_tenant) || entry_fee_tenant < 0)
+    throw new Error("Entry fee (tenant) must be a non-negative number");
+  if (!Number.isFinite(monthly_fee_default) || monthly_fee_default < 0)
+    throw new Error("Maintenance fee must be a non-negative number");
+  if (
+    !Number.isInteger(utility_cutoff_after_months) ||
+    utility_cutoff_after_months < 1 ||
+    utility_cutoff_after_months > 24
+  )
+    throw new Error("Utility cut-off must be a whole number between 1 and 24");
+  if (input.voting_rule !== "majority" && input.voting_rule !== "unanimous")
+    throw new Error("Invalid voting rule");
+
+  const supabase = await createClient();
+  // SECURITY DEFINER RPC enforces the column whitelist server-side — no other
+  // bms_buildings columns can be touched even if a caller bypasses this action.
+  const { error } = await supabase.rpc("bms_update_building_settings", {
+    p_entry_fee_owner: entry_fee_owner,
+    p_entry_fee_tenant: entry_fee_tenant,
+    p_monthly_fee_default: monthly_fee_default,
+    p_utility_cutoff: utility_cutoff_after_months,
+    p_voting_rule: input.voting_rule,
+    p_expose_defaulter_names: Boolean(input.expose_defaulter_names),
+  });
+  if (error) throw new Error(error.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    building_id: profile.building_id,
+    action: "building.settings.update",
+    entity: "building",
+    entity_id: profile.building_id,
+    meta: {
+      entry_fee_owner,
+      entry_fee_tenant,
+      monthly_fee_default,
+      utility_cutoff_after_months,
+      voting_rule: input.voting_rule,
+      expose_defaulter_names: Boolean(input.expose_defaulter_names),
+    },
+  });
+
+  revalidatePath("/union/settings");
+  revalidatePath("/admin");
+  revalidatePath(`/super-admin/buildings/${profile.building_id}`);
+}

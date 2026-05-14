@@ -38,15 +38,20 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
   const start12Iso = start12.toISOString().slice(0, 10);
   const currentMonthYm = ymKey(today);
 
-  // All 7 queries are independent — run in parallel to cut TTFB by ~6× RTT.
+  // 10 parallel queries: building opening + 3 streams × (12mo, YTD, all-time).
+  // Salaries live in bms_salary_payments (separate from bms_expenses) — including all 3
+  // outflow streams here. Earlier impl omitted salaries → fund_balance overstated.
   const [
     { data: building },
     { data: payments },
     { data: expenses },
+    { data: salaries },
     { data: paymentsYtd },
     { data: expensesYtd },
+    { data: salariesYtd },
     { data: paymentsAll },
     { data: expensesAll },
+    { data: salariesAll },
   ] = await Promise.all([
     supabase
       .from("bms_buildings")
@@ -64,6 +69,11 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
       .eq("building_id", profile.building_id)
       .gte("expense_date", start12Iso),
     supabase
+      .from("bms_salary_payments")
+      .select("amount, payment_date")
+      .eq("building_id", profile.building_id)
+      .gte("payment_date", start12Iso),
+    supabase
       .from("bms_payments")
       .select("amount")
       .eq("building_id", profile.building_id)
@@ -74,11 +84,20 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
       .eq("building_id", profile.building_id)
       .gte("expense_date", ytdStart),
     supabase
+      .from("bms_salary_payments")
+      .select("amount")
+      .eq("building_id", profile.building_id)
+      .gte("payment_date", ytdStart),
+    supabase
       .from("bms_payments")
       .select("amount")
       .eq("building_id", profile.building_id),
     supabase
       .from("bms_expenses")
+      .select("amount")
+      .eq("building_id", profile.building_id),
+    supabase
+      .from("bms_salary_payments")
       .select("amount")
       .eq("building_id", profile.building_id),
   ]);
@@ -88,9 +107,13 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
     (rows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
 
   const income_ytd = sum(paymentsYtd ?? null);
-  const expense_ytd = sum(expensesYtd ?? null);
+  const expense_ytd = sum(expensesYtd ?? null) + sum(salariesYtd ?? null);
   const net_ytd = income_ytd - expense_ytd;
-  const fund_balance = initialFund + sum(paymentsAll ?? null) - sum(expensesAll ?? null);
+  const fund_balance =
+    initialFund +
+    sum(paymentsAll ?? null) -
+    sum(expensesAll ?? null) -
+    sum(salariesAll ?? null);
 
   // Build 12-month buckets
   const buckets: Map<string, FinanceMonthly> = new Map();
@@ -111,18 +134,34 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
     const b = buckets.get(k);
     if (b) b.expense += Number(e.amount ?? 0);
   }
+  for (const s of salaries ?? []) {
+    if (!s.payment_date) continue;
+    const k = ymKey(s.payment_date);
+    const b = buckets.get(k);
+    if (b) b.expense += Number(s.amount ?? 0);
+  }
   const monthly: FinanceMonthly[] = Array.from(buckets.values()).map((b) => ({
     ...b,
     net: b.income - b.expense,
   }));
 
-  // Expense breakdown — current month
+  // Expense breakdown — current month. Salary surfaces as its own slice so the
+  // donut shows where money actually went.
   const breakdownMap: Map<string, number> = new Map();
   for (const e of expenses ?? []) {
     if (!e.expense_date) continue;
     if (ymKey(e.expense_date) !== currentMonthYm) continue;
     const key = e.category ?? "other";
     breakdownMap.set(key, (breakdownMap.get(key) ?? 0) + Number(e.amount ?? 0));
+  }
+  let salaryCurrentMonth = 0;
+  for (const s of salaries ?? []) {
+    if (!s.payment_date) continue;
+    if (ymKey(s.payment_date) !== currentMonthYm) continue;
+    salaryCurrentMonth += Number(s.amount ?? 0);
+  }
+  if (salaryCurrentMonth > 0) {
+    breakdownMap.set("salaries", (breakdownMap.get("salaries") ?? 0) + salaryCurrentMonth);
   }
   const expense_breakdown = Array.from(breakdownMap.entries()).map(([category, amount]) => ({
     category,

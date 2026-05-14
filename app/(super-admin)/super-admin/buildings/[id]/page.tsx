@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { formatLakh, formatCurrency, formatDate } from "@/lib/utils";
@@ -114,7 +114,14 @@ export default async function BuildingDetailPage({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card-soft">
-          <h2 className="text-xl font-semibold mb-4">Settings</h2>
+          <h2 className="text-xl font-semibold mb-4">Union-managed settings</h2>
+          <p className="text-sm text-muted-foreground mb-4 flex items-start gap-2">
+            <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <span>
+              Fees, voting rule and utility cut-off are owned by the building&rsquo;s
+              Union committee. Shown read-only for reference.
+            </span>
+          </p>
           <dl className="space-y-3 text-sm">
             <Row label="Voting Rule" value={building.voting_rule === "unanimous" ? "Unanimous" : "Majority"} />
             <Row
@@ -130,7 +137,7 @@ export default async function BuildingDetailPage({
               value={formatCurrency(Number(building.entry_fee_tenant ?? 0))}
             />
             <Row
-              label="Default Monthly Fee"
+              label="Maintenance Fee"
               value={formatCurrency(Number(building.monthly_fee_default ?? 0))}
             />
             <Row label="Created" value={formatDate(building.created_at)} />

@@ -23,6 +23,7 @@ import {
   LineChart,
   MessageSquareWarning,
   Eye,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -122,6 +123,12 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       label: "Communication",
       items: [
         { href: "/union/notices", label: "Notices", icon: Megaphone },
+      ],
+    },
+    {
+      label: "Configuration",
+      items: [
+        { href: "/union/settings", label: "Settings", icon: Settings },
       ],
     },
   ],

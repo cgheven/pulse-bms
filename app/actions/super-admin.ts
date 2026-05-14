@@ -10,16 +10,14 @@ import { revalidatePath } from "next/cache";
 /* Buildings                                                    */
 /* ────────────────────────────────────────────────────────────── */
 
+// Super Admin only manages the building shell (name, location, planned size).
+// Fees, voting rule and utility cutoff are managed by the building's Union via
+// updateBuildingSettings — see app/actions/union.ts.
 export type BuildingInput = {
   name: string;
   address?: string | null;
   city?: string | null;
   total_flats?: number | null;
-  entry_fee_owner?: number | null;
-  entry_fee_tenant?: number | null;
-  monthly_fee_default?: number | null;
-  voting_rule?: "majority" | "unanimous";
-  utility_cutoff_after_months?: number | null;
 };
 
 export async function createBuilding(data: BuildingInput) {
@@ -29,16 +27,17 @@ export async function createBuilding(data: BuildingInput) {
     throw new Error("Building name is required");
   }
 
+  // Sensible Pakistani-building defaults seeded once; the Union changes these later.
   const payload = {
     name: data.name.trim(),
     address: data.address?.trim() || null,
     city: data.city?.trim() || "Karachi",
     total_flats: data.total_flats ?? 0,
-    entry_fee_owner: data.entry_fee_owner ?? 10000,
-    entry_fee_tenant: data.entry_fee_tenant ?? 5000,
-    monthly_fee_default: data.monthly_fee_default ?? 3000,
-    voting_rule: data.voting_rule ?? "majority",
-    utility_cutoff_after_months: data.utility_cutoff_after_months ?? 3,
+    entry_fee_owner: 10000,
+    entry_fee_tenant: 5000,
+    monthly_fee_default: 3000,
+    voting_rule: "majority" as const,
+    utility_cutoff_after_months: 3,
     is_active: true,
   };
 
@@ -75,16 +74,13 @@ export async function updateBuilding(id: string, data: BuildingInput) {
     throw new Error("Building name is required");
   }
 
+  // Update only Super Admin-owned fields. Union-managed fields are untouched —
+  // they live behind updateBuildingSettings in app/actions/union.ts.
   const payload = {
     name: data.name.trim(),
     address: data.address?.trim() || null,
     city: data.city?.trim() || "Karachi",
     total_flats: data.total_flats ?? 0,
-    entry_fee_owner: data.entry_fee_owner ?? 10000,
-    entry_fee_tenant: data.entry_fee_tenant ?? 5000,
-    monthly_fee_default: data.monthly_fee_default ?? 3000,
-    voting_rule: data.voting_rule ?? "majority",
-    utility_cutoff_after_months: data.utility_cutoff_after_months ?? 3,
   };
 
   const supabase = await createClient();

@@ -15,12 +15,14 @@ const LABELS: Record<ProposalStatus, string> = {
   cancelled: "Cancelled",
 };
 
+// Dark-theme tokens — translucent fills, tinted text, low-opacity borders.
+// Matches the rest of the SaaS shell (billing pills, P&L hero).
 const CLASSES: Record<ProposalStatus, string> = {
-  pending: "bg-amber-100 text-amber-800 border border-amber-300",
-  approved: "bg-green-100 text-green-800 border border-green-300",
-  rejected: "bg-red-100 text-red-800 border border-red-300",
-  executed: "bg-blue-100 text-blue-800 border border-blue-300",
-  cancelled: "bg-gray-200 text-gray-700 border border-gray-300",
+  pending:   "bg-[hsl(38_92%_55%/0.12)] text-[hsl(38_92%_65%)] border-[hsl(38_92%_55%/0.30)]",
+  approved:  "bg-[hsl(151_70%_55%/0.12)] text-[hsl(151_70%_55%)] border-[hsl(151_70%_55%/0.30)]",
+  rejected:  "bg-destructive/15 text-destructive border-destructive/30",
+  executed:  "bg-[hsl(210_90%_60%/0.12)] text-[hsl(210_90%_70%)] border-[hsl(210_90%_60%/0.30)]",
+  cancelled: "bg-muted/40 text-muted-foreground border-border",
 };
 
 export function StatusPill({
@@ -34,9 +36,9 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold",
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wider",
         CLASSES[key],
-        className
+        className,
       )}
     >
       {LABELS[key]}

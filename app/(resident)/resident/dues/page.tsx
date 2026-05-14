@@ -1,9 +1,13 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StatusPill } from "@/components/resident/status-pill";
 import { ReceiptButton, type ReceiptData } from "@/components/resident/receipt-button";
+import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 import { AlertTriangle } from "lucide-react";
+
+export const dynamic = "force-dynamic";
 
 type InvoiceRow = {
   id: string;
@@ -30,26 +34,49 @@ type PaymentRow = {
 
 export default async function ResidentDuesPage() {
   const { profile } = await requireRole("resident");
+
+  return (
+    <div className="space-y-5 animate-fade-up max-w-5xl">
+      <header>
+        <h1>My Dues</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Maintenance bills and payment status.
+        </p>
+      </header>
+
+      <Suspense fallback={<KpiRowSkeleton count={3} />}>
+        <DuesContent profileId={profile.id} buildingId={profile.building_id} residentName={profile.full_name} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function DuesContent({
+  profileId,
+  buildingId,
+  residentName,
+}: {
+  profileId: string;
+  buildingId: string | null;
+  residentName: string | null;
+}) {
   const supabase = await createClient();
 
-  // building (for receipt)
-  let building: { name: string; address: string | null; city: string | null } | null = null;
-  if (profile.building_id) {
-    const { data } = await supabase
-      .from("bms_buildings")
-      .select("name, address, city")
-      .eq("id", profile.building_id)
-      .maybeSingle();
-    building = data ?? null;
-  }
-
-  // resident's flats
-  const { data: residentRows } = await supabase
-    .from("bms_residents")
-    .select("flat_id, is_primary, bms_flats(id, flat_number)")
-    .eq("profile_id", profile.id)
-    .eq("is_active", true)
-    .order("is_primary", { ascending: false });
+  const [{ data: building }, { data: residentRows }] = await Promise.all([
+    buildingId
+      ? supabase
+          .from("bms_buildings")
+          .select("name, address, city")
+          .eq("id", buildingId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("bms_residents")
+      .select("flat_id, is_primary, bms_flats(id, flat_number)")
+      .eq("profile_id", profileId)
+      .eq("is_active", true)
+      .order("is_primary", { ascending: false }),
+  ]);
 
   type FlatBasic = { id: string; flat_number: string };
   type ResidentRow = {
@@ -57,12 +84,12 @@ export default async function ResidentDuesPage() {
     is_primary: boolean | null;
     bms_flats: FlatBasic | FlatBasic[] | null;
   };
-
   const flats: FlatBasic[] = ((residentRows ?? []) as unknown as ResidentRow[])
     .map((r) => (Array.isArray(r.bms_flats) ? r.bms_flats[0] : r.bms_flats))
     .filter((f): f is FlatBasic => !!f);
   const flatIds = flats.map((f) => f.id);
   const flatNumberById = new Map(flats.map((f) => [f.id, f.flat_number]));
+  const multiFlat = flats.length > 1;
 
   let invoices: InvoiceRow[] = [];
   let payments: PaymentRow[] = [];
@@ -83,107 +110,140 @@ export default async function ResidentDuesPage() {
     payments = (pay ?? []) as PaymentRow[];
   }
 
-  // map paid_amount per invoice
   const paidByInvoice = new Map<string, number>();
   for (const p of payments) {
     if (!p.invoice_id) continue;
     paidByInvoice.set(p.invoice_id, (paidByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount));
   }
 
-  // last payment per invoice (for receipt)
   const lastPaymentByInvoice = new Map<string, PaymentRow>();
   for (const p of payments) {
     if (!p.invoice_id) continue;
     if (!lastPaymentByInvoice.has(p.invoice_id)) lastPaymentByInvoice.set(p.invoice_id, p);
   }
 
-  // yearly summary (current calendar year)
   const yearStart = `${new Date().getFullYear()}-01-01`;
   const ytdInvoices = invoices.filter((i) => i.billing_month >= yearStart);
   const totalBilled = ytdInvoices.reduce((s, i) => s + Number(i.amount), 0);
   const totalPaidYTD = ytdInvoices.reduce(
     (s, i) => s + (paidByInvoice.get(i.id) ?? 0),
-    0
+    0,
   );
   const totalPendingYTD = Math.max(0, totalBilled - totalPaidYTD);
 
   const pending = invoices.filter((i) => i.status !== "paid" && i.status !== "waived");
   const paidOrWaived = invoices.filter((i) => i.status === "paid" || i.status === "waived");
 
-  const pendingMonths = pending.length;
-
   return (
-    <div className="space-y-8 animate-fade-up">
-      <div>
-        <h1>My Dues</h1>
-        <p className="text-lg text-muted-foreground mt-2">Your maintenance bills and payment status.</p>
-      </div>
-
-      {pendingMonths > 1 && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
-          <AlertTriangle className="w-6 h-6 text-destructive shrink-0" />
-          <div>
-            <div className="font-semibold text-lg text-destructive">
-              {pendingMonths} pending bills
-            </div>
-            <div className="text-base text-muted-foreground">
-              Please clear pending dues to avoid late fees.
-            </div>
+    <>
+      {pending.length > 1 && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <span className="font-semibold text-destructive">
+              {pending.length} pending bills
+            </span>
+            <span className="text-muted-foreground"> — please clear soon to avoid late fees.</span>
           </div>
         </div>
       )}
 
-      {/* Yearly summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="card-soft">
-          <div className="text-sm text-muted-foreground">Total Billed (this year)</div>
-          <div className="text-3xl font-bold mt-2">{formatCurrency(totalBilled)}</div>
-        </div>
-        <div className="card-soft">
-          <div className="text-sm text-muted-foreground">Total Paid (this year)</div>
-          <div className="text-3xl font-bold mt-2 text-[hsl(151_70%_28%)]">{formatCurrency(totalPaidYTD)}</div>
-        </div>
-        <div className="card-soft">
-          <div className="text-sm text-muted-foreground">Total Pending (this year)</div>
-          <div className={`text-3xl font-bold mt-2 ${totalPendingYTD > 0 ? "text-destructive" : ""}`}>
-            {formatCurrency(totalPendingYTD)}
-          </div>
-        </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Kpi label="Billed (YTD)" value={formatCurrency(totalBilled)} />
+        <Kpi label="Paid (YTD)" value={formatCurrency(totalPaidYTD)} tone="success" />
+        <Kpi
+          label="Pending"
+          value={formatCurrency(totalPendingYTD)}
+          tone={totalPendingYTD > 0 ? "danger" : "neutral"}
+        />
       </div>
 
-      {/* Pending invoices */}
-      <section>
-        <h2 className="text-2xl font-semibold mb-3">Pending Bills</h2>
+      <Section title="Pending bills" count={pending.length}>
         {pending.length === 0 ? (
-          <div className="card-soft text-base text-muted-foreground">No pending bills. You are all clear.</div>
+          <EmptyRow text="No pending bills. You are all clear." />
         ) : (
           <DuesTable
             rows={pending}
             paidByInvoice={paidByInvoice}
             flatNumberById={flatNumberById}
             lastPaymentByInvoice={lastPaymentByInvoice}
-            building={building}
-            residentName={profile.full_name}
+            building={building ?? null}
+            residentName={residentName}
+            showFlat={multiFlat}
           />
         )}
-      </section>
+      </Section>
 
-      {/* Paid history */}
-      <section>
-        <h2 className="text-2xl font-semibold mb-3">Payment History</h2>
+      <Section title="Payment history" count={paidOrWaived.length}>
         {paidOrWaived.length === 0 ? (
-          <div className="card-soft text-base text-muted-foreground">No paid bills yet.</div>
+          <EmptyRow text="No paid bills yet." />
         ) : (
           <DuesTable
             rows={paidOrWaived}
             paidByInvoice={paidByInvoice}
             flatNumberById={flatNumberById}
             lastPaymentByInvoice={lastPaymentByInvoice}
-            building={building}
-            residentName={profile.full_name}
+            building={building ?? null}
+            residentName={residentName}
+            showFlat={multiFlat}
           />
         )}
-      </section>
+      </Section>
+    </>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "success" | "danger";
+}) {
+  const color =
+    tone === "success"
+      ? "text-[hsl(151_70%_55%)]"
+      : tone === "danger"
+        ? "text-destructive"
+        : "text-foreground";
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className={`mt-1 text-xl sm:text-2xl font-semibold tracking-tight tabular-nums ${color}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline gap-2 mb-2">
+        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+        <span className="text-[11px] text-muted-foreground tabular-nums">{count}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function EmptyRow({ text }: { text: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+      {text}
     </div>
   );
 }
@@ -195,6 +255,7 @@ function DuesTable({
   lastPaymentByInvoice,
   building,
   residentName,
+  showFlat,
 }: {
   rows: InvoiceRow[];
   paidByInvoice: Map<string, number>;
@@ -202,26 +263,27 @@ function DuesTable({
   lastPaymentByInvoice: Map<string, PaymentRow>;
   building: { name: string; address: string | null; city: string | null } | null;
   residentName: string | null;
+  showFlat: boolean;
 }) {
   return (
-    <div className="rounded-xl border bg-card overflow-x-auto">
-      <table className="w-full text-base">
-        <thead className="bg-secondary text-left">
+    <div className="rounded-lg border border-border bg-card overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-secondary/60 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
           <tr>
-            <th className="px-4 py-3 font-semibold">Month</th>
-            <th className="px-4 py-3 font-semibold">Flat</th>
-            <th className="px-4 py-3 font-semibold text-right">Amount</th>
-            <th className="px-4 py-3 font-semibold text-right">Paid</th>
-            <th className="px-4 py-3 font-semibold">Due Date</th>
-            <th className="px-4 py-3 font-semibold">Status</th>
-            <th className="px-4 py-3 font-semibold text-right">Receipt</th>
+            <th className="px-4 py-2.5 font-medium">Month</th>
+            {showFlat && <th className="px-4 py-2.5 font-medium">Flat</th>}
+            <th className="px-4 py-2.5 font-medium text-right">Amount</th>
+            <th className="px-4 py-2.5 font-medium text-right">Paid</th>
+            <th className="px-4 py-2.5 font-medium">Due</th>
+            <th className="px-4 py-2.5 font-medium">Status</th>
+            <th className="px-4 py-2.5 font-medium text-right">Receipt</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((i) => {
             const paid = paidByInvoice.get(i.id) ?? 0;
             const lp = lastPaymentByInvoice.get(i.id);
-            const flatNum = flatNumberById.get(i.flat_id) ?? "-";
+            const flatNum = flatNumberById.get(i.flat_id) ?? "—";
             const receipt: ReceiptData = {
               building_name: building?.name ?? "Building",
               building_address: building?.address,
@@ -239,18 +301,28 @@ function DuesTable({
               notes: lp?.notes ?? i.notes,
             };
             return (
-              <tr key={i.id} className="border-t hover:bg-secondary/40">
-                <td className="px-4 py-4 font-semibold">{formatDate(i.billing_month)}</td>
-                <td className="px-4 py-4">{flatNum}</td>
-                <td className="px-4 py-4 text-right font-semibold">{formatCurrency(Number(i.amount))}</td>
-                <td className="px-4 py-4 text-right">{formatCurrency(paid)}</td>
-                <td className="px-4 py-4">{i.due_date ? formatDate(i.due_date) : "—"}</td>
-                <td className="px-4 py-4"><StatusPill status={i.status} /></td>
-                <td className="px-4 py-4 text-right">
+              <tr key={i.id} className="border-t border-border hover:bg-secondary/40">
+                <td className="px-4 py-3 font-medium tabular-nums">
+                  {formatDate(i.billing_month)}
+                </td>
+                {showFlat && <td className="px-4 py-3 tabular-nums">{flatNum}</td>}
+                <td className="px-4 py-3 text-right tabular-nums font-medium">
+                  {formatCurrency(Number(i.amount))}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                  {paid > 0 ? formatCurrency(paid) : "—"}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                  {i.due_date ? formatDate(i.due_date) : "—"}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusPill status={i.status} />
+                </td>
+                <td className="px-4 py-3 text-right">
                   {i.status === "paid" && lp ? (
                     <ReceiptButton data={receipt} label="Download" />
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </td>
               </tr>

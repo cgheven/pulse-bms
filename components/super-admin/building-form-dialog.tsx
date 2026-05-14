@@ -13,13 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   createBuilding,
@@ -35,11 +28,6 @@ export type BuildingFormValues = {
   address: string | null;
   city: string | null;
   total_flats: number;
-  entry_fee_owner: number;
-  entry_fee_tenant: number;
-  monthly_fee_default: number;
-  voting_rule: "majority" | "unanimous";
-  utility_cutoff_after_months: number;
 };
 
 const DEFAULTS: BuildingFormValues = {
@@ -47,11 +35,6 @@ const DEFAULTS: BuildingFormValues = {
   address: "",
   city: "Karachi",
   total_flats: 0,
-  entry_fee_owner: 10000,
-  entry_fee_tenant: 5000,
-  monthly_fee_default: 3000,
-  voting_rule: "majority",
-  utility_cutoff_after_months: 3,
 };
 
 export function BuildingFormDialog({
@@ -98,11 +81,6 @@ export function BuildingFormDialog({
       address: values.address,
       city: values.city,
       total_flats: Number(values.total_flats) || 0,
-      entry_fee_owner: Number(values.entry_fee_owner) || 0,
-      entry_fee_tenant: Number(values.entry_fee_tenant) || 0,
-      monthly_fee_default: Number(values.monthly_fee_default) || 0,
-      voting_rule: values.voting_rule,
-      utility_cutoff_after_months: Number(values.utility_cutoff_after_months) || 0,
     };
 
     startTransition(async () => {
@@ -130,13 +108,14 @@ export function BuildingFormDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger}
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Add New Building" : "Edit Building"}
           </DialogTitle>
           <DialogDescription>
-            Set the building details and default fees. You can change these later.
+            Set the building shell. Fees, voting rule and utility cut-off are
+            managed by the building&rsquo;s Union from their settings page.
           </DialogDescription>
         </DialogHeader>
 
@@ -187,81 +166,6 @@ export function BuildingFormDialog({
               value={values.address ?? ""}
               onChange={(e) => set("address", e.target.value)}
             />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="entry_fee_owner" className="text-base">
-                Entry Fee for Flat Purchase
-              </Label>
-              <Input
-                id="entry_fee_owner"
-                type="number"
-                min={0}
-                className="h-12 text-base"
-                value={values.entry_fee_owner}
-                onChange={(e) => set("entry_fee_owner", Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="entry_fee_tenant" className="text-base">
-                Entry Fee for Rent
-              </Label>
-              <Input
-                id="entry_fee_tenant"
-                type="number"
-                min={0}
-                className="h-12 text-base"
-                value={values.entry_fee_tenant}
-                onChange={(e) => set("entry_fee_tenant", Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="monthly_fee_default" className="text-base">
-                Monthly Fee (Default)
-              </Label>
-              <Input
-                id="monthly_fee_default"
-                type="number"
-                min={0}
-                className="h-12 text-base"
-                value={values.monthly_fee_default}
-                onChange={(e) => set("monthly_fee_default", Number(e.target.value))}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-base">Voting Rule</Label>
-              <Select
-                value={values.voting_rule}
-                onValueChange={(v) => set("voting_rule", v as "majority" | "unanimous")}
-              >
-                <SelectTrigger className="h-12 text-base">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="majority">Majority (more than half)</SelectItem>
-                  <SelectItem value="unanimous">Unanimous (everyone agrees)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cutoff" className="text-base">
-                Utility Cutoff (months unpaid)
-              </Label>
-              <Input
-                id="cutoff"
-                type="number"
-                min={1}
-                className="h-12 text-base"
-                value={values.utility_cutoff_after_months}
-                onChange={(e) =>
-                  set("utility_cutoff_after_months", Number(e.target.value))
-                }
-              />
-            </div>
           </div>
 
           <DialogFooter className="pt-2">
