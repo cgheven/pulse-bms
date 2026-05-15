@@ -140,23 +140,26 @@ function FlatListingCard({ flat }: { flat: FlatCard }) {
         hasListing ? "border-primary/30" : "border-border",
       )}
     >
-      <div className="flex items-start justify-between gap-3 p-4">
+      {/* Header — stacks vertically on mobile so the flat number never wraps
+          into 3 lines. Actions sit on their own row below on phones, inline
+          on the right at sm: and up. */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 p-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Home className="w-4 h-4 text-primary" />
-            <h3 className="text-base font-semibold tracking-tight tabular-nums">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Home className="w-4 h-4 text-primary shrink-0" />
+            <h3 className="text-base font-semibold tracking-tight tabular-nums whitespace-nowrap">
               Flat {flat.flat_number}
             </h3>
             {hasListing && flat.existing && (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium uppercase tracking-wider",
+                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium uppercase tracking-wider whitespace-nowrap",
                   flat.existing.listing_type === "rent"
                     ? "bg-[hsl(151_70%_55%/0.12)] text-[hsl(151_70%_55%)] border-[hsl(151_70%_55%/0.30)]"
                     : "bg-primary/10 text-primary border-primary/25",
                 )}
               >
-                <CheckCircle2 className="w-3 h-3" />
+                <CheckCircle2 className="w-3 h-3 shrink-0" />
                 Live · for {flat.existing.listing_type === "rent" ? "Rent" : "Sale"}
               </span>
             )}
@@ -170,17 +173,22 @@ function FlatListingCard({ flat }: { flat: FlatCard }) {
         </div>
 
         {!editing && (
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
             {hasListing ? (
               <>
-                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 sm:flex-none"
+                  onClick={() => setEditing(true)}
+                >
                   <Pencil className="w-3.5 h-3.5" />
                   Update
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="flex-1 sm:flex-none text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={() => setRemoving(true)}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -188,7 +196,11 @@ function FlatListingCard({ flat }: { flat: FlatCard }) {
                 </Button>
               </>
             ) : (
-              <Button size="sm" onClick={() => setEditing(true)}>
+              <Button
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => setEditing(true)}
+              >
                 <Plus className="w-3.5 h-3.5" />
                 List this flat
               </Button>

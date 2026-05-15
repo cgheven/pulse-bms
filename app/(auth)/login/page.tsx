@@ -66,9 +66,9 @@ export default function LoginPage() {
           <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
             <Building2 className="w-6 h-6 text-primary" />
           </div>
-          <h1 className="font-serif text-3xl text-foreground tracking-tight">Pulse BMS</h1>
+          <h1 className="font-serif text-3xl text-foreground tracking-tight">Pulse</h1>
           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary/70">
-            Manage your building, transparently.
+            Pulse of your Building
           </p>
         </div>
 

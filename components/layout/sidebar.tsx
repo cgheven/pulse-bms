@@ -258,10 +258,10 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
             </div>
             <div>
               <p className="text-foreground font-bold text-base tracking-tight leading-none">
-                Pulse BMS
+                Pulse
               </p>
               <p className="text-primary/60 text-[10px] mt-1 font-semibold tracking-[0.15em] uppercase">
-                Building Management
+                Pulse of your Building
               </p>
             </div>
           </Link>
@@ -300,7 +300,7 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
         <div className="px-4 py-3 border-t border-sidebar-border">
           <div className="flex items-center gap-2 px-1">
             <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-            <p className="text-xs text-muted-foreground">Pulse BMS is online</p>
+            <p className="text-xs text-muted-foreground">Pulse is online</p>
           </div>
         </div>
       </aside>
