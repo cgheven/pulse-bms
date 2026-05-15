@@ -66,7 +66,7 @@ export function AppShell({ role, navbarUser, children }: AppShellProps) {
           <div className="ml-auto flex items-center gap-2">{navbarUser}</div>
         </header>
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">{children}</div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-8">{children}</div>
         </main>
       </div>
     </div>

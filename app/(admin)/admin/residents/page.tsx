@@ -15,7 +15,7 @@ export default function ResidentsPage() {
     <div className="space-y-6 animate-fade-up">
       <div>
         <h1>Residents</h1>
-        <p className="text-muted-foreground">Owners, tenants and family members.</p>
+        <p className="text-muted-foreground">Owners and tenants.</p>
       </div>
       <Suspense fallback={<TableSkeleton rows={6} />}>
         <ResidentsContent />

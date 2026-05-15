@@ -55,8 +55,10 @@ export function ResidentFormDialog({
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
   const [cnic, setCnic] = useState(initial?.cnic ?? "");
-  const [relationship, setRelationship] = useState<"owner" | "tenant" | "family">(
-    initial?.relationship ?? "owner",
+  // Coerce legacy "family" rows back to "owner" — the form no longer offers
+  // family member as a choice, so opening an old record falls back to owner.
+  const [relationship, setRelationship] = useState<"owner" | "tenant">(
+    initial?.relationship === "tenant" ? "tenant" : "owner",
   );
   const [is_primary, setIsPrimary] = useState(initial?.is_primary ?? false);
   const [move_in_date, setMoveIn] = useState(initial?.move_in_date ?? "");
@@ -65,7 +67,6 @@ export function ResidentFormDialog({
     initial?.entry_fee_paid != null ? String(initial.entry_fee_paid) : "0",
   );
   const [entryFeePaidTouched, setEntryFeePaidTouched] = useState(false);
-  const [invite, setInvite] = useState(false);
   const [is_active, setActive] = useState(initial?.is_active ?? true);
 
   const [pending, start] = useTransition();
@@ -103,7 +104,6 @@ export function ResidentFormDialog({
           move_out_date: move_out_date || null,
           entry_fee_paid: Number(entry_fee_paid) || 0,
           is_active,
-          invite,
         };
         if (initial?.id) {
           await updateResident(initial.id, payload);
@@ -167,7 +167,7 @@ export function ResidentFormDialog({
             <Label>Relationship</Label>
             <Select
               value={relationship}
-              onValueChange={(v) => setRelationship(v as "owner" | "tenant" | "family")}
+              onValueChange={(v) => setRelationship(v as "owner" | "tenant")}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -175,7 +175,6 @@ export function ResidentFormDialog({
               <SelectContent>
                 <SelectItem value="owner">Owner</SelectItem>
                 <SelectItem value="tenant">Tenant</SelectItem>
-                <SelectItem value="family">Family member</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -217,17 +216,6 @@ export function ResidentFormDialog({
               />
               Active
             </label>
-            {!initial?.id && (
-              <label className="flex items-center gap-2 text-sm col-span-2">
-                <input
-                  type="checkbox"
-                  checked={invite}
-                  onChange={(e) => setInvite(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                Send portal invite by email (resident role)
-              </label>
-            )}
           </div>
           <DialogFooter className="col-span-2 mt-2">
             <Button

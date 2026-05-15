@@ -11,16 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default function AdminUnionPage() {
   return (
-    <div className="space-y-6 animate-fade-up">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1>Union management</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-            Manage committee members and election cycles for this building.
-          </p>
-        </div>
-      </header>
-
+    <div className="space-y-4 animate-fade-up">
       <Suspense fallback={<TableSkeleton rows={6} />}>
         <UnionContent />
       </Suspense>
@@ -61,28 +52,39 @@ async function UnionContent() {
       .order("full_name", { ascending: true }),
   ]);
 
+  const activeCount = members?.filter((m) => m.is_active).length ?? 0;
+  const electionsCount = elections?.length ?? 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-end">
+    <>
+      {/* Header — h1 + action inline. No subtitle (the tabs explain context). */}
+      <header className="flex items-center justify-between gap-3 flex-wrap">
+        <h1>Union</h1>
         <AddMemberButton candidates={candidates ?? []} />
-      </div>
+      </header>
 
       <Tabs defaultValue="members">
         <TabsList>
           <TabsTrigger value="members">
-            Members ({members?.filter((m) => m.is_active).length ?? 0})
+            Members
+            <span className="ml-1.5 tabular-nums text-[10px] px-1.5 rounded-full bg-secondary">
+              {activeCount}
+            </span>
           </TabsTrigger>
           <TabsTrigger value="elections">
-            Elections ({elections?.length ?? 0})
+            Elections
+            <span className="ml-1.5 tabular-nums text-[10px] px-1.5 rounded-full bg-secondary">
+              {electionsCount}
+            </span>
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="members" className="mt-4">
+        <TabsContent value="members" className="mt-3">
           <MembersTab members={members ?? []} />
         </TabsContent>
-        <TabsContent value="elections" className="mt-4">
+        <TabsContent value="elections" className="mt-3">
           <ElectionsTab elections={(elections ?? []) as never} />
         </TabsContent>
       </Tabs>
-    </div>
+    </>
   );
 }

@@ -146,6 +146,7 @@ export function ResidentsTable({
                     <td className="px-4 py-3 font-semibold">
                       <Link
                         href={`/admin/residents/${r.id}`}
+                        prefetch
                         className="text-primary hover:underline"
                       >
                         {r.full_name}

@@ -532,7 +532,7 @@ async function FinancialCards({
           <Wallet className="w-3.5 h-3.5 text-primary" />
           Cash available
         </div>
-        <div className="mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight tabular-nums text-foreground">
+        <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-foreground">
           {formatCurrency(fundBalance)}
         </div>
         <div className="mt-3">
@@ -546,7 +546,7 @@ async function FinancialCards({
           <CreditCard className="w-3.5 h-3.5 text-[hsl(151_70%_55%)]" />
           Maintenance collection
         </div>
-        <div className="mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight tabular-nums text-[hsl(151_70%_55%)]">
+        <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-[hsl(151_70%_55%)]">
           {formatCurrency(collected)}
         </div>
         <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
@@ -574,13 +574,19 @@ async function FinancialCards({
         </div>
       </div>
 
-      {/* Card 3 · Expenses */}
-      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          <TrendingDown className="w-3.5 h-3.5 text-destructive" />
-          Expenses
+      {/* Card 3 · Expenses — clickable, navigates to full expenses ledger */}
+      <Link
+        href="/admin/expenses"
+        className="rounded-xl border border-border bg-card p-4 sm:p-5 block transition-colors hover:border-destructive/40 hover:bg-secondary/30 group"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <TrendingDown className="w-3.5 h-3.5 text-destructive" />
+            Expenses
+          </div>
+          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-destructive" />
         </div>
-        <div className="mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight tabular-nums text-destructive">
+        <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-destructive">
           {formatCurrency(outflow)}
         </div>
         <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
@@ -608,7 +614,7 @@ async function FinancialCards({
             </span>
           )}
         </div>
-      </div>
+      </Link>
 
       {/* Card 4 · Remaining (this month) */}
       <div
@@ -625,7 +631,7 @@ async function FinancialCards({
         </div>
         <div
           className={cn(
-            "mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight tabular-nums",
+            "mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums",
             net >= 0 ? "text-[hsl(151_70%_55%)]" : "text-destructive",
           )}
         >
@@ -781,6 +787,7 @@ async function StatusTiles({
             : `${defaulterFlats.slice(0, 4).join(" · ")}${defaulterFlats.length > 4 ? " …" : ""} · ${formatLakh(totalDefaulterOwed)} owed`
         }
         tone={defaulterFlats.length === 0 ? "ok" : "risk"}
+        href="/admin/billing"
       />
       <StatusTile
         label="Complaints"
@@ -801,6 +808,7 @@ async function StatusTiles({
               ? "risk"
               : "warning"
         }
+        href="/admin/facility"
       />
       <StatusTile
         label="Governance"
@@ -815,6 +823,7 @@ async function StatusTiles({
             : "Awaiting union votes"
         }
         tone={(proposalsPending ?? []).length === 0 ? "ok" : "warning"}
+        href="/admin/union"
       />
     </div>
   );
@@ -827,6 +836,7 @@ function StatusTile({
   delta,
   deltaLabel,
   tone,
+  href,
 }: {
   label: string;
   primary: string;
@@ -834,6 +844,8 @@ function StatusTile({
   delta?: number | null;
   deltaLabel?: string;
   tone: "ok" | "warning" | "risk";
+  /** When set, the whole tile becomes a deep-link card with hover affordance. */
+  href?: string;
 }) {
   const accent =
     tone === "ok"
@@ -847,19 +859,25 @@ function StatusTile({
       : tone === "warning"
         ? "border-l-primary"
         : "border-l-destructive";
-  return (
-    <div
-      className={cn(
-        "rounded-lg border border-border border-l-2 bg-card p-4",
-        borderL,
-      )}
-    >
-      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        {label}
+  const wrapperCls = cn(
+    "rounded-lg border border-border border-l-2 bg-card p-4 transition-colors",
+    borderL,
+    href && "hover:border-primary/40 hover:bg-secondary/30 cursor-pointer group block",
+  );
+
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+        </div>
+        {href && (
+          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        )}
       </div>
       <div
         className={cn(
-          "mt-1 text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums truncate",
+          "mt-1 text-xl sm:text-2xl font-semibold tracking-tight tabular-nums truncate",
           accent,
         )}
       >
@@ -884,7 +902,15 @@ function StatusTile({
           {delta}pp {deltaLabel}
         </div>
       )}
-    </div>
+    </>
+  );
+
+  return href ? (
+    <Link href={href} className={wrapperCls}>
+      {body}
+    </Link>
+  ) : (
+    <div className={wrapperCls}>{body}</div>
   );
 }
 

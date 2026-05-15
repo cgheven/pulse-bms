@@ -74,7 +74,7 @@ async function ListingsContent() {
           You don&rsquo;t own any flat in this building.
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          Only flat owners can publish rent or sale listings. Tenants and family members can&rsquo;t.
+          Only flat owners can publish rent or sale listings. Tenants can&rsquo;t.
         </p>
       </div>
     );
