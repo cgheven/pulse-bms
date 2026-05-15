@@ -45,7 +45,12 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login");
-  const isPublic = isAuthRoute || pathname.startsWith("/api/");
+  // /find is the public discovery marketplace — must be reachable without
+  // signing in (drives word-of-mouth). Keep auth/API allowlist as-is.
+  // Tight match: only /find and /find/* (not /findings or similar).
+  const isFind = pathname === "/find" || pathname.startsWith("/find/");
+  const isPublic =
+    isAuthRoute || pathname.startsWith("/api/") || isFind;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

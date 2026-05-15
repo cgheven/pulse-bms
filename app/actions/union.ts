@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { normalizePhone } from "@/lib/phone";
 import { revalidatePath } from "next/cache";
 
 export type UnionPosition =
@@ -272,6 +273,8 @@ export type BuildingSettingsInput = {
   utility_cutoff_after_months: number;
   voting_rule: "majority" | "unanimous";
   expose_defaulter_names: boolean;
+  listing_enabled: boolean;
+  public_whatsapp: string; // canonical 03xxxxxxxxx or empty
 };
 
 export async function updateBuildingSettings(input: BuildingSettingsInput) {
@@ -301,6 +304,13 @@ export async function updateBuildingSettings(input: BuildingSettingsInput) {
   if (input.voting_rule !== "majority" && input.voting_rule !== "unanimous")
     throw new Error("Invalid voting rule");
 
+  // Normalize WhatsApp number to canonical 03xxxxxxxxx (empty if not provided).
+  // The RPC re-validates the format but we want a friendly client error too.
+  const rawWa = (input.public_whatsapp ?? "").trim();
+  const wa = rawWa ? normalizePhone(rawWa) : "";
+  if (rawWa && wa === null)
+    throw new Error("Public WhatsApp number is not a valid Pakistani mobile (e.g. 0331-1000006)");
+
   const supabase = await createClient();
   // SECURITY DEFINER RPC enforces the column whitelist server-side — no other
   // bms_buildings columns can be touched even if a caller bypasses this action.
@@ -311,6 +321,8 @@ export async function updateBuildingSettings(input: BuildingSettingsInput) {
     p_utility_cutoff: utility_cutoff_after_months,
     p_voting_rule: input.voting_rule,
     p_expose_defaulter_names: Boolean(input.expose_defaulter_names),
+    p_listing_enabled: Boolean(input.listing_enabled),
+    p_public_whatsapp: wa ?? "",
   });
   if (error) throw new Error(error.message);
 
@@ -329,10 +341,14 @@ export async function updateBuildingSettings(input: BuildingSettingsInput) {
       utility_cutoff_after_months,
       voting_rule: input.voting_rule,
       expose_defaulter_names: Boolean(input.expose_defaulter_names),
+      listing_enabled: Boolean(input.listing_enabled),
+      public_whatsapp: wa,
     },
   });
 
   revalidatePath("/union/settings");
   revalidatePath("/admin");
+  revalidatePath("/find");
+  revalidatePath(`/find/${profile.building_id}`);
   revalidatePath(`/super-admin/buildings/${profile.building_id}`);
 }

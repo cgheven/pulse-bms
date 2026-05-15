@@ -42,7 +42,7 @@ async function SettingsLoader() {
   const { data: building, error } = await supabase
     .from("bms_buildings")
     .select(
-      "id, name, entry_fee_owner, entry_fee_tenant, monthly_fee_default, utility_cutoff_after_months, voting_rule, expose_defaulter_names",
+      "id, name, entry_fee_owner, entry_fee_tenant, monthly_fee_default, utility_cutoff_after_months, voting_rule, expose_defaulter_names, listing_enabled, public_whatsapp",
     )
     .eq("id", profile.building_id)
     .single();
@@ -68,6 +68,8 @@ async function SettingsLoader() {
         voting_rule:
           building.voting_rule === "unanimous" ? "unanimous" : "majority",
         expose_defaulter_names: Boolean(building.expose_defaulter_names),
+        listing_enabled: Boolean(building.listing_enabled),
+        public_whatsapp: (building.public_whatsapp ?? "") as string,
       }}
     />
   );

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Building2, EyeOff, Eye } from "lucide-react";
+import { Save, Building2, EyeOff, Eye, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +43,9 @@ export function BuildingSettingsForm({
     values.monthly_fee_default !== initial.monthly_fee_default ||
     values.utility_cutoff_after_months !== initial.utility_cutoff_after_months ||
     values.voting_rule !== initial.voting_rule ||
-    values.expose_defaulter_names !== initial.expose_defaulter_names;
+    values.expose_defaulter_names !== initial.expose_defaulter_names ||
+    values.listing_enabled !== initial.listing_enabled ||
+    (values.public_whatsapp ?? "") !== (initial.public_whatsapp ?? "");
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,6 +59,8 @@ export function BuildingSettingsForm({
             Number(values.utility_cutoff_after_months) || 1,
           voting_rule: values.voting_rule,
           expose_defaulter_names: Boolean(values.expose_defaulter_names),
+          listing_enabled: Boolean(values.listing_enabled),
+          public_whatsapp: (values.public_whatsapp ?? "").trim(),
         });
         toast({ title: "Settings saved" });
         router.refresh();
@@ -183,6 +187,52 @@ export function BuildingSettingsForm({
             labelOn="Names visible"
             labelOff="Names hidden"
           />
+        </div>
+      </div>
+
+      {/* Public listings */}
+      <div className="card-soft">
+        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-border">
+          <Globe className="w-4 h-4 text-primary" />
+          <h2 className="text-base font-semibold tracking-tight">
+            Public listings · /find
+          </h2>
+        </div>
+
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <Label className="text-sm font-medium">
+              List this building on the public marketplace
+            </Label>
+            <p className="text-xs text-muted-foreground leading-snug mt-1.5">
+              {values.listing_enabled
+                ? "Your building appears on /find. Flat owners can publish rent/sale listings that route leads to your WhatsApp."
+                : "Hidden from /find. Owners can still mark flats but nothing is public until you switch this on."}
+            </p>
+          </div>
+          <Toggle
+            checked={values.listing_enabled}
+            onChange={(v) => set("listing_enabled", v)}
+            labelOn="Listed"
+            labelOff="Hidden"
+          />
+        </div>
+
+        <div className="mt-4">
+          <Label className="text-sm font-medium">
+            Union WhatsApp number{values.listing_enabled ? " *" : ""}
+          </Label>
+          <Input
+            inputMode="tel"
+            placeholder="0331-1000006"
+            value={values.public_whatsapp ?? ""}
+            onChange={(e) => set("public_whatsapp", e.target.value)}
+            className="h-11 text-base"
+          />
+          <p className="text-xs text-muted-foreground leading-snug mt-1.5">
+            Rental and buyer leads from /find open WhatsApp pre-filled to this number.
+            Union committee picks up the conversation and closes the deal.
+          </p>
         </div>
       </div>
 

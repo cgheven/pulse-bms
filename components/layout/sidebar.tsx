@@ -24,6 +24,7 @@ import {
   MessageSquareWarning,
   Eye,
   Settings,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -145,6 +146,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/resident/dues",       label: "Dues",       icon: Wallet },
         { href: "/resident/payments",   label: "Payments",   icon: CreditCard },
         { href: "/resident/complaints", label: "Complaints", icon: MessageSquareWarning },
+        { href: "/resident/listings",   label: "Listings",   icon: Tag },
       ],
     },
     {
