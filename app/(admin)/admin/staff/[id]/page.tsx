@@ -42,22 +42,33 @@ export default async function StaffDetailPage({
   const supabase = await createClient();
 
   // Accept either full UUID (legacy links) or new slug like "abdul-sattar-00000006".
+  // PostgREST has no LIKE operator on the `uuid` type, so for the slug path we
+  // resolve the suffix → uuid in JS over the building's staff list (small N).
   const isUuid = /^[0-9a-f-]{36}$/i.test(slug);
-  let staffQ = supabase
-    .from("bms_staff")
-    .select("*")
-    .eq("building_id", profile.building_id);
+  let resolvedId: string | null = null;
 
   if (isUuid) {
-    staffQ = staffQ.eq("id", slug);
+    resolvedId = slug;
   } else {
     const suffix = parseSlugSuffix(slug);
     if (!suffix) notFound();
-    // 8-char suffix from end of UUID — unique within a small building's staff
-    staffQ = staffQ.ilike("id", `%${suffix}`);
+    const { data: idList } = await supabase
+      .from("bms_staff")
+      .select("id")
+      .eq("building_id", profile.building_id);
+    const match = (idList ?? []).find((r) =>
+      r.id.replace(/-/g, "").toLowerCase().endsWith(suffix),
+    );
+    if (!match) notFound();
+    resolvedId = match.id;
   }
 
-  const { data: staff } = await staffQ.maybeSingle();
+  const { data: staff } = await supabase
+    .from("bms_staff")
+    .select("*")
+    .eq("building_id", profile.building_id)
+    .eq("id", resolvedId)
+    .maybeSingle();
   if (!staff) notFound();
 
   const { data: building } = await supabase

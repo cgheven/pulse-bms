@@ -9,11 +9,7 @@ export const dynamic = "force-dynamic";
 // SYNC outer — renders shell instantly
 export default function FlatsPage() {
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div>
-        <h1>Flats</h1>
-        <p className="text-muted-foreground">All units in this building.</p>
-      </div>
+    <div className="space-y-4 animate-fade-up">
       <Suspense fallback={<TableSkeleton rows={6} />}>
         <FlatsContent />
       </Suspense>
