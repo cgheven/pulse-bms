@@ -9,6 +9,8 @@ interface Props {
   confirmLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** When true, both buttons disable + the dialog can't close via overlay click. */
+  loading?: boolean;
 }
 
 export function ConfirmDialog({
@@ -18,17 +20,20 @@ export function ConfirmDialog({
   confirmLabel = "Delete",
   onConfirm,
   onCancel,
+  loading = false,
 }: Props) {
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+    <Dialog open={open} onOpenChange={(o) => !o && !loading && onCancel()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button variant="destructive" onClick={onConfirm}>{confirmLabel}</Button>
+          <Button variant="outline" onClick={onCancel} disabled={loading}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={loading}>
+            {confirmLabel}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

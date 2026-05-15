@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Megaphone,
   Pin,
+  Sparkles,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,34 @@ export default async function ResidentHomePage() {
       <Suspense fallback={<HeroSkeleton />}>
         <DuesHero profileId={profile.id} buildingId={profile.building_id} />
       </Suspense>
+
+      {/* Featured: building services marketplace — our differentiator.
+          Surfaced on home so every resident sees it on first open. */}
+      <Link
+        href="/resident/services"
+        className="group block rounded-xl border border-primary/30 bg-gradient-to-br from-primary/12 via-card to-card p-4 sm:p-5 hover:border-primary/50 hover:from-primary/15 transition-colors"
+      >
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex w-10 h-10 sm:w-12 sm:h-12 items-center justify-center rounded-lg bg-primary/20 border border-primary/30 text-primary shrink-0">
+            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-semibold tracking-tight">
+                Building Services
+              </h2>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-primary/15 border border-primary/30 text-[9px] font-bold uppercase tracking-wider text-primary">
+                New
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-2">
+              Tech help, home-cooked food, tutoring, repair — from your neighbors.
+              Direct WhatsApp, no brokers.
+            </p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+        </div>
+      </Link>
 
       <Suspense fallback={<KpiRowSkeleton count={2} />}>
         <BillAndNotices profileId={profile.id} buildingId={profile.building_id} />

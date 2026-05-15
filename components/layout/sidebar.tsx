@@ -25,6 +25,7 @@ import {
   Eye,
   Settings,
   Tag,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -141,12 +142,18 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       ],
     },
     {
+      label: "Marketplace",
+      items: [
+        { href: "/resident/services", label: "Services", icon: Sparkles },
+        { href: "/resident/listings", label: "Flat Listings", icon: Tag },
+      ],
+    },
+    {
       label: "My Account",
       items: [
         { href: "/resident/dues",       label: "Dues",       icon: Wallet },
         { href: "/resident/payments",   label: "Payments",   icon: CreditCard },
         { href: "/resident/complaints", label: "Complaints", icon: MessageSquareWarning },
-        { href: "/resident/listings",   label: "Listings",   icon: Tag },
       ],
     },
     {
