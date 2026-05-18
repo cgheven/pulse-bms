@@ -49,8 +49,9 @@ export async function updateSession(request: NextRequest) {
   // signing in (drives word-of-mouth). Keep auth/API allowlist as-is.
   // Tight match: only /find and /find/* (not /findings or similar).
   const isFind = pathname === "/find" || pathname.startsWith("/find/");
+  const isPricing = pathname === "/pricing";
   const isPublic =
-    isAuthRoute || pathname.startsWith("/api/") || isFind;
+    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
