@@ -33,3 +33,6 @@ next-env.d.ts
 
 # Local DB backups — never commit
 backups/
+
+# MCP config — contains Supabase access token, never commit
+.mcp.json

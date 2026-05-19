@@ -26,6 +26,7 @@ import {
   Settings,
   Tag,
   Sparkles,
+  Car,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -67,6 +68,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { href: "/admin/flats",     label: "Flats",     icon: Home },
         { href: "/admin/residents", label: "Residents", icon: Users },
+        { href: "/admin/vehicles",  label: "Vehicles",  icon: Car },
       ],
     },
     {
@@ -113,6 +115,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/union/staff",    label: "Staff",    icon: UserCog },
         { href: "/union/expenses", label: "Expenses", icon: Receipt },
         { href: "/union/facility", label: "Facility", icon: Wrench },
+        { href: "/union/vehicles", label: "Vehicles", icon: Car },
       ],
     },
     {
@@ -153,6 +156,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { href: "/resident/dues",       label: "Dues",       icon: Wallet },
         { href: "/resident/payments",   label: "Payments",   icon: CreditCard },
+        { href: "/resident/vehicles",   label: "Vehicles",   icon: Car },
         { href: "/resident/complaints", label: "Complaints", icon: MessageSquareWarning },
       ],
     },

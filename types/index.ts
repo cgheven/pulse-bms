@@ -89,3 +89,28 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
 
 export type ProposalStatus = "pending" | "approved" | "rejected" | "executed" | "cancelled";
 export type InvoiceStatus  = "pending" | "paid" | "partial" | "overdue" | "waived";
+
+export type VehicleType = "car" | "bike" | "ev" | "other";
+
+export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
+  car:   "Car",
+  bike:  "Bike",
+  ev:    "Electric Vehicle",
+  other: "Other",
+};
+
+export interface Vehicle {
+  id: string;
+  building_id: string;
+  flat_id: string;
+  resident_id: string | null;
+  plate_number: string;
+  vehicle_type: VehicleType;
+  make: string | null;
+  model: string | null;
+  color: string | null;
+  is_primary: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatCNIC, formatDate, formatPhone } from "@/lib/utils";
-import { ArrowLeft, Pencil, Star } from "lucide-react";
+import { ArrowLeft, Car, Pencil, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResidentFormDialog } from "@/components/admin/residents/resident-form-dialog";
 import { KpiRowSkeleton, TableSkeleton } from "@/components/layout/table-skeleton";
@@ -43,6 +43,9 @@ export default async function ResidentDetailPage(props: {
           <PaymentsCard id={id} />
         </Suspense>
       </div>
+      <Suspense fallback={<TableSkeleton rows={3} />}>
+        <VehiclesCard id={id} />
+      </Suspense>
     </div>
   );
 }
@@ -220,6 +223,74 @@ async function PaymentsCard({ id }: { id: string }) {
         </div>
       ) : (
         <p className="text-muted-foreground">No payments recorded.</p>
+      )}
+    </div>
+  );
+}
+
+async function VehiclesCard({ id }: { id: string }) {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+  if (!profile.building_id) notFound();
+  const supabase = await createClient();
+
+  const { data: vehicles } = await supabase
+    .from("bms_vehicles")
+    .select("id, plate_number, vehicle_type, make, model, color, is_primary, notes")
+    .eq("resident_id", id)
+    .eq("building_id", profile.building_id)
+    .order("is_primary", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  return (
+    <div className="card-soft">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="flex items-center gap-2">
+          <Car className="w-4 h-4 text-muted-foreground" />
+          Vehicles
+        </h3>
+        <Link
+          href="/admin/vehicles"
+          prefetch
+          className="text-sm text-primary hover:underline"
+        >
+          Manage
+        </Link>
+      </div>
+      {vehicles?.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b border-border">
+                <th className="py-2">Plate</th>
+                <th className="py-2">Type</th>
+                <th className="py-2">Make / Model</th>
+                <th className="py-2">Color</th>
+                <th className="py-2">Primary</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.map((v) => (
+                <tr key={v.id} className="border-b border-border last:border-0">
+                  <td className="py-2 font-mono">{v.plate_number}</td>
+                  <td className="py-2 capitalize">{v.vehicle_type}</td>
+                  <td className="py-2">
+                    {[v.make, v.model].filter(Boolean).join(" ") || "—"}
+                  </td>
+                  <td className="py-2 capitalize">{v.color ?? "—"}</td>
+                  <td className="py-2">
+                    {v.is_primary ? (
+                      <Star className="w-4 h-4 text-warning fill-warning" />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-muted-foreground">No vehicles registered.</p>
       )}
     </div>
   );

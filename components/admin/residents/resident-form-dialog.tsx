@@ -26,6 +26,8 @@ import {
   updateResident,
   type ResidentInput,
 } from "@/app/actions/residents";
+import { createVehicle } from "@/app/actions/vehicles";
+import type { VehicleType } from "@/types";
 
 export type ResidentFormValues = ResidentInput & { id?: string };
 
@@ -69,6 +71,15 @@ export function ResidentFormDialog({
   const [entryFeePaidTouched, setEntryFeePaidTouched] = useState(false);
   const [is_active, setActive] = useState(initial?.is_active ?? true);
 
+  // Vehicle (optional, create-only). Skipped entirely on edit.
+  const isEdit = Boolean(initial?.id);
+  const [vehiclePlate, setVehiclePlate] = useState("");
+  const [vehicleType, setVehicleType] = useState<VehicleType>("car");
+  const [vehicleMake, setVehicleMake] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [vehicleColor, setVehicleColor] = useState("");
+  const [vehiclePrimary, setVehiclePrimary] = useState(true);
+
   const [pending, start] = useTransition();
   const router = useRouter();
   const { toast } = useToast();
@@ -109,8 +120,37 @@ export function ResidentFormDialog({
           await updateResident(initial.id, payload);
           toast({ title: "Resident updated" });
         } else {
-          await createResident(payload);
+          const created = await createResident(payload);
           toast({ title: "Resident added" });
+
+          // Optional vehicle on create. Plate empty → skip.
+          // Resident creation already succeeded; surface vehicle failure
+          // separately so the user can retry from /admin/vehicles.
+          const plateTrimmed = vehiclePlate.trim();
+          if (plateTrimmed && created?.id) {
+            try {
+              await createVehicle({
+                flat_id,
+                resident_id: created.id,
+                plate_number: plateTrimmed,
+                vehicle_type: vehicleType,
+                make: vehicleMake.trim() || null,
+                model: vehicleModel.trim() || null,
+                color: vehicleColor.trim() || null,
+                is_primary: vehiclePrimary,
+              });
+              toast({ title: "Vehicle added" });
+            } catch (vErr) {
+              toast({
+                title: "Resident saved, vehicle failed",
+                description:
+                  vErr instanceof Error
+                    ? vErr.message
+                    : "Could not save vehicle — add it later from /admin/vehicles",
+                variant: "destructive",
+              });
+            }
+          }
         }
         setOpen(false);
         router.refresh();
@@ -217,6 +257,76 @@ export function ResidentFormDialog({
               Active
             </label>
           </div>
+          {!isEdit && (
+            <div className="col-span-2 border-t border-border pt-4 mt-1 space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold">Vehicle (optional)</h4>
+                <p className="text-xs text-muted-foreground">
+                  Add one now. More can be registered later from the Vehicles page.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Number plate</Label>
+                  <Input
+                    value={vehiclePlate}
+                    onChange={(e) => setVehiclePlate(e.target.value)}
+                    placeholder="ALN-540"
+                  />
+                </div>
+                <div>
+                  <Label>Type</Label>
+                  <Select
+                    value={vehicleType}
+                    onValueChange={(v) => setVehicleType(v as VehicleType)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="car">Car</SelectItem>
+                      <SelectItem value="bike">Bike</SelectItem>
+                      <SelectItem value="ev">EV</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Make</Label>
+                  <Input
+                    value={vehicleMake}
+                    onChange={(e) => setVehicleMake(e.target.value)}
+                    placeholder="Toyota"
+                  />
+                </div>
+                <div>
+                  <Label>Model</Label>
+                  <Input
+                    value={vehicleModel}
+                    onChange={(e) => setVehicleModel(e.target.value)}
+                    placeholder="Corolla GLi"
+                  />
+                </div>
+                <div>
+                  <Label>Color</Label>
+                  <Input
+                    value={vehicleColor}
+                    onChange={(e) => setVehicleColor(e.target.value)}
+                    placeholder="white"
+                  />
+                </div>
+                <label className="flex items-end gap-2 text-sm pb-2">
+                  <input
+                    type="checkbox"
+                    checked={vehiclePrimary}
+                    onChange={(e) => setVehiclePrimary(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Primary vehicle for this flat
+                </label>
+              </div>
+            </div>
+          )}
           <DialogFooter className="col-span-2 mt-2">
             <Button
               type="button"
