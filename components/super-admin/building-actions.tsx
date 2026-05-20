@@ -7,6 +7,7 @@ import { Eye, Pencil, Power, PowerOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { BuildingFormDialog, type BuildingFormValues } from "./building-form-dialog";
 import { setBuildingActive, deleteBuilding } from "@/app/actions/super-admin";
 
@@ -34,7 +35,7 @@ export function BuildingRowActions({
       } catch (err) {
         toast({
           title: "Could not update",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }
@@ -51,7 +52,7 @@ export function BuildingRowActions({
       } catch (err) {
         toast({
           title: "Could not delete",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

@@ -10,6 +10,7 @@ import {
   markTaskDone,
   type FacilityTaskInput,
 } from "@/app/actions/facility";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Check, Pencil, Trash2 } from "lucide-react";
 
 type StaffOption = { id: string; full_name: string };
@@ -34,7 +35,7 @@ export function TaskRowActions({
         await markTaskDone(task.id);
         router.refresh();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(friendlyErrorMessage(e, "Could not complete action"));
       }
     });
   };
@@ -46,7 +47,7 @@ export function TaskRowActions({
         setDel(false);
         router.refresh();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(friendlyErrorMessage(e, "Could not complete action"));
       }
     });
   };

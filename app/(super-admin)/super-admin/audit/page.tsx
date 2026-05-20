@@ -164,7 +164,7 @@ async function AuditTable({
     <>
       {logsRes.error && (
         <div className="card-soft border-destructive/40 bg-destructive/5 text-destructive">
-          Could not load audit log: {logsRes.error.message}
+          Could not load audit log. Please refresh — if the problem persists, contact support.
         </div>
       )}
 

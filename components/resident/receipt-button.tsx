@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { PAYMENT_MODE } from "@/types";
 
 export type ReceiptData = {
   building_name: string;
@@ -17,8 +18,31 @@ export type ReceiptData = {
   reference_no?: string | null;
   category?: string | null;
   billing_month?: string | null;
+  /** This chunk only — what the resident paid in this transaction. */
   amount: number;
   notes?: string | null;
+  /** Total paid against the invoice INCLUDING this chunk. */
+  total_paid_so_far?: number | null;
+  /** Remaining due after this chunk; <=0 means cleared. */
+  still_due?: number | null;
+  /** Full invoice amount for context. */
+  invoice_amount?: number | null;
+  /**
+   * Snapshot of the committee officer who collected the cash. Null for
+   * super_admin-recorded or legacy rows — the receipt skips the line when
+   * absent rather than rendering a hyphen.
+   */
+  received_by_name?: string | null;
+  /** Position label at receipt time (e.g. "President"). Optional alongside name. */
+  received_by_position?: string | null;
+};
+
+const MODE_LABEL: Record<string, string> = {
+  [PAYMENT_MODE.CASH]: "Cash",
+  [PAYMENT_MODE.BANK]: "Bank transfer",
+  [PAYMENT_MODE.ONLINE]: "Online",
+  [PAYMENT_MODE.CHEQUE]: "Cheque",
+  [PAYMENT_MODE.CREDIT_CARRYFORWARD]: "Credit (from previous overpayment)",
 };
 
 async function buildReceipt(d: ReceiptData) {
@@ -55,12 +79,26 @@ async function buildReceipt(d: ReceiptData) {
     { align: "right" }
   );
 
+  const friendlyMode = MODE_LABEL[d.payment_mode ?? ""] ?? d.payment_mode ?? "-";
+  const isCarryForward = d.payment_mode === PAYMENT_MODE.CREDIT_CARRYFORWARD;
+
+  // "Received by" goes between Payment Mode and Reference No to mirror the
+  // admin receipt builder. We omit the row entirely when the receiver
+  // snapshot is null so we never render a bare hyphen for the most
+  // important transparency field.
+  const receivedByLine = d.received_by_name
+    ? d.received_by_position
+      ? `${d.received_by_name} (${d.received_by_position})`
+      : d.received_by_name
+    : null;
+
   const rows: [string, string][] = [
     ["Resident", d.resident_name ?? "-"],
     ["Flat Number", d.flat_number],
     ["Invoice No", d.invoice_number ?? "-"],
     ["Billing Month", d.billing_month ? formatDate(d.billing_month) : "-"],
-    ["Payment Mode", d.payment_mode ?? "-"],
+    ["Payment Mode", friendlyMode],
+    ...(receivedByLine ? [["Received by", receivedByLine] as [string, string]] : []),
     ["Reference No", d.reference_no ?? "-"],
     ["Category", d.category ?? "Maintenance"],
   ];
@@ -77,18 +115,78 @@ async function buildReceipt(d: ReceiptData) {
 
   const endY =
     (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 320;
-  const amountY = endY + 32;
 
+  // Running-balance breakdown panel — the senior-friendly part. Order is
+  // invoice total → total paid → still due → paid now, so the resident's eye
+  // reads it like a bill statement: here's what was owed, what's been paid,
+  // what's left, and what this specific receipt covers.
+  let cursorY = endY + 28;
+
+  if (d.invoice_amount != null) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text("Invoice total", 40, cursorY);
+    doc.text(
+      formatCurrency(Number(d.invoice_amount)),
+      w - 40,
+      cursorY,
+      { align: "right" },
+    );
+    cursorY += 16;
+  }
+
+  if (typeof d.total_paid_so_far === "number" && d.total_paid_so_far !== null) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text("Total paid so far (this invoice)", 40, cursorY);
+    doc.text(
+      formatCurrency(Number(d.total_paid_so_far)),
+      w - 40,
+      cursorY,
+      { align: "right" },
+    );
+    cursorY += 16;
+  }
+
+  if (typeof d.still_due === "number") {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    const cleared = Number(d.still_due) <= 0;
+    if (cleared) {
+      doc.setTextColor(20, 130, 80);
+      doc.text("Cleared", 40, cursorY);
+      doc.text("Rs. 0", w - 40, cursorY, { align: "right" });
+    } else {
+      doc.setTextColor(200, 30, 30);
+      doc.text("Still due", 40, cursorY);
+      doc.text(formatCurrency(Number(d.still_due)), w - 40, cursorY, { align: "right" });
+    }
+    doc.setTextColor(0, 0, 0);
+    cursorY += 18;
+  }
+
+  // Paid now — the chunk this receipt actually records. Rendered last and
+  // largest so it remains the headline number on the page.
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("Amount Paid", 40, amountY);
-  doc.setFontSize(20);
-  doc.text(formatCurrency(d.amount), w - 40, amountY, { align: "right" });
+  doc.setFontSize(13);
+  doc.text("Paid now", 40, cursorY);
+  doc.setFontSize(18);
+  doc.text(formatCurrency(d.amount), w - 40, cursorY, { align: "right" });
+  cursorY += 22;
+
+  if (isCarryForward) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.setTextColor(120, 80, 40);
+    doc.text("This payment was applied from a previous overpayment.", 40, cursorY);
+    doc.setTextColor(0, 0, 0);
+    cursorY += 14;
+  }
 
   if (d.notes) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.text(`Notes: ${d.notes}`, 40, amountY + 28);
+    doc.text(`Notes: ${d.notes}`, 40, cursorY);
   }
 
   const footY = doc.internal.pageSize.getHeight() - 80;
@@ -97,7 +195,11 @@ async function buildReceipt(d: ReceiptData) {
   doc.line(w - 200, footY, w - 40, footY);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text("Received by", 40, footY + 14);
+  // Footer labels the two hand-signature lines. The left line is where
+  // the resident signs to acknowledge receipt of this PDF copy — calling
+  // it "Recipient signature" avoids clashing with the body's "Received by"
+  // field which already names the committee officer who collected the cash.
+  doc.text("Recipient signature", 40, footY + 14);
   doc.text("Authorised signature", w - 40, footY + 14, { align: "right" });
 
   doc.setFontSize(9);

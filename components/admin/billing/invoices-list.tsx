@@ -35,16 +35,22 @@ export type InvoiceRow = {
 export function InvoicesList({
   invoices,
   buildingName,
+  buildingId,
   flatPickerOptions,
 }: {
   invoices: InvoiceRow[];
   buildingName: string;
+  buildingId: string;
   flatPickerOptions: FlatPickerOption[];
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [monthFilter, setMonthFilter] = useState<string>("all");
   const [flatFilter, setFlatFilter] = useState<string>("all");
   const [q, setQ] = useState("");
+  // Default sort: amount due DESC — biggest debtors surface first so
+  // chowkidars / admins act on the most pressing rows. Other columns can
+  // be selected to override.
+  const [sortKey, setSortKey] = useState<"due" | "month">("due");
   const [payInvoice, setPayInvoice] = useState<InvoiceRow | null>(null);
 
   const months = useMemo(() => {
@@ -62,13 +68,26 @@ export function InvoicesList({
   const today = new Date().toISOString().slice(0, 10);
 
   const filtered = useMemo(() => {
-    return invoices.filter((i) => {
+    const list = invoices.filter((i) => {
       if (flatFilter !== "all" && i.flat_id !== flatFilter) return false;
       if (monthFilter !== "all" && i.billing_month.slice(0, 7) !== monthFilter) return false;
+      const amountDue = Math.max(0, Number(i.amount) - Number(i.paid_total));
       if (statusFilter !== "all") {
-        const eff =
-          i.status === "pending" && i.due_date && i.due_date < today ? "overdue" : i.status;
-        if (eff !== statusFilter) return false;
+        // Status filter uses amount-aware buckets:
+        //   "cleared"     → amount_due === 0 (and not waived)
+        //   "due"         → amount_due > 0
+        //   "defaulter"   → amount_due > 0 AND due_date < today
+        //   "waived"      → status === 'waived'
+        if (statusFilter === "cleared") {
+          if (amountDue > 0 || i.status === "waived") return false;
+        } else if (statusFilter === "due") {
+          if (amountDue <= 0 || i.status === "waived") return false;
+        } else if (statusFilter === "defaulter") {
+          if (amountDue <= 0) return false;
+          if (!i.due_date || i.due_date >= today) return false;
+        } else if (statusFilter === "waived") {
+          if (i.status !== "waived") return false;
+        }
       }
       if (q) {
         const s = q.trim().toLowerCase();
@@ -80,7 +99,22 @@ export function InvoicesList({
       }
       return true;
     });
-  }, [invoices, statusFilter, monthFilter, flatFilter, q, today]);
+    // Sort
+    // TODO(perf): in-memory sort is fine under ~10k invoices per building.
+    // If a building's archive grows past that we should push sort to the
+    // server query (order by amount-paid DESC) and paginate.
+    const sorted = [...list];
+    if (sortKey === "due") {
+      sorted.sort((a, b) => {
+        const dueA = Math.max(0, Number(a.amount) - Number(a.paid_total));
+        const dueB = Math.max(0, Number(b.amount) - Number(b.paid_total));
+        return dueB - dueA;
+      });
+    } else {
+      sorted.sort((a, b) => b.billing_month.localeCompare(a.billing_month));
+    }
+    return sorted;
+  }, [invoices, statusFilter, monthFilter, flatFilter, q, today, sortKey]);
 
   return (
     <div className="space-y-4">
@@ -101,14 +135,20 @@ export function InvoicesList({
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
-            <SelectItem value="partial">Partial</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="due">Still due</SelectItem>
+            <SelectItem value="defaulter">Defaulters (overdue)</SelectItem>
+            <SelectItem value="cleared">Cleared</SelectItem>
             <SelectItem value="waived">Waived</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortKey} onValueChange={(v) => setSortKey(v as "due" | "month")}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="Sort" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="due">Sort: Amount due ↓</SelectItem>
+            <SelectItem value="month">Sort: Latest month</SelectItem>
           </SelectContent>
         </Select>
         <Select value={flatFilter} onValueChange={setFlatFilter}>
@@ -132,6 +172,7 @@ export function InvoicesList({
                 <th className="px-4 py-3 font-semibold">Due</th>
                 <th className="px-4 py-3 font-semibold text-right">Amount</th>
                 <th className="px-4 py-3 font-semibold text-right">Paid</th>
+                <th className="px-4 py-3 font-semibold text-right">Still due</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold">Invoice #</th>
                 <th className="px-4 py-3" />
@@ -140,7 +181,7 @@ export function InvoicesList({
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                     No invoices match the filters.
                   </td>
                 </tr>
@@ -161,8 +202,16 @@ export function InvoicesList({
                     <td className="px-4 py-3">{inv.due_date ? formatDate(inv.due_date) : "—"}</td>
                     <td className="px-4 py-3 text-right">{formatCurrency(Number(inv.amount))}</td>
                     <td className="px-4 py-3 text-right">{formatCurrency(Number(inv.paid_total))}</td>
+                    <td className={`px-4 py-3 text-right font-semibold tabular-nums ${remaining > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                      {remaining > 0 ? formatCurrency(remaining) : "—"}
+                    </td>
                     <td className="px-4 py-3">
-                      <InvoiceStatusPill status={inv.status} due_date={inv.due_date} />
+                      <InvoiceStatusPill
+                        status={inv.status}
+                        amount={Number(inv.amount)}
+                        paidTotal={Number(inv.paid_total)}
+                        due_date={inv.due_date}
+                      />
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
                       {inv.invoice_number}
@@ -189,6 +238,7 @@ export function InvoicesList({
           onOpenChange={(b) => !b && setPayInvoice(null)}
           flats={flatPickerOptions}
           buildingName={buildingName}
+          buildingId={buildingId}
           presetInvoice={{
             invoice_id: payInvoice.id,
             flat_id: payInvoice.flat_id,

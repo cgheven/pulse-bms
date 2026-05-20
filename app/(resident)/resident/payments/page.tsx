@@ -18,9 +18,11 @@ type PaymentRow = {
   category: string | null;
   receipt_no: string | null;
   notes: string | null;
+  received_by_name: string | null;
+  received_by_position: string | null;
   bms_invoices:
-    | { invoice_number: string; billing_month: string }
-    | { invoice_number: string; billing_month: string }[]
+    | { invoice_number: string; billing_month: string; amount: number }
+    | { invoice_number: string; billing_month: string; amount: number }[]
     | null;
 };
 
@@ -95,15 +97,43 @@ async function PaymentsContent({
   const multiFlat = flats.length > 1;
 
   let payments: PaymentRow[] = [];
+  // amountByInvoice stores invoice.amount keyed by invoice_id so each chunk
+  // receipt can render the still-due figure. paidByInvoice is the running
+  // total INCLUDING the chunk represented by the row; computed
+  // chronologically below so chunk N shows the balance as of chunk N.
+  const amountByInvoice = new Map<string, number>();
   if (flatIds.length > 0) {
     const { data } = await supabase
       .from("bms_payments")
       .select(
-        "id, invoice_id, flat_id, amount, payment_date, payment_mode, reference_no, category, receipt_no, notes, bms_invoices(invoice_number, billing_month)",
+        "id, invoice_id, flat_id, amount, payment_date, payment_mode, reference_no, category, receipt_no, notes, received_by_name, received_by_position, bms_invoices(invoice_number, billing_month, amount)",
       )
       .in("flat_id", flatIds)
       .order("payment_date", { ascending: false });
     payments = (data ?? []) as unknown as PaymentRow[];
+    for (const p of payments) {
+      const invRel = Array.isArray(p.bms_invoices) ? p.bms_invoices[0] : p.bms_invoices;
+      if (p.invoice_id && invRel) {
+        amountByInvoice.set(p.invoice_id, Number((invRel as { amount: number }).amount ?? 0));
+      }
+    }
+  }
+
+  // Running total per invoice: each chunk receipt shows the cumulative paid
+  // AT THE TIME of that chunk. We iterate chronologically (oldest first) to
+  // accumulate, then look up by payment id when rendering.
+  const cumulativeByPayment = new Map<string, number>();
+  {
+    const oldestFirst = [...payments].sort((a, b) =>
+      (a.payment_date ?? "").localeCompare(b.payment_date ?? ""),
+    );
+    const running = new Map<string, number>();
+    for (const p of oldestFirst) {
+      if (!p.invoice_id) continue;
+      const next = (running.get(p.invoice_id) ?? 0) + Number(p.amount);
+      running.set(p.invoice_id, next);
+      cumulativeByPayment.set(p.id, next);
+    }
   }
 
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
@@ -153,6 +183,14 @@ async function PaymentsContent({
                   ? p.bms_invoices[0]
                   : p.bms_invoices;
                 const flatNum = p.flat_id ? flatNumberById.get(p.flat_id) ?? "—" : "—";
+                const cumulative = cumulativeByPayment.get(p.id);
+                const invoiceAmount = p.invoice_id
+                  ? amountByInvoice.get(p.invoice_id) ?? null
+                  : null;
+                const stillDue =
+                  invoiceAmount != null && cumulative != null
+                    ? Math.max(0, invoiceAmount - cumulative)
+                    : null;
                 const data: ReceiptData = {
                   building_name: building?.name ?? "Building",
                   building_address: building?.address ?? null,
@@ -168,6 +206,11 @@ async function PaymentsContent({
                   billing_month: invoice?.billing_month ?? null,
                   amount: Number(p.amount),
                   notes: p.notes,
+                  total_paid_so_far: cumulative ?? null,
+                  still_due: stillDue,
+                  invoice_amount: invoiceAmount,
+                  received_by_name: p.received_by_name,
+                  received_by_position: p.received_by_position,
                 };
                 const billLabel = invoice?.billing_month
                   ? formatDate(invoice.billing_month)

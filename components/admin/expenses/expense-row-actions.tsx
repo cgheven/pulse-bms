@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ExpenseForm } from "./expense-form";
 import { deleteExpense } from "@/app/actions/expenses";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Pencil, Trash2 } from "lucide-react";
 import type { ExpenseCategory, ExpenseRecurrence } from "@/app/actions/expenses";
 
@@ -35,7 +36,7 @@ export function ExpenseRowActions({ expense }: { expense: ExpenseRow }) {
         setDel(false);
         router.refresh();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(friendlyErrorMessage(e, "Could not delete expense"));
       }
     });
   };

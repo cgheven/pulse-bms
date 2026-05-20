@@ -50,7 +50,7 @@ async function SettingsLoader() {
   if (error || !building) {
     return (
       <div className="card-soft border-destructive/40 bg-destructive/5 text-destructive">
-        Could not load building: {error?.message ?? "not found"}
+        Could not load building. Please refresh — if the problem persists, contact support.
       </div>
     );
   }

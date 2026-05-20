@@ -41,9 +41,20 @@ export default function LoginPage() {
       password,
     });
     if (error) {
+      // Supabase auth errors are typically user-safe ("Invalid login credentials",
+      // etc.) but rare backend errors can leak detail — show a generic message in
+      // those cases. Log raw error for debugging.
+      console.error(error);
+      const msg = error.message || "";
+      const known =
+        msg.toLowerCase().includes("invalid") ||
+        msg.toLowerCase().includes("not confirmed") ||
+        msg.toLowerCase().includes("rate limit");
       toast({
         title: "Login failed",
-        description: error.message,
+        description: known
+          ? "Check your mobile/email and password, then try again."
+          : "Something went wrong. Please try again.",
         variant: "destructive",
       });
       setLoading(false);

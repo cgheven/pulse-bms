@@ -15,7 +15,7 @@ interface NavbarProps {
 /**
  * Derive a friendly page title from the pathname.
  *   /admin                 → "Dashboard"
- *   /admin/billing         → "Billing"
+ *   /admin/maintenance     → "Maintenance"
  *   /admin/flats/abc-123   → "Flats"
  *   /super-admin           → "Dashboard"
  *   /resident              → "Home"

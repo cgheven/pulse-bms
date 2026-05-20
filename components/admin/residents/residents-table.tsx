@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Plus, Star, KeyRound, UserX } from "lucide-react";
 import { cn, formatDate, formatPhone, formatCNIC } from "@/lib/utils";
 import {
@@ -80,7 +81,7 @@ export function ResidentsTable({
       } catch (err) {
         toast({
           title: "Could not revoke login",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

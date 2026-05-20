@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -18,6 +18,7 @@ export async function createUnionNotice(input: {
   pinned?: boolean;
   expires_at?: string | null;
 }) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["union", "admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -53,6 +54,7 @@ export async function createUnionNotice(input: {
 }
 
 export async function deleteUnionNotice(id: string) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["union", "admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 

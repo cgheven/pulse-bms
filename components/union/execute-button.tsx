@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/hooks/use-toast";
 import { executeProposal } from "@/app/actions/proposals";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 export function ExecuteButton({ proposalId }: { proposalId: string }) {
   const [open, setOpen] = useState(false);
@@ -21,7 +22,7 @@ export function ExecuteButton({ proposalId }: { proposalId: string }) {
         });
         setOpen(false);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to execute proposal";
+        const msg = friendlyErrorMessage(e, "Failed to execute proposal");
         toast({ title: "Execution failed", description: msg, variant: "destructive" });
       }
     });

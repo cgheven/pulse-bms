@@ -24,6 +24,7 @@ import {
   updateComplaintStatus,
   type ComplaintStatus,
 } from "@/app/actions/facility";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 type StaffOption = { id: string; full_name: string };
 
@@ -52,7 +53,7 @@ export function ComplaintActions({
         });
         router.refresh();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(friendlyErrorMessage(e, "Could not update complaint"));
       }
     });
   };
@@ -67,7 +68,7 @@ export function ComplaintActions({
         await updateComplaintStatus({ id: complaintId, status });
         router.refresh();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(friendlyErrorMessage(e, "Could not update complaint"));
       }
     });
   };
@@ -83,7 +84,7 @@ export function ComplaintActions({
         setResolveOpen(false);
         router.refresh();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(friendlyErrorMessage(e, "Could not update complaint"));
       }
     });
   };

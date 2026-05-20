@@ -1,7 +1,7 @@
 "use server";
 
 import { cache } from "react";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createPublicClient } from "@/lib/supabase/public";
 import { writeAuditLog } from "@/lib/audit";
@@ -49,6 +49,7 @@ export type ListingRow = {
 };
 
 export async function upsertListing(input: ListingInput): Promise<ListingRow> {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["resident", "admin", "super_admin"]);
   const supabase = await createClient();
 
@@ -112,6 +113,7 @@ export async function upsertListing(input: ListingInput): Promise<ListingRow> {
 }
 
 export async function deactivateListing(listingId: string): Promise<void> {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["resident", "admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();

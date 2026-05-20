@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Plus, Star, Pencil, Trash2, Car } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { VEHICLE_TYPE_LABELS, type VehicleType } from "@/types";
@@ -86,7 +87,7 @@ export function VehiclesTable({
       } catch (err) {
         toast({
           title: "Could not delete",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

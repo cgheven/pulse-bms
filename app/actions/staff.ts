@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -19,6 +19,7 @@ export type StaffInput = {
 };
 
 export async function createStaff(input: StaffInput) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -45,6 +46,7 @@ export async function createStaff(input: StaffInput) {
 }
 
 export async function updateStaff(id: string, input: Partial<StaffInput>) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -74,6 +76,7 @@ export async function updateStaff(id: string, input: Partial<StaffInput>) {
 }
 
 export async function deleteStaff(id: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -105,6 +108,7 @@ export async function setAttendance(input: {
   status: AttendanceStatus;
   notes?: string | null;
 }) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -162,6 +166,7 @@ export async function setAttendance(input: {
 }
 
 export async function markAllPresentToday() {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -219,6 +224,7 @@ export async function paySalary(input: {
   slip_no?: string | null;
   notes?: string | null;
 }) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();

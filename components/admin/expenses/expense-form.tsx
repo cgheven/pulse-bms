@@ -27,6 +27,7 @@ import {
   type ExpenseInput,
   type ExpenseRecurrence,
 } from "@/app/actions/expenses";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 // Salaries are NOT here — they live in /admin/staff (bms_salary_payments).
 // Keeping them separate avoids double-entry and lets us track per-staff slips.
@@ -110,7 +111,7 @@ export function ExpenseForm({
         onOpenChange(false);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed");
+        setError(friendlyErrorMessage(e, "Could not save expense"));
       }
     });
   };

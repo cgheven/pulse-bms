@@ -26,6 +26,7 @@ import {
   type FacilityTaskInput,
   type TaskRecurrence,
 } from "@/app/actions/facility";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 type StaffOption = { id: string; full_name: string };
 
@@ -67,7 +68,7 @@ export function TaskForm({
         onOpenChange(false);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed");
+        setError(friendlyErrorMessage(e, "Could not save task"));
       }
     });
   };

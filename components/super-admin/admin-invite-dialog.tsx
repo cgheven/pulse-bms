@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { createAdmin } from "@/app/actions/super-admin";
 
 type BuildingOption = { id: string; name: string };
@@ -109,7 +110,7 @@ export function AdminInviteDialog({
       } catch (err) {
         toast({
           title: "Could not create admin",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

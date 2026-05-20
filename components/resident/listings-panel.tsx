@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn, formatCurrency, formatLakh } from "@/lib/utils";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { upsertListing, deactivateListing } from "@/app/actions/listings";
 import {
   AlertTriangle,
@@ -126,7 +127,7 @@ function FlatListingCard({ flat }: { flat: FlatCard }) {
       } catch (err) {
         toast({
           title: "Could not remove",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }
@@ -375,7 +376,7 @@ function ListingForm({
       } catch (err) {
         toast({
           title: "Could not save",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

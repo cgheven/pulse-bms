@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Users,
   CreditCard,
-  FileText,
   X,
   Building2,
   Home,
@@ -27,6 +26,8 @@ import {
   Tag,
   Sparkles,
   Car,
+  Coins,
+  HandCoins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -74,10 +75,10 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "Finance",
       items: [
-        { href: "/admin/billing",  label: "Billing",  icon: FileText },
-        { href: "/admin/payments", label: "Payments", icon: CreditCard },
-        { href: "/admin/expenses", label: "Expenses", icon: Receipt },
-        { href: "/admin/finance",  label: "Finance",  icon: LineChart },
+        { href: "/admin/maintenance",  label: "Maintenance",  icon: Receipt },
+        { href: "/admin/other-income", label: "Other Income", icon: Coins },
+        { href: "/admin/expenses",     label: "Expenses",     icon: Wallet },
+        { href: "/admin/finance",      label: "Finance",      icon: LineChart },
       ],
     },
     {
@@ -100,6 +101,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       label: "Overview",
       items: [
         { href: "/union", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/union/collections", label: "Collections", icon: HandCoins },
       ],
     },
     {

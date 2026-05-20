@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
@@ -25,6 +25,7 @@ export async function addUnionMember(input: {
   term_start: string;
   term_end: string;
 }) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -72,6 +73,7 @@ export async function updateUnionMember(
   id: string,
   input: { position: UnionPosition; term_start: string; term_end: string; is_active: boolean }
 ) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -106,6 +108,7 @@ export async function updateUnionMember(
 }
 
 export async function removeUnionMember(id: string) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -155,6 +158,7 @@ export async function createElection(input: {
   cycle_label: string;
   scheduled_date: string;
 }) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -187,6 +191,7 @@ export async function createElection(input: {
 }
 
 export async function openElection(id: string) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -214,6 +219,7 @@ export async function closeElection(
   id: string,
   results: Record<string, unknown>
 ) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -239,6 +245,7 @@ export async function closeElection(
 }
 
 export async function deleteElection(id: string) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -278,6 +285,7 @@ export type BuildingSettingsInput = {
 };
 
 export async function updateBuildingSettings(input: BuildingSettingsInput) {
+  await requireNotDemo();
   // Super Admin is intentionally excluded — this surface is owned by the building.
   const { profile, user } = await requireRole(["union", "admin"]);
   if (!profile.building_id) throw new Error("No building assigned");

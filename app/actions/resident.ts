@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -22,6 +22,7 @@ export async function raiseComplaint(input: {
   category: ComplaintCategory;
   priority: ComplaintPriority;
 }) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("resident");
   if (!profile.building_id) throw new Error("No building assigned to this resident");
 
@@ -92,6 +93,7 @@ export async function updateMyProfile(input: {
   full_name?: string;
   phone?: string;
 }) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("resident");
   const supabase = await createClient();
 

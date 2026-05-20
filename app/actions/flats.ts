@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
@@ -18,6 +18,7 @@ export type FlatInput = {
 };
 
 export async function createFlat(input: FlatInput) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -57,6 +58,7 @@ export async function createFlat(input: FlatInput) {
 }
 
 export async function updateFlat(id: string, input: Partial<FlatInput>) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -97,6 +99,7 @@ export async function updateFlat(id: string, input: Partial<FlatInput>) {
 }
 
 export async function deleteFlat(id: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -298,6 +301,7 @@ async function ensureProfile(
 export async function createFlatWithPeople(
   input: FlatWithPeopleInput,
 ): Promise<CreateFlatWithPeopleResult> {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();

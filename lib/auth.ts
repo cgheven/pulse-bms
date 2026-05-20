@@ -84,3 +84,23 @@ export async function requireBuilding() {
   }
   return s;
 }
+
+/**
+ * Read-only guard for sales-demo accounts.
+ *
+ * Every mutation server action (insert/update/delete) must call this BEFORE
+ * touching the DB. Demo accounts are seeded with is_demo=true on
+ * bms_profiles; this helper throws so the action fails loudly with a toast,
+ * and a stacked restrictive RLS policy backs it up at the DB layer.
+ *
+ * Read-only actions do NOT need this — demo users are allowed to browse.
+ */
+export async function requireNotDemo() {
+  const s = await requireSession();
+  if (s.profile.is_demo) {
+    throw new Error(
+      "Demo accounts are read-only. Sign up to make changes.",
+    );
+  }
+  return s;
+}

@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import {
   createElection,
   openElection,
@@ -74,7 +75,7 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
       } catch (e) {
         toast({
           title: "Could not schedule",
-          description: e instanceof Error ? e.message : "Failed",
+          description: friendlyErrorMessage(e),
           variant: "destructive",
         });
       }
@@ -89,7 +90,7 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
       } catch (e) {
         toast({
           title: "Could not open",
-          description: e instanceof Error ? e.message : "Failed",
+          description: friendlyErrorMessage(e),
           variant: "destructive",
         });
       }
@@ -112,7 +113,7 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
       } catch (e) {
         toast({
           title: "Could not close",
-          description: e instanceof Error ? e.message : "Failed",
+          description: friendlyErrorMessage(e),
           variant: "destructive",
         });
       }
@@ -129,7 +130,7 @@ export function ElectionsTab({ elections }: { elections: Election[] }) {
       } catch (e) {
         toast({
           title: "Could not delete",
-          description: e instanceof Error ? e.message : "Failed",
+          description: friendlyErrorMessage(e),
           variant: "destructive",
         });
       }

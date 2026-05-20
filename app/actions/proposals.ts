@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -20,6 +20,7 @@ export async function createProposal(input: {
   amount?: number | null;
   voting_rule?: VotingRule;
 }) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["union", "admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -68,6 +69,7 @@ export async function createProposal(input: {
 }
 
 export async function cancelProposal(id: string) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["union", "admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -154,6 +156,7 @@ export async function castVote(
   vote: VoteChoice,
   comment?: string
 ) {
+  await requireNotDemo();
   const { user, profile } = await requireRole("union");
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -206,6 +209,7 @@ export async function castVote(
  * ────────────────────────────────────────────────────────────────────────── */
 
 export async function addProposalComment(proposal_id: string, body: string) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["union", "admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const trimmed = body.trim();
@@ -243,6 +247,7 @@ export async function addProposalComment(proposal_id: string, body: string) {
  * ────────────────────────────────────────────────────────────────────────── */
 
 export async function executeProposal(id: string) {
+  await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 

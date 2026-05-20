@@ -41,6 +41,12 @@ export type Profile = {
   role: Role;
   building_id: string | null;
   is_active: boolean;
+  /**
+   * True if this profile is a read-only sales-demo account. Set by the
+   * seed-demo-users script and enforced by `requireNotDemo()` plus
+   * restrictive RLS policies (`bms_<table>_demo_deny_*`).
+   */
+  is_demo: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -89,6 +95,45 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
 
 export type ProposalStatus = "pending" | "approved" | "rejected" | "executed" | "cancelled";
 export type InvoiceStatus  = "pending" | "paid" | "partial" | "overdue" | "waived";
+
+/**
+ * Canonical payment mode values. The DB enum is
+ * `cash | bank | online | cheque | credit_carryforward`. We keep the
+ * carry-forward literal here so it isn't a free-floating magic string
+ * scattered across actions and PDF builders.
+ *
+ * `BANK_TRANSFER` is the *form* value (UI label) — the server action maps
+ * it to the DB enum `bank` before insert. Both are exported so the
+ * mapping has a single source of truth.
+ */
+export const PAYMENT_MODE = {
+  CASH: "cash",
+  BANK_TRANSFER: "bank_transfer",
+  BANK: "bank",
+  CHEQUE: "cheque",
+  ONLINE: "online",
+  OTHER: "other",
+  CREDIT_CARRYFORWARD: "credit_carryforward",
+} as const;
+export type PaymentMode = typeof PAYMENT_MODE[keyof typeof PAYMENT_MODE];
+
+/**
+ * A parked overpayment waiting to be auto-applied to the next invoice for
+ * the same flat. `applied_invoice_id` is null while the credit is open;
+ * once consumed it points at the invoice that absorbed it. Split credits
+ * preserve `created_at` on the remainder row so FIFO ordering is stable.
+ */
+export type FlatCredit = {
+  id: string;
+  building_id: string;
+  flat_id: string;
+  amount: number;
+  source_payment_id: string | null;
+  applied_invoice_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+};
 
 export type VehicleType = "car" | "bike" | "ev" | "other";
 

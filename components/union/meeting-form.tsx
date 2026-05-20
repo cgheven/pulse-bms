@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { createMeeting, updateMeeting } from "@/app/actions/meetings";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 type Meeting = {
   id: string;
@@ -64,7 +65,7 @@ export function MeetingForm({
           setLocation("");
           setAgenda("");
         } catch (e) {
-          const msg = e instanceof Error ? e.message : "Failed to create meeting";
+          const msg = friendlyErrorMessage(e, "Failed to create meeting");
           toast({ title: "Could not schedule", description: msg, variant: "destructive" });
         }
       });
@@ -78,7 +79,7 @@ export function MeetingForm({
           toast({ title: "Meeting marked complete", description: "Minutes saved." });
           setOpen(false);
         } catch (e) {
-          const msg = e instanceof Error ? e.message : "Failed to save minutes";
+          const msg = friendlyErrorMessage(e, "Failed to save minutes");
           toast({ title: "Could not save", description: msg, variant: "destructive" });
         }
       });

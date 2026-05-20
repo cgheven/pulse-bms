@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { cn, formatCurrency, formatDate, capitalize } from "@/lib/utils";
 import { KpiRowSkeleton, TableSkeleton } from "@/components/layout/table-skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { StatusPill } from "@/components/resident/status-pill";
+import { DuesPill } from "@/components/resident/dues-pill";
 import { STAFF_ROLE_LABELS, type StaffRole } from "@/types";
 import {
   TrendingUp,
@@ -243,11 +243,13 @@ async function StaffPanel({
                   </td>
                   <td className="px-4 py-3">
                     {isPaid ? (
-                      <StatusPill status="paid" />
-                    ) : paid > 0 ? (
-                      <StatusPill status="partial" />
+                      <span className="inline-flex items-center rounded-full border border-[hsl(151_70%_55%/0.30)] bg-[hsl(151_70%_55%/0.12)] text-[hsl(151_70%_55%)] px-2 py-0.5 text-[11px] font-medium">
+                        Cleared ✓
+                      </span>
                     ) : (
-                      <StatusPill status="pending" />
+                      <span className="inline-flex items-center rounded-full border border-destructive/30 bg-destructive/15 text-destructive px-2 py-0.5 text-[11px] font-medium tabular-nums">
+                        {formatCurrency(Math.max(0, owed - paid))} still due
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -292,6 +294,25 @@ async function BillsPanel({
       .select("id, flat_number")
       .eq("building_id", buildingId),
   ]);
+
+  // Paid totals per invoice — used by the amount-aware status pill so a
+  // resident who paid Rs. 500 of a Rs. 5,000 bill shows "Rs. 4,500 still due"
+  // instead of the jargon-y "partial".
+  const paidByInvoice = new Map<string, number>();
+  const invoiceIds = (invoices ?? []).map((i) => i.id);
+  if (invoiceIds.length > 0) {
+    const { data: pays } = await supabase
+      .from("bms_payments")
+      .select("invoice_id, amount")
+      .in("invoice_id", invoiceIds);
+    for (const p of pays ?? []) {
+      if (!p.invoice_id) continue;
+      paidByInvoice.set(
+        p.invoice_id,
+        (paidByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount ?? 0),
+      );
+    }
+  }
 
   const exposeNames = Boolean(building?.expose_defaulter_names);
   type InvRow = {
@@ -431,7 +452,11 @@ async function BillsPanel({
                   {r.due_date ? formatDate(r.due_date) : "—"}
                 </td>
                 <td className="px-4 py-3">
-                  <StatusPill status={r.status} />
+                  <DuesPill
+                    status={r.status}
+                    amount={Number(r.amount)}
+                    paidTotal={paidByInvoice.get(r.id) ?? 0}
+                  />
                 </td>
               </tr>
             ))}

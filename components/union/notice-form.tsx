@@ -23,6 +23,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/hooks/use-toast";
 import { createUnionNotice, deleteUnionNotice } from "@/app/actions/union-notices";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 type NoticeType = "general" | "urgent" | "maintenance" | "event";
 
@@ -54,7 +55,7 @@ export function NoticeForm() {
         setType("general");
         setPinned(false);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to post";
+        const msg = friendlyErrorMessage(e, "Failed to post notice");
         toast({ title: "Could not post", description: msg, variant: "destructive" });
       }
     });
@@ -135,7 +136,7 @@ export function DeleteNoticeButton({ id }: { id: string }) {
         toast({ title: "Notice deleted" });
         setOpen(false);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to delete";
+        const msg = friendlyErrorMessage(e, "Failed to delete notice");
         toast({ title: "Could not delete", description: msg, variant: "destructive" });
       }
     });

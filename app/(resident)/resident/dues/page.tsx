@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { StatusPill } from "@/components/resident/status-pill";
+import { DuesPill } from "@/components/resident/dues-pill";
 import { ReceiptButton, type ReceiptData } from "@/components/resident/receipt-button";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 import { AlertTriangle } from "lucide-react";
@@ -30,6 +30,8 @@ type PaymentRow = {
   category: string | null;
   receipt_no: string | null;
   notes: string | null;
+  received_by_name: string | null;
+  received_by_position: string | null;
 };
 
 export default async function ResidentDuesPage() {
@@ -93,8 +95,9 @@ async function DuesContent({
 
   let invoices: InvoiceRow[] = [];
   let payments: PaymentRow[] = [];
+  let openCredits = 0;
   if (flatIds.length > 0) {
-    const [{ data: inv }, { data: pay }] = await Promise.all([
+    const [{ data: inv }, { data: pay }, { data: credits }] = await Promise.all([
       supabase
         .from("bms_invoices")
         .select("id, flat_id, invoice_number, billing_month, amount, status, due_date, notes")
@@ -102,12 +105,21 @@ async function DuesContent({
         .order("billing_month", { ascending: false }),
       supabase
         .from("bms_payments")
-        .select("id, invoice_id, amount, payment_date, payment_mode, reference_no, category, receipt_no, notes")
+        .select("id, invoice_id, amount, payment_date, payment_mode, reference_no, category, receipt_no, notes, received_by_name, received_by_position")
         .in("flat_id", flatIds)
         .order("payment_date", { ascending: false }),
+      supabase
+        .from("bms_flat_credits")
+        .select("amount")
+        .in("flat_id", flatIds)
+        .is("applied_invoice_id", null),
     ]);
     invoices = (inv ?? []) as InvoiceRow[];
     payments = (pay ?? []) as PaymentRow[];
+    openCredits = (credits ?? []).reduce(
+      (s, c) => s + Number((c as { amount: number }).amount ?? 0),
+      0,
+    );
   }
 
   const paidByInvoice = new Map<string, number>();
@@ -129,19 +141,44 @@ async function DuesContent({
     (s, i) => s + (paidByInvoice.get(i.id) ?? 0),
     0,
   );
-  const totalPendingYTD = Math.max(0, totalBilled - totalPaidYTD);
+  // Per UX rule: never surface the word "Pending" in resident UI. We call
+  // this "Still due" everywhere so the resident sees one consistent label.
+  const totalStillDueYTD = Math.max(0, totalBilled - totalPaidYTD);
 
-  const pending = invoices.filter((i) => i.status !== "paid" && i.status !== "waived");
-  const paidOrWaived = invoices.filter((i) => i.status === "paid" || i.status === "waived");
+  // Status pills are amount-derived (CLAUDE.md UX rule). An invoice with
+  // status='partial' but amount_paid === amount is treated as cleared,
+  // and any invoice with amount_due > 0 surfaces as "still due" — never
+  // the words "pending" or "partial".
+  const stillDue = invoices.filter((i) => {
+    if (i.status === "waived") return false;
+    const paid = paidByInvoice.get(i.id) ?? 0;
+    return Number(i.amount) - paid > 0;
+  });
+  const cleared = invoices.filter((i) => {
+    if (i.status === "waived") return true;
+    const paid = paidByInvoice.get(i.id) ?? 0;
+    return Number(i.amount) - paid <= 0;
+  });
 
   return (
     <>
-      {pending.length > 1 && (
+      {openCredits > 0 && (
+        <div className="rounded-lg border border-[hsl(151_70%_55%/0.30)] bg-[hsl(151_70%_55%/0.06)] p-3 text-sm">
+          <span className="font-semibold text-[hsl(151_70%_55%)]">
+            {formatCurrency(openCredits)} credit
+          </span>
+          <span className="text-muted-foreground">
+            {" "}— will apply to your next bill automatically.
+          </span>
+        </div>
+      )}
+
+      {stillDue.length > 1 && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2.5">
           <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
           <div className="text-sm">
             <span className="font-semibold text-destructive">
-              {pending.length} pending bills
+              {stillDue.length} bills still due
             </span>
             <span className="text-muted-foreground"> — please clear soon to avoid late fees.</span>
           </div>
@@ -152,18 +189,18 @@ async function DuesContent({
         <Kpi label="Billed (YTD)" value={formatCurrency(totalBilled)} />
         <Kpi label="Paid (YTD)" value={formatCurrency(totalPaidYTD)} tone="success" />
         <Kpi
-          label="Pending"
-          value={formatCurrency(totalPendingYTD)}
-          tone={totalPendingYTD > 0 ? "danger" : "neutral"}
+          label="Still due (YTD)"
+          value={formatCurrency(totalStillDueYTD)}
+          tone={totalStillDueYTD > 0 ? "danger" : "neutral"}
         />
       </div>
 
-      <Section title="Pending bills" count={pending.length}>
-        {pending.length === 0 ? (
-          <EmptyRow text="No pending bills. You are all clear." />
+      <Section title="Bills still due" count={stillDue.length}>
+        {stillDue.length === 0 ? (
+          <EmptyRow text="All clear — thank you." />
         ) : (
           <DuesTable
-            rows={pending}
+            rows={stillDue}
             paidByInvoice={paidByInvoice}
             flatNumberById={flatNumberById}
             lastPaymentByInvoice={lastPaymentByInvoice}
@@ -174,12 +211,12 @@ async function DuesContent({
         )}
       </Section>
 
-      <Section title="Payment history" count={paidOrWaived.length}>
-        {paidOrWaived.length === 0 ? (
-          <EmptyRow text="No paid bills yet." />
+      <Section title="Payment history" count={cleared.length}>
+        {cleared.length === 0 ? (
+          <EmptyRow text="No cleared bills yet." />
         ) : (
           <DuesTable
-            rows={paidOrWaived}
+            rows={cleared}
             paidByInvoice={paidByInvoice}
             flatNumberById={flatNumberById}
             lastPaymentByInvoice={lastPaymentByInvoice}
@@ -284,6 +321,8 @@ function DuesTable({
             const paid = paidByInvoice.get(i.id) ?? 0;
             const lp = lastPaymentByInvoice.get(i.id);
             const flatNum = flatNumberById.get(i.flat_id) ?? "—";
+            const invoiceAmount = Number(i.amount);
+            const stillDue = Math.max(0, invoiceAmount - paid);
             const receipt: ReceiptData = {
               building_name: building?.name ?? "Building",
               building_address: building?.address,
@@ -297,8 +336,16 @@ function DuesTable({
               reference_no: lp?.reference_no ?? null,
               category: lp?.category ?? "Maintenance",
               billing_month: i.billing_month,
-              amount: paid > 0 ? paid : Number(i.amount),
+              // Receipt shows the LAST chunk amount paid for this invoice
+              // (or total if no payments). The running breakdown below
+              // (total_paid_so_far + still_due) tells the full story.
+              amount: lp ? Number(lp.amount ?? 0) : 0,
               notes: lp?.notes ?? i.notes,
+              total_paid_so_far: paid,
+              still_due: stillDue,
+              invoice_amount: invoiceAmount,
+              received_by_name: lp?.received_by_name ?? null,
+              received_by_position: lp?.received_by_position ?? null,
             };
             return (
               <tr key={i.id} className="border-t border-border hover:bg-secondary/40">
@@ -316,10 +363,14 @@ function DuesTable({
                   {i.due_date ? formatDate(i.due_date) : "—"}
                 </td>
                 <td className="px-4 py-3">
-                  <StatusPill status={i.status} />
+                  <DuesPill
+                    status={i.status}
+                    amount={Number(i.amount)}
+                    paidTotal={paid}
+                  />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {i.status === "paid" && lp ? (
+                  {paid > 0 && lp ? (
                     <ReceiptButton data={receipt} label="Download" />
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>

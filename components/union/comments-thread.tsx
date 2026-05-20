@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { addProposalComment } from "@/app/actions/proposals";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 type Comment = {
   id: string;
@@ -32,7 +33,7 @@ export function CommentsThread({
         await addProposalComment(proposalId, body);
         setBody("");
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to post comment";
+        const msg = friendlyErrorMessage(e, "Failed to post comment");
         toast({ title: "Could not post", description: msg, variant: "destructive" });
       }
     });

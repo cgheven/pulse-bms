@@ -24,7 +24,7 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
     .single();
   if (!flat) notFound();
 
-  const [{ data: residents }, { data: invoices }, { data: payments }] = await Promise.all([
+  const [{ data: residents }, { data: invoices }, { data: payments }, { data: credits }] = await Promise.all([
     supabase
       .from("bms_residents")
       .select("id, full_name, phone, cnic, relationship, is_primary, is_active, move_in_date, entry_fee_paid")
@@ -46,7 +46,40 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
       .eq("building_id", profile.building_id)
       .order("payment_date", { ascending: false })
       .limit(20),
+    supabase
+      .from("bms_flat_credits")
+      .select("amount")
+      .eq("flat_id", id)
+      .eq("building_id", profile.building_id)
+      .is("applied_invoice_id", null),
   ]);
+
+  // Per-invoice paid total — drives the amount-aware status pill.
+  const invoiceIds = (invoices ?? []).map((i) => i.id);
+  const paidByInvoice = new Map<string, number>();
+  if (invoiceIds.length) {
+    const { data: pays } = await supabase
+      .from("bms_payments")
+      .select("invoice_id, amount")
+      .in("invoice_id", invoiceIds);
+    for (const p of pays ?? []) {
+      if (!p.invoice_id) continue;
+      paidByInvoice.set(
+        p.invoice_id,
+        (paidByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount ?? 0),
+      );
+    }
+  }
+
+  const openCredits = (credits ?? []).reduce(
+    (s, c) => s + Number((c as { amount: number }).amount ?? 0),
+    0,
+  );
+
+  // Current month invoice for the at-a-glance status card
+  const monthStart = new Date().toISOString().slice(0, 7) + "-01";
+  const thisMonth = (invoices ?? []).find((i) => i.billing_month === monthStart);
+  const thisMonthPaid = thisMonth ? paidByInvoice.get(thisMonth.id) ?? 0 : 0;
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -108,6 +141,35 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
         </div>
       </div>
 
+      {(openCredits > 0 || thisMonth) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {thisMonth && (
+            <div className="card-soft">
+              <div className="text-sm text-muted-foreground">This month</div>
+              <div className="mt-2">
+                <InvoiceStatusPill
+                  status={thisMonth.status ?? "pending"}
+                  amount={Number(thisMonth.amount)}
+                  paidTotal={thisMonthPaid}
+                  due_date={thisMonth.due_date}
+                />
+              </div>
+            </div>
+          )}
+          {openCredits > 0 && (
+            <div className="card-soft border-[hsl(151_70%_55%/0.30)]">
+              <div className="text-sm text-muted-foreground">Credit balance</div>
+              <div className="mt-1 text-xl font-semibold text-[hsl(151_70%_55%)]">
+                {formatCurrency(openCredits)}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Will auto-apply to next invoice generation.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="card-soft">
         <h3 className="mb-3">Residents</h3>
         {residents?.length ? (
@@ -161,7 +223,12 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
                     <td className="py-2">{inv.due_date ? formatDate(inv.due_date) : "—"}</td>
                     <td className="py-2 text-right">{formatCurrency(Number(inv.amount))}</td>
                     <td className="py-2">
-                      <InvoiceStatusPill status={inv.status ?? "pending"} due_date={inv.due_date} />
+                      <InvoiceStatusPill
+                        status={inv.status ?? "pending"}
+                        amount={Number(inv.amount)}
+                        paidTotal={paidByInvoice.get(inv.id) ?? 0}
+                        due_date={inv.due_date}
+                      />
                     </td>
                   </tr>
                 ))}

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Copy, Check, Eye, EyeOff, KeyRound } from "lucide-react";
 import {
   createResidentLogin,
@@ -81,7 +82,7 @@ export function ResidentLoginDialog({
       } catch (err) {
         toast({
           title: mode === "create" ? "Could not create login" : "Could not reset password",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

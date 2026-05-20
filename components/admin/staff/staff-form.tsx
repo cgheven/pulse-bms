@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { STAFF_ROLE_LABELS, type StaffRole } from "@/types";
 import { createStaff, updateStaff, type StaffInput } from "@/app/actions/staff";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 type StaffRow = {
   id: string;
@@ -72,7 +73,7 @@ export function StaffForm({
         onOpenChange(false);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to save");
+        setError(friendlyErrorMessage(e, "Could not save staff"));
       }
     });
   };

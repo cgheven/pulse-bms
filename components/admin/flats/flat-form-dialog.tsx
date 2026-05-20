@@ -23,6 +23,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import {
   createFlatWithPeople,
   updateFlat,
@@ -148,7 +149,7 @@ export function FlatFormDialog({
       } catch (err) {
         toast({
           title: "Error",
-          description: err instanceof Error ? err.message : "Could not save flat",
+          description: friendlyErrorMessage(err, "Could not save flat"),
           variant: "destructive",
         });
       }

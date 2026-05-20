@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
@@ -21,6 +21,7 @@ export type BuildingInput = {
 };
 
 export async function createBuilding(data: BuildingInput) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("super_admin");
 
   if (!data.name || !data.name.trim()) {
@@ -67,6 +68,7 @@ export async function createBuilding(data: BuildingInput) {
 }
 
 export async function updateBuilding(id: string, data: BuildingInput) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("super_admin");
 
   if (!id) throw new Error("Building id required");
@@ -111,6 +113,7 @@ export async function updateBuilding(id: string, data: BuildingInput) {
 }
 
 export async function setBuildingActive(id: string, isActive: boolean) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("super_admin");
 
   if (!id) throw new Error("Building id required");
@@ -150,6 +153,7 @@ export async function createAdmin(data: {
   phone?: string | null;
   building_id: string;
 }) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("super_admin");
 
   const email = data.email?.trim().toLowerCase();
@@ -227,6 +231,7 @@ export async function createAdmin(data: {
 }
 
 export async function reassignAdmin(profileId: string, buildingId: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("super_admin");
 
   if (!profileId) throw new Error("Admin id required");
@@ -255,6 +260,7 @@ export async function reassignAdmin(profileId: string, buildingId: string) {
 }
 
 export async function setAdminActive(profileId: string, isActive: boolean) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("super_admin");
 
   if (!profileId) throw new Error("Admin id required");
@@ -294,6 +300,7 @@ export async function setAdminActive(profileId: string, isActive: boolean) {
  * misclick.
  */
 export async function deleteBuilding(id: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("super_admin");
   if (!id) throw new Error("Building id required");
 
@@ -393,6 +400,7 @@ export async function deleteBuilding(id: string) {
  * to delete a Super Admin or the caller themselves to avoid lockouts.
  */
 export async function deleteAdmin(profileId: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole("super_admin");
   if (!profileId) throw new Error("Profile id required");
   if (profileId === user.id) {

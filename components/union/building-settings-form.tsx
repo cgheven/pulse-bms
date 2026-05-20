@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import {
   updateBuildingSettings,
   type BuildingSettingsInput,
@@ -67,7 +68,7 @@ export function BuildingSettingsForm({
       } catch (err) {
         toast({
           title: "Could not save",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

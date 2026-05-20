@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -21,6 +21,7 @@ export type ExpenseInput = {
 };
 
 export async function createExpense(input: ExpenseInput) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -60,6 +61,7 @@ export async function createExpense(input: ExpenseInput) {
 }
 
 export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -89,6 +91,7 @@ export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
 }
 
 export async function deleteExpense(id: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();

@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
@@ -23,6 +23,7 @@ export type ResidentInput = {
 };
 
 export async function createResident(input: ResidentInput) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -119,6 +120,7 @@ export async function createResident(input: ResidentInput) {
 }
 
 export async function updateResident(id: string, input: Partial<ResidentInput>) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -178,6 +180,7 @@ export async function updateResident(id: string, input: Partial<ResidentInput>) 
 }
 
 export async function deleteResident(id: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -248,6 +251,7 @@ export async function createResidentLogin(
   residentId: string,
   input: { phone?: string | null; email?: string | null },
 ): Promise<LoginResult> {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const admin = createAdminClient();
@@ -379,6 +383,7 @@ export async function createResidentLogin(
 export async function resetResidentPassword(
   residentId: string,
 ): Promise<LoginResult> {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const admin = createAdminClient();
@@ -429,6 +434,7 @@ export async function resetResidentPassword(
 }
 
 export async function revokeResidentLogin(residentId: string): Promise<void> {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const admin = createAdminClient();

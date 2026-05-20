@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { StaffForm } from "./staff-form";
 import { deleteStaff } from "@/app/actions/staff";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 import type { StaffRole } from "@/types";
 import { buildSlug } from "@/lib/slug";
@@ -37,7 +38,7 @@ export function StaffRowActions({ staff }: { staff: StaffRow }) {
         setDel(false);
         router.refresh();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(friendlyErrorMessage(e, "Could not delete staff"));
       }
     });
   };

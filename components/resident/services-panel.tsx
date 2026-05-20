@@ -26,6 +26,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { toIntlNoPlus } from "@/lib/phone";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import {
   upsertMyService,
   deactivateService,
@@ -462,7 +463,7 @@ function MyServiceCard({
       } catch (err) {
         toast({
           title: "Could not remove",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }
@@ -614,7 +615,7 @@ function ServiceForm({
       } catch (err) {
         toast({
           title: "Could not save",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

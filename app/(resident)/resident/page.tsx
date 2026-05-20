@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate, formatRelative } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { StatusPill } from "@/components/resident/status-pill";
+import { DuesPill } from "@/components/resident/dues-pill";
 import { KpiRowSkeleton } from "@/components/layout/table-skeleton";
 import {
   ArrowRight,
@@ -156,21 +156,35 @@ async function DuesHero({
     .map((r) => (Array.isArray(r.bms_flats) ? r.bms_flats[0] : r.bms_flats))
     .filter((f): f is FlatRow => !!f);
   const primaryFlatId = flats[0]?.id ?? null;
+  const flatIds = flats.map((f) => f.id);
   const totalOutstanding = flats.reduce(
     (s, f) => s + (Number(f.outstanding_dues) || 0),
     0,
   );
 
-  // Last payment only matters if we need to show it — small parallel fetch.
-  const { data: lastPayment } = primaryFlatId
-    ? await supabase
-        .from("bms_payments")
-        .select("amount, payment_date")
-        .eq("flat_id", primaryFlatId)
-        .order("payment_date", { ascending: false })
-        .limit(1)
-        .maybeSingle()
-    : { data: null };
+  // Last payment + open credits in parallel.
+  const [{ data: lastPayment }, { data: credits }] = await Promise.all([
+    primaryFlatId
+      ? supabase
+          .from("bms_payments")
+          .select("amount, payment_date")
+          .eq("flat_id", primaryFlatId)
+          .order("payment_date", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    flatIds.length > 0
+      ? supabase
+          .from("bms_flat_credits")
+          .select("amount")
+          .in("flat_id", flatIds)
+          .is("applied_invoice_id", null)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const openCredits = (credits ?? []).reduce(
+    (s, c) => s + Number((c as { amount: number }).amount ?? 0),
+    0,
+  );
 
   const hasDues = totalOutstanding > 0;
 
@@ -181,13 +195,16 @@ async function DuesHero({
           <div>
             <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <AlertTriangle className="w-4 h-4 text-destructive" />
-              You owe
+              {formatCurrency(totalOutstanding)} still due
             </div>
             <div className="mt-1.5 text-4xl sm:text-5xl font-bold tracking-tight tabular-nums text-destructive">
               {formatCurrency(totalOutstanding)}
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Pay anytime — partial payments welcome.
+            </p>
             {lastPayment?.payment_date && (
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground mt-1">
                 Last paid {formatCurrency(Number(lastPayment.amount))} on{" "}
                 {formatDate(lastPayment.payment_date)}
               </p>
@@ -210,8 +227,13 @@ async function DuesHero({
         <CheckCircle2 className="w-5 h-5 text-[hsl(151_70%_55%)] shrink-0" />
         <div>
           <div className="text-base font-semibold text-foreground">
-            You&rsquo;re all clear.
+            All clear — thank you ✓
           </div>
+          {openCredits > 0 && (
+            <div className="text-xs text-[hsl(151_70%_55%)] mt-0.5 font-medium">
+              {formatCurrency(openCredits)} credit — will apply next month
+            </div>
+          )}
           {lastPayment?.payment_date && (
             <div className="text-xs text-muted-foreground mt-0.5">
               Last paid {formatCurrency(Number(lastPayment.amount))} on{" "}
@@ -270,6 +292,20 @@ async function BillAndNotices({
       .limit(2),
   ]);
 
+  // Sum chunk payments for the current invoice so the dues pill reflects
+  // running balance, not the stale DB status enum.
+  let currentInvoicePaid = 0;
+  if (currentInvoice?.id) {
+    const { data: pays } = await supabase
+      .from("bms_payments")
+      .select("amount")
+      .eq("invoice_id", currentInvoice.id);
+    currentInvoicePaid = (pays ?? []).reduce(
+      (s, p) => s + Number((p as { amount: number }).amount ?? 0),
+      0,
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="card-soft card-hover">
@@ -281,7 +317,13 @@ async function BillAndNotices({
             })}{" "}
             bill
           </span>
-          {currentInvoice && <StatusPill status={currentInvoice.status} />}
+          {currentInvoice && (
+            <DuesPill
+              status={currentInvoice.status}
+              amount={Number(currentInvoice.amount)}
+              paidTotal={currentInvoicePaid}
+            />
+          )}
         </div>
         {currentInvoice ? (
           <>

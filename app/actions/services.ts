@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
@@ -59,6 +59,7 @@ function sanitizeText(input: string, maxLen: number): string {
 }
 
 export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["resident", "admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -159,6 +160,7 @@ export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> 
 }
 
 export async function deactivateService(serviceId: string): Promise<void> {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["resident", "admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();

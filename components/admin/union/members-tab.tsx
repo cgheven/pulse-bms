@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { removeUnionMember } from "@/app/actions/union";
 
 type Member = {
@@ -62,7 +63,7 @@ export function MembersTab({ members }: { members: Member[] }) {
       } catch (e) {
         toast({
           title: "Could not remove",
-          description: e instanceof Error ? e.message : "Failed",
+          description: friendlyErrorMessage(e),
           variant: "destructive",
         });
       }

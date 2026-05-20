@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { generateMonthlyInvoices } from "@/app/actions/billing";
 
 export function GenerateInvoicesButton({ defaultMonth }: { defaultMonth: string }) {
@@ -37,7 +38,7 @@ export function GenerateInvoicesButton({ defaultMonth }: { defaultMonth: string 
       } catch (err) {
         toast({
           title: "Error",
-          description: err instanceof Error ? err.message : "Could not generate invoices",
+          description: friendlyErrorMessage(err, "Could not generate invoices"),
           variant: "destructive",
         });
       }

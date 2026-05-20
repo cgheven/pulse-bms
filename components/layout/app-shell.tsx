@@ -12,6 +12,12 @@ interface AppShellProps {
   role: Role;
   /** Server-rendered slot for user info — streams in via Suspense in the layout. */
   navbarUser: React.ReactNode;
+  /**
+   * Optional server-rendered demo banner. Streams in via Suspense from each
+   * role layout. Renders null for non-demo sessions, so we just slot it in
+   * unconditionally above the header.
+   */
+  demoBanner?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -32,7 +38,7 @@ function deriveTitle(pathname: string, role: Role): string {
  * Profile + building name are streamed into the `navbarUser` slot via Suspense
  * at the layout level.
  */
-export function AppShell({ role, navbarUser, children }: AppShellProps) {
+export function AppShell({ role, navbarUser, demoBanner, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const title = deriveTitle(pathname, role);
@@ -45,6 +51,8 @@ export function AppShell({ role, navbarUser, children }: AppShellProps) {
         onClose={() => setSidebarOpen(false)}
       />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Demo strip — renders null when the session isn't a demo account. */}
+        {demoBanner}
         <header className="sticky top-0 z-30 flex items-center gap-3 px-4 sm:px-6 h-16 bg-sidebar/90 backdrop-blur-md border-b border-sidebar-border">
           <button
             onClick={() => setSidebarOpen(true)}

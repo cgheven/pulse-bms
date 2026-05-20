@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { paySalary } from "@/app/actions/staff";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Download } from "lucide-react";
 
 type Payment = {
@@ -97,7 +98,7 @@ export function SalaryPanel({
         setOpen(false);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed");
+        setError(friendlyErrorMessage(e, "Could not record salary"));
       }
     });
   };

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import type { VehicleType } from "@/types";
@@ -102,6 +102,7 @@ async function resolveResidentContext(buildingId: string, profileId: string) {
  *   - resident: flat_id + resident_id derived from session
  * ────────────────────────────────────────────────────────────────────────── */
 export async function createVehicle(input: VehicleInput) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "resident"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -197,6 +198,7 @@ export async function createVehicle(input: VehicleInput) {
  * Residents may not move a vehicle to another flat/resident.
  * ────────────────────────────────────────────────────────────────────────── */
 export async function updateVehicle(id: string, input: Partial<VehicleInput>) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "resident"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
@@ -318,6 +320,7 @@ export async function updateVehicle(id: string, input: Partial<VehicleInput>) {
  * deleteVehicle — resident (own) OR admin (any in building)
  * ────────────────────────────────────────────────────────────────────────── */
 export async function deleteVehicle(id: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "resident"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();

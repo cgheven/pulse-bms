@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { NoticeForm } from "./notice-form";
 import { deleteNotice, type NoticeInput } from "@/app/actions/notices";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Pencil, Trash2 } from "lucide-react";
 
 type NoticeRow = NoticeInput & { id: string };
@@ -29,7 +30,7 @@ export function NoticeRowActions({
         setDel(false);
         router.refresh();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(friendlyErrorMessage(e, "Could not delete notice"));
       }
     });
   };

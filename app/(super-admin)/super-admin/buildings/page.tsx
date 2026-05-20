@@ -65,7 +65,7 @@ async function BuildingsTable() {
     <>
       {error && (
         <div className="card-soft border-destructive/40 bg-destructive/5 text-destructive">
-          Could not load buildings: {error.message}
+          Could not load buildings. Please refresh — if the problem persists, contact support.
         </div>
       )}
 

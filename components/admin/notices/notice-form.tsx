@@ -26,6 +26,7 @@ import {
   type NoticeInput,
   type NoticeType,
 } from "@/app/actions/notices";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 const NOTICE_TYPES: Record<NoticeType, string> = {
   general: "General",
@@ -82,7 +83,7 @@ export function NoticeForm({
         onOpenChange(false);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed");
+        setError(friendlyErrorMessage(e, "Could not save notice"));
       }
     });
   };

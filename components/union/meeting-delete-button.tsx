@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/hooks/use-toast";
 import { deleteMeeting } from "@/app/actions/meetings";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 export function MeetingDeleteButton({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
@@ -17,7 +18,7 @@ export function MeetingDeleteButton({ id }: { id: string }) {
         toast({ title: "Meeting deleted" });
         setOpen(false);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to delete";
+        const msg = friendlyErrorMessage(e, "Failed to delete meeting");
         toast({ title: "Could not delete", description: msg, variant: "destructive" });
       }
     });

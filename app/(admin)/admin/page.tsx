@@ -224,7 +224,7 @@ async function ActionCenter({
       tone: overdueCount > 0 ? "danger" : "warning",
       title: `${unpaidSorted.length} ${unpaidSorted.length === 1 ? "flat" : "flats"} unpaid · ${formatCurrency(unpaidTotal)} pending`,
       body: `${sample}${moreSuffix}${overdueCount > 0 ? ` · ${overdueCount} overdue` : ""}`,
-      href: "/admin/billing",
+      href: "/admin/maintenance?tab=dues",
       cta: "Send reminder",
     });
   }
@@ -787,7 +787,7 @@ async function StatusTiles({
             : `${defaulterFlats.slice(0, 4).join(" · ")}${defaulterFlats.length > 4 ? " …" : ""} · ${formatLakh(totalDefaulterOwed)} owed`
         }
         tone={defaulterFlats.length === 0 ? "ok" : "risk"}
-        href="/admin/billing"
+        href="/admin/maintenance?tab=dues"
       />
       <StatusTile
         label="Complaints"
@@ -1243,13 +1243,13 @@ function ActionFooter() {
         sub="P&L · trends · download statement"
       />
       <ActionLink
-        href="/admin/billing"
+        href="/admin/maintenance?tab=invoices"
         icon={<FileText className="w-4 h-4" />}
         title="Maintenance"
         sub="Generate · waive · review invoices"
       />
       <ActionLink
-        href="/admin/payments"
+        href="/admin/maintenance?tab=payments"
         icon={<Receipt className="w-4 h-4" />}
         title="Record payment"
         sub="Mark a flat as paid"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -22,6 +22,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { recordPayment, type PaymentInput } from "@/app/actions/payments";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { downloadReceiptPdf } from "@/components/admin/billing/receipt-pdf";
@@ -41,17 +42,27 @@ type PendingInv = {
   paid_total: number;
 };
 
+export type PaymentCategoryDefault = "maintenance" | "entry_fee" | "fine" | "other";
+
 export function RecordPaymentDialog({
   trigger,
   flats,
   buildingName,
+  buildingId,
   presetInvoice,
+  defaultCategory = "maintenance",
   open: controlledOpen,
   onOpenChange,
 }: {
   trigger?: React.ReactNode;
   flats: FlatPickerOption[];
   buildingName: string;
+  /**
+   * Caller-provided building scope. Threaded into every client-side Supabase
+   * read so RLS is backstopped by an explicit `building_id` filter — same
+   * defence-in-depth pattern the server-side loaders use.
+   */
+  buildingId: string;
   presetInvoice?: {
     invoice_id: string;
     flat_id: string;
@@ -60,6 +71,19 @@ export function RecordPaymentDialog({
     billing_month: string;
     amount_due: number;
   };
+  /**
+   * Pre-selects the "Pay against" target when the dialog opens.
+   *   - "maintenance" (default): if the chosen flat has an unpaid current-month
+   *     invoice → that one; else oldest open invoice; else first invoice. Falls
+   *     back to "entry_fee" only if the flat has zero invoices at all.
+   *   - "entry_fee" | "fine" | "other": pre-selects that category. Used by the
+   *     Other Income page so admins land on the right preset.
+   *
+   * Note: "fine" is not currently a target option in the select (the dialog
+   * only exposes entry_fee + other as non-invoice categories), so passing
+   * "fine" maps to "other" until/if fine becomes a first-class target.
+   */
+  defaultCategory?: PaymentCategoryDefault;
   open?: boolean;
   onOpenChange?: (b: boolean) => void;
 }) {
@@ -67,10 +91,25 @@ export function RecordPaymentDialog({
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
 
+  // Tracks whether the admin has manually picked a "Pay against" target so the
+  // smart-default effect below stops stomping their choice when they change
+  // flats. Reset when the dialog closes so reopening starts fresh.
+  const userTouchedTarget = useRef(false);
+
+  // For non-maintenance defaults we want the category preset visible immediately.
+  // For maintenance with no preset invoice we deliberately start empty so the
+  // placeholder ("Pick invoice or category") shows — the smart-default effect
+  // below upgrades this to the best open invoice once invoices load. The
+  // empty-string fallback avoids the surprising "Entry fee" pre-selection on
+  // a fully-paid flat opened from the Maintenance page.
+  const nonMaintenanceFallback: string =
+    defaultCategory === "fine" ? "other" : defaultCategory === "other" ? "other" : "entry_fee";
+  const initialTarget =
+    presetInvoice?.invoice_id ??
+    (defaultCategory === "maintenance" ? "" : nonMaintenanceFallback);
+
   const [flat_id, setFlatId] = useState(presetInvoice?.flat_id ?? "");
-  const [target, setTarget] = useState<string>(
-    presetInvoice?.invoice_id ?? "entry_fee",
-  );
+  const [target, setTarget] = useState<string>(initialTarget);
   // target values:
   //   "<invoice_id>" => maintenance payment
   //   "entry_fee"   => entry fee
@@ -88,6 +127,9 @@ export function RecordPaymentDialog({
   const [notes, setNotes] = useState("");
   const [residentId, setResidentId] = useState<string>("");
   const [residents, setResidents] = useState<Array<{ id: string; full_name: string }>>([]);
+  // Receipt PDF is opt-in — chowkidars recording many small chunks shouldn't
+  // get a download every time. Defaults to false; admin ticks to download.
+  const [downloadPdf, setDownloadPdf] = useState(false);
   const [invoices, setInvoices] = useState<PendingInv[]>(
     presetInvoice
       ? [
@@ -125,19 +167,24 @@ export function RecordPaymentDialog({
             : [],
         );
         setResidents([]);
+        setResidentId("");
         return;
       }
       const supabase = createClient();
+      // All three reads are explicitly scoped by building_id — defence-in-depth
+      // against any RLS regression. Mirrors the server-side loaders.
       const [invQ, resQ] = await Promise.all([
         supabase
           .from("bms_invoices")
           .select("id, invoice_number, billing_month, amount, status")
+          .eq("building_id", buildingId)
           .eq("flat_id", flat_id)
           .in("status", ["pending", "partial", "overdue"])
           .order("billing_month", { ascending: true }),
         supabase
           .from("bms_residents")
           .select("id, full_name, is_primary")
+          .eq("building_id", buildingId)
           .eq("flat_id", flat_id)
           .eq("is_active", true)
           .order("is_primary", { ascending: false }),
@@ -150,6 +197,7 @@ export function RecordPaymentDialog({
         const { data: pays } = await supabase
           .from("bms_payments")
           .select("invoice_id, amount")
+          .eq("building_id", buildingId)
           .in("invoice_id", invIds);
         for (const p of pays ?? []) {
           if (!p.invoice_id) continue;
@@ -167,14 +215,55 @@ export function RecordPaymentDialog({
       }));
       setInvoices(list);
       setResidents(resQ.data ?? []);
-      if (resQ.data?.[0]?.id && !residentId) setResidentId(resQ.data[0].id);
+      // Always pre-select the primary resident of the chosen flat (residents
+      // are ordered is_primary DESC server-side, so [0] is the primary). This
+      // also clears any stale residentId from a previously selected flat that
+      // wouldn't exist in the new flat's resident list.
+      setResidentId(resQ.data?.[0]?.id ?? "");
+
+      // Smart default for maintenance flow: pick the "right" invoice so the
+      // chowkidar doesn't have to scroll a long list to find it.
+      //   1. Unpaid current-month invoice (the typical case)
+      //   2. Oldest still-open invoice (catching up on backlog)
+      //   3. First invoice in the list (last resort — covers any open row)
+      //   4. If zero open invoices → leave the empty placeholder alone so the
+      //      admin picks deliberately (entry_fee / other / etc).
+      // Skip entirely once the admin has manually touched the target select —
+      // otherwise switching flats would clobber their explicit choice.
+      if (
+        defaultCategory === "maintenance" &&
+        !presetInvoice &&
+        !userTouchedTarget.current
+      ) {
+        const openInvs = list.filter(
+          (i) => Math.max(0, i.amount - i.paid_total) > 0,
+        );
+        if (openInvs.length > 0) {
+          const ym = new Date().toISOString().slice(0, 7);
+          const currentMonth = openInvs.find((i) =>
+            (i.billing_month ?? "").startsWith(ym),
+          );
+          const picked = currentMonth ?? openInvs[0] ?? list[0];
+          if (picked) {
+            setTarget(picked.id);
+            setAmount(String(Math.max(0, picked.amount - picked.paid_total)));
+          }
+        }
+      }
     }
     load();
     return () => {
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flat_id]);
+  }, [flat_id, buildingId]);
+
+  // Reset the manual-touch flag whenever the dialog closes so a fresh open
+  // starts from the smart default again (admin's intent doesn't bleed across
+  // unrelated payment recording sessions).
+  useEffect(() => {
+    if (!open) userTouchedTarget.current = false;
+  }, [open]);
 
   const targetIsInvoice = useMemo(
     () => target !== "entry_fee" && target !== "other",
@@ -182,6 +271,22 @@ export function RecordPaymentDialog({
   );
 
   const selectedFlat = flats.find((f) => f.id === flat_id);
+
+  // Live running totals for the selected invoice — shown above the amount
+  // input so the recorder sees invoice total / already paid / still due
+  // without needing to do arithmetic. Pakistani chowkidars often record
+  // chunks mid-day; this keeps mistakes (paying the FULL amount when only
+  // half is owed) from happening.
+  const selectedInvoice = useMemo(
+    () => (targetIsInvoice ? invoices.find((i) => i.id === target) : null),
+    [target, targetIsInvoice, invoices],
+  );
+  const stillDue = selectedInvoice
+    ? Math.max(0, selectedInvoice.amount - selectedInvoice.paid_total)
+    : 0;
+  const amountNum = Number(amount) || 0;
+  const overflow =
+    selectedInvoice && amountNum > stillDue ? amountNum - stillDue : 0;
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,23 +329,56 @@ export function RecordPaymentDialog({
         }
         const residentName = residents.find((r) => r.id === residentId)?.full_name ?? null;
 
-        downloadReceiptPdf({
-          receipt_no: row.receipt_no,
-          payment_date: row.payment_date,
-          building_name: buildingName,
-          flat_number: selectedFlat?.flat_number ?? "—",
-          resident_name: residentName,
-          amount: Number(row.amount),
-          payment_mode: row.payment_mode,
-          reference_no: row.reference_no,
-          category: row.category,
-          invoice_number,
-          billing_month,
-        });
+        // Running balance for the receipt — computed from the live view of
+        // the invoice + the just-recorded chunk (capped to the invoice).
+        const invoiceAmount = selectedInvoice?.amount ?? null;
+        const totalPaidSoFar =
+          selectedInvoice != null
+            ? selectedInvoice.paid_total + Number(row.amount)
+            : null;
+        const stillDue =
+          invoiceAmount != null && totalPaidSoFar != null
+            ? Math.max(0, invoiceAmount - totalPaidSoFar)
+            : null;
+
+        if (downloadPdf) {
+          downloadReceiptPdf({
+            receipt_no: row.receipt_no,
+            payment_date: row.payment_date,
+            building_name: buildingName,
+            flat_number: selectedFlat?.flat_number ?? "—",
+            resident_name: residentName,
+            amount: Number(row.amount),
+            payment_mode: row.payment_mode,
+            reference_no: row.reference_no,
+            category: row.category,
+            invoice_number,
+            billing_month,
+            invoice_amount: invoiceAmount,
+            total_paid_so_far: totalPaidSoFar,
+            still_due: stillDue,
+            // Receiver was resolved server-side and returned on the row; the
+            // PDF shows it on the "Received by" line so the resident knows
+            // exactly which committee officer took the cash.
+            received_by_name: (row as { received_by_name?: string | null }).received_by_name ?? null,
+            received_by_position: (row as { received_by_position?: string | null }).received_by_position ?? null,
+          });
+        }
+
+        if (row.overflow > 0) {
+          toast({
+            title: `${formatCurrency(row.overflow)} carried forward`,
+            description: row.credit_id
+              ? "Saved as credit — will apply to the next invoice."
+              : "Applied to next month's invoice automatically.",
+          });
+        }
 
         toast({
           title: "Payment recorded",
-          description: `Receipt ${row.receipt_no} downloaded.`,
+          description: downloadPdf
+            ? `Receipt ${row.receipt_no} downloaded.`
+            : `Receipt ${row.receipt_no} saved. Download anytime from Payments.`,
         });
         setOpen(false);
         router.refresh();
@@ -248,7 +386,7 @@ export function RecordPaymentDialog({
         toast({
           title: "Error",
           description:
-            err instanceof Error ? err.message : "Could not record payment",
+            friendlyErrorMessage(err, "Could not record payment"),
           variant: "destructive",
         });
       }
@@ -301,8 +439,15 @@ export function RecordPaymentDialog({
           <div className="col-span-2">
             <Label>Pay against</Label>
             <Select value={target} onValueChange={(v) => {
+              userTouchedTarget.current = true;
               setTarget(v);
-              if (v !== "entry_fee" && v !== "other") {
+              if (v === "entry_fee" || v === "other") {
+                // Switching to a non-invoice category — drop the previously
+                // auto-filled invoice amount so the admin types the fee
+                // amount fresh instead of accidentally booking the invoice
+                // total against an entry fee.
+                setAmount("");
+              } else {
                 const inv = invoices.find((i) => i.id === v);
                 if (inv) setAmount(String(Math.max(0, inv.amount - inv.paid_total)));
               }
@@ -326,6 +471,33 @@ export function RecordPaymentDialog({
             </Select>
           </div>
 
+          {selectedInvoice && (
+            <div className="col-span-2 rounded-lg border border-border bg-secondary/40 p-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Invoice total</span>
+                <span className="tabular-nums font-medium">
+                  {formatCurrency(selectedInvoice.amount)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Already paid</span>
+                <span className="tabular-nums">
+                  {formatCurrency(selectedInvoice.paid_total)}
+                </span>
+              </div>
+              <div className="flex justify-between mt-1 border-t border-border pt-1">
+                <span className="text-muted-foreground">Still due</span>
+                <span
+                  className={`tabular-nums font-semibold ${
+                    stillDue > 0 ? "text-destructive" : "text-[hsl(151_70%_55%)]"
+                  }`}
+                >
+                  {stillDue > 0 ? formatCurrency(stillDue) : "Cleared ✓"}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div>
             <Label>Amount (PKR) *</Label>
             <Input
@@ -334,6 +506,11 @@ export function RecordPaymentDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
+            {overflow > 0 && (
+              <p className="text-xs text-[hsl(151_70%_55%)] mt-1">
+                {formatCurrency(overflow)} will apply to next invoice (or saved as credit).
+              </p>
+            )}
           </div>
           <div>
             <Label>Date</Label>
@@ -377,6 +554,18 @@ export function RecordPaymentDialog({
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
+          <div className="col-span-2">
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={downloadPdf}
+                onChange={(e) => setDownloadPdf(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              <span>Download receipt PDF after saving</span>
+            </label>
+          </div>
+
           <DialogFooter className="col-span-2 mt-2">
             <Button
               type="button"
@@ -387,7 +576,11 @@ export function RecordPaymentDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Saving..." : "Record & download receipt"}
+              {pending
+                ? "Saving..."
+                : downloadPdf
+                ? "Record & download receipt"
+                : "Record payment"}
             </Button>
           </DialogFooter>
         </form>

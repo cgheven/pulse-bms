@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { raiseComplaint, type ComplaintCategory, type ComplaintPriority } from "@/app/actions/resident";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 const CATEGORIES: { value: ComplaintCategory; label: string }[] = [
   { value: "water",       label: "Water" },
@@ -74,7 +75,7 @@ export function ComplaintDialog() {
         setPriority("normal");
         router.refresh();
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Could not raise complaint";
+        const msg = friendlyErrorMessage(e, "Could not raise complaint");
         toast({ title: "Failed", description: msg, variant: "destructive" });
       }
     });

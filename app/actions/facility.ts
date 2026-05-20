@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -30,6 +30,7 @@ function advanceDate(iso: string, recurrence: Exclude<TaskRecurrence, null>): st
 }
 
 export async function createFacilityTask(input: FacilityTaskInput) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -67,6 +68,7 @@ export async function createFacilityTask(input: FacilityTaskInput) {
 }
 
 export async function updateFacilityTask(id: string, input: Partial<FacilityTaskInput>) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -96,6 +98,7 @@ export async function updateFacilityTask(id: string, input: Partial<FacilityTask
 }
 
 export async function markTaskDone(id: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -139,6 +142,7 @@ export async function markTaskDone(id: string) {
 }
 
 export async function deleteFacilityTask(id: string) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -166,6 +170,7 @@ export async function assignComplaint(input: {
   id: string;
   assigned_to: string | null;
 }) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
@@ -200,6 +205,7 @@ export async function updateComplaintStatus(input: {
   status: ComplaintStatus;
   resolution?: string | null;
 }) {
+  await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();

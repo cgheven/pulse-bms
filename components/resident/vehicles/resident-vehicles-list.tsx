@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Plus, Star, Pencil, Trash2, Car } from "lucide-react";
 import { VEHICLE_TYPE_LABELS, type VehicleType } from "@/types";
 import { deleteVehicle } from "@/app/actions/vehicles";
@@ -54,7 +55,7 @@ export function ResidentVehiclesList({
       } catch (err) {
         toast({
           title: "Could not delete",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

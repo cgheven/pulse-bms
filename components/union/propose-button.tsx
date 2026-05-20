@@ -27,6 +27,7 @@ import {
   type ProposalType,
   type VotingRule,
 } from "@/app/actions/proposals";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 type Props = {
   proposal_type: ProposalType;
@@ -89,7 +90,7 @@ export function ProposeButton({
         setOpen(false);
         reset();
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to create proposal";
+        const msg = friendlyErrorMessage(e, "Failed to create proposal");
         toast({ title: "Could not create proposal", description: msg, variant: "destructive" });
       }
     });

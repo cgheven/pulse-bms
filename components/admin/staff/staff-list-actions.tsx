@@ -7,6 +7,7 @@ import { Plus, UserCheck, Loader2 } from "lucide-react";
 import { StaffForm } from "./staff-form";
 import { markAllPresentToday } from "@/app/actions/staff";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 export function StaffListActions() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export function StaffListActions() {
       } catch (e) {
         toast({
           title: "Could not mark attendance",
-          description: e instanceof Error ? e.message : "Unknown error",
+          description: friendlyErrorMessage(e),
           variant: "destructive",
         });
       }

@@ -60,7 +60,7 @@ async function AdminsTable() {
 
       {adminsRes.error && (
         <div className="card-soft border-destructive/40 bg-destructive/5 text-destructive">
-          Could not load admins: {adminsRes.error.message}
+          Could not load admins. Please refresh — if the problem persists, contact support.
         </div>
       )}
 

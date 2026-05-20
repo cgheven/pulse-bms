@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { addUnionMember, type UnionPosition } from "@/app/actions/union";
 
 type Candidate = {
@@ -68,7 +69,7 @@ export function AddMemberButton({ candidates }: { candidates: Candidate[] }) {
       } catch (e) {
         toast({
           title: "Could not add",
-          description: e instanceof Error ? e.message : "Failed",
+          description: friendlyErrorMessage(e),
           variant: "destructive",
         });
       }

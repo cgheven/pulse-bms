@@ -21,6 +21,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import {
   createVehicle,
   updateVehicle,
@@ -94,7 +95,7 @@ export function ResidentVehicleFormDialog({
       } catch (err) {
         toast({
           title: "Error",
-          description: err instanceof Error ? err.message : "Could not save vehicle",
+          description: friendlyErrorMessage(err, "Could not save vehicle"),
           variant: "destructive",
         });
       }

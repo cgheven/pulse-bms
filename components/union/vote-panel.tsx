@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { castVote, type VoteChoice } from "@/app/actions/proposals";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 type Props = {
   proposalId: string;
@@ -68,7 +69,7 @@ export function VotePanel({ proposalId, existingVote, canVote, proposalStatus }:
         await castVote(proposalId, choice, comment.trim() || undefined);
         toast({ title: "Vote recorded", description: `You voted to ${choice}.` });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to cast vote";
+        const msg = friendlyErrorMessage(e, "Failed to cast vote");
         toast({ title: "Could not vote", description: msg, variant: "destructive" });
       }
     });

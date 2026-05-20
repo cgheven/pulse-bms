@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { reassignAdmin, setAdminActive, deleteAdmin } from "@/app/actions/super-admin";
 
 type BuildingOption = { id: string; name: string };
@@ -61,7 +62,7 @@ export function AdminRowActions({
       } catch (err) {
         toast({
           title: "Could not reassign",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }
@@ -78,7 +79,7 @@ export function AdminRowActions({
       } catch (err) {
         toast({
           title: "Could not update",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }
@@ -95,7 +96,7 @@ export function AdminRowActions({
       } catch (err) {
         toast({
           title: "Could not delete",
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: friendlyErrorMessage(err),
           variant: "destructive",
         });
       }

@@ -60,30 +60,98 @@ async function loadNoticesData() {
     .order("pinned", { ascending: false })
     .order("created_at", { ascending: false });
 
-  // Build dues-reminder template from current defaulters
-  const { data: defaulters } = await supabase
-    .from("bms_flats")
-    .select("flat_number,outstanding_dues")
+  // Build dues-reminder template from CURRENT-MONTH defaulters specifically.
+  // We use per-invoice gap (amount - paid_total), not flats.outstanding_dues,
+  // so residents who paid Rs. 500 of a Rs. 5000 bill see "Rs. 4,500 baqi"
+  // instead of the full month. Senior-friendly: the message includes what
+  // was already paid so the resident isn't confused.
+  const today = new Date();
+  const monthStart =
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+  const monthLabel = today.toLocaleDateString("en-PK", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const { data: currentInvoices } = await supabase
+    .from("bms_invoices")
+    .select("id, flat_id, amount, status, bms_flats(flat_number)")
     .eq("building_id", profile.building_id)
-    .gt("outstanding_dues", 0)
-    .order("outstanding_dues", { ascending: false });
+    .eq("billing_month", monthStart)
+    .neq("status", "waived");
+
+  type InvRow = {
+    id: string;
+    flat_id: string;
+    amount: number;
+    status: string | null;
+    bms_flats:
+      | { flat_number: string }
+      | { flat_number: string }[]
+      | null;
+  };
+  const invRows = (currentInvoices ?? []) as unknown as InvRow[];
+
+  const paidByInvoice = new Map<string, number>();
+  if (invRows.length > 0) {
+    const { data: pays } = await supabase
+      .from("bms_payments")
+      .select("invoice_id, amount")
+      .eq("building_id", profile.building_id)
+      .in("invoice_id", invRows.map((i) => i.id));
+    for (const p of pays ?? []) {
+      if (!p.invoice_id) continue;
+      paidByInvoice.set(
+        p.invoice_id,
+        (paidByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount ?? 0),
+      );
+    }
+  }
+
+  type Defaulter = {
+    flat_number: string;
+    amount_total: number;
+    amount_paid: number;
+    amount_due: number;
+  };
+  const defaulters: Defaulter[] = invRows
+    .map((i) => {
+      const total = Number(i.amount);
+      const paid = paidByInvoice.get(i.id) ?? 0;
+      const flatRel = Array.isArray(i.bms_flats) ? i.bms_flats[0] : i.bms_flats;
+      return {
+        flat_number: flatRel?.flat_number ?? "—",
+        amount_total: total,
+        amount_paid: paid,
+        amount_due: total - paid,
+      };
+    })
+    .filter((d) => d.amount_due > 0)
+    .sort((a, b) => b.amount_due - a.amount_due);
 
   let defaulterTemplate: string | undefined;
-  if (defaulters && defaulters.length > 0) {
-    const lines = defaulters.map(
-      (d) => `- Flat ${d.flat_number}: ${formatCurrency(Number(d.outstanding_dues))}`,
-    );
-    const total = defaulters.reduce((a, d) => a + Number(d.outstanding_dues), 0);
+  if (defaulters.length > 0) {
+    const lines = defaulters.map((d) => {
+      // Roman-Urdu — what Pakistani chowkidars + senior residents read on WhatsApp.
+      // Always include the GAP (amount_due) and what was already paid so the
+      // message can't be misread as "you owe the full month again".
+      const paidNote =
+        d.amount_paid > 0
+          ? ` (${formatCurrency(d.amount_paid)} mil chuke hain, total ${formatCurrency(d.amount_total)})`
+          : ` (total ${formatCurrency(d.amount_total)})`;
+      return `- Flat ${d.flat_number}: ${formatCurrency(d.amount_due)} baqi${paidNote}`;
+    });
+    const totalDue = defaulters.reduce((a, d) => a + d.amount_due, 0);
     defaulterTemplate = [
       "Dear Residents,",
       "",
-      "Kindly clear your outstanding maintenance dues at the earliest. Below is the current list of flats with pending balances:",
+      `Aap ki ${monthLabel} maintenance ke baqi rakam clear karne ki guzarish hai:`,
       "",
       ...lines,
       "",
-      `Total outstanding: ${formatCurrency(total)}`,
+      `Kul baqi: ${formatCurrency(totalDue)}`,
       "",
-      "Please contact the building office to settle your dues. Thank you for your cooperation.",
+      "Partial payments bhi accept hote hain. Building office se rabta karein. Shukriya.",
       "",
       "— Building Admin",
     ].join("\n");

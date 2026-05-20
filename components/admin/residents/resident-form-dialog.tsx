@@ -28,6 +28,7 @@ import {
 } from "@/app/actions/residents";
 import { createVehicle } from "@/app/actions/vehicles";
 import type { VehicleType } from "@/types";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 
 export type ResidentFormValues = ResidentInput & { id?: string };
 
@@ -143,10 +144,10 @@ export function ResidentFormDialog({
             } catch (vErr) {
               toast({
                 title: "Resident saved, vehicle failed",
-                description:
-                  vErr instanceof Error
-                    ? vErr.message
-                    : "Could not save vehicle — add it later from /admin/vehicles",
+                description: friendlyErrorMessage(
+                  vErr,
+                  "Could not save vehicle — add it later from /admin/vehicles",
+                ),
                 variant: "destructive",
               });
             }
@@ -157,7 +158,7 @@ export function ResidentFormDialog({
       } catch (err) {
         toast({
           title: "Error",
-          description: err instanceof Error ? err.message : "Could not save resident",
+          description: friendlyErrorMessage(err, "Could not save resident"),
           variant: "destructive",
         });
       }
