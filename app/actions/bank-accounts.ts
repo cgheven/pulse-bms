@@ -20,6 +20,10 @@ export async function createBankAccount(input: BankAccountInput) {
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
 
+  // Per-bank opening_balance is locked to 0 — society-wide opening is
+  // managed once via Settings → Opening Balance. Forcing 0 here prevents
+  // an API bypass from creating a double-count in the "All combined"
+  // reports view, where the building opening is already added.
   const { data, error } = await supabase
     .from("bms_bank_accounts")
     .insert({
@@ -27,7 +31,7 @@ export async function createBankAccount(input: BankAccountInput) {
       name: input.name.trim(),
       type: input.type,
       account_number_masked: input.account_number_masked?.trim() || null,
-      opening_balance: input.opening_balance,
+      opening_balance: 0,
       opening_balance_date: input.opening_balance_date,
       is_active: input.is_active ?? true,
     })
@@ -43,7 +47,7 @@ export async function createBankAccount(input: BankAccountInput) {
     action: "bank_account.create",
     entity: "bank_account",
     entity_id: data.id,
-    meta: input as unknown as Record<string, unknown>,
+    meta: { ...input, opening_balance: 0 } as unknown as Record<string, unknown>,
   });
 
   revalidatePath("/admin/settings/bank-accounts");
@@ -60,9 +64,18 @@ export async function updateBankAccount(
   if (!profile.building_id) throw new Error("No building assigned");
   const supabase = await createClient();
 
+  // Per-bank opening_balance is locked to 0 — society-wide opening is
+  // managed via Settings → Opening Balance. Strip any caller-supplied
+  // value (or coerce to 0 if explicitly present) before the update so an
+  // API bypass cannot reintroduce double-counting in reports.
+  const sanitized: Partial<BankAccountInput> = { ...input };
+  if ("opening_balance" in sanitized) {
+    sanitized.opening_balance = 0;
+  }
+
   const { data, error } = await supabase
     .from("bms_bank_accounts")
-    .update(input)
+    .update(sanitized)
     .eq("id", id)
     .eq("building_id", profile.building_id)
     .select()
@@ -77,7 +90,7 @@ export async function updateBankAccount(
     action: "bank_account.update",
     entity: "bank_account",
     entity_id: id,
-    meta: input as Record<string, unknown>,
+    meta: sanitized as Record<string, unknown>,
   });
 
   revalidatePath("/admin/settings/bank-accounts");

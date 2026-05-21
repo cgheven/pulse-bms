@@ -82,6 +82,11 @@ export function BuildingFormDialog({
       address: values.address,
       city: values.city,
       total_flats: Number(values.total_flats) || 0,
+      // Opening balance is owned by the building's Admin (President),
+      // not Super Admin. New buildings start at 0 / today; Admin sets
+      // the real number from Settings → Opening Balance after creation.
+      opening_balance_amount: null,
+      opening_balance_date: null,
     };
 
     startTransition(async () => {
@@ -168,6 +173,13 @@ export function BuildingFormDialog({
               onChange={(e) => set("address", e.target.value)}
             />
           </div>
+
+          {mode === "create" && (
+            <p className="text-xs text-muted-foreground">
+              The Opening Fund Balance is set by the building&rsquo;s Admin
+              (President) from Settings → Opening Fund Balance after onboarding.
+            </p>
+          )}
 
           <DialogFooter className="pt-2">
             <Button

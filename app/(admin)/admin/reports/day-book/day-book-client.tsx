@@ -123,6 +123,11 @@ export type DayBookDay = {
   realIncomeTotal: number;
   expenseTotal: number;
   seedAmount: number; // bank seed activated on this date (rare)
+  // Building-level opening seed amount activated on this date (the
+  // onboarding "we had Rs. X cash on hand on day one" number). Counted
+  // in the running balance alongside seedAmount but rendered as a
+  // distinct "Opening balance set" line so admins recognise it.
+  buildingSeedAmount: number;
   isEmpty: boolean; // no real transactions or seeds
 };
 
@@ -139,6 +144,8 @@ function expenseLabel(category: string, subcategory: string): string {
 export function DayBookClient({
   buildingName,
   initialDateRange,
+  buildingOpening,
+  buildingOpeningDate,
   bankAccounts,
   payments,
   expenses,
@@ -146,6 +153,12 @@ export function DayBookClient({
 }: {
   buildingName: string;
   initialDateRange: DateRange;
+  // Building-level onboarding seed — total cash + bank the society had
+  // when they joined Pulse. Folded into the running balance ONLY when
+  // the bank filter is "All combined"; per-bank and cash-only views
+  // already track each account's own opening.
+  buildingOpening: number;
+  buildingOpeningDate: string;
   bankAccounts: BankAccount[];
   payments: PaymentRow[];
   expenses: ExpenseRow[];
@@ -318,11 +331,25 @@ export function DayBookClient({
     }
 
     // --- 2. Compute opening balance on the first visible day.
-    // baseOpening = sum(bank_seeds with date <= from) + (incomeBefore - expenseBefore).
+    // baseOpening = sum(bank_seeds with date <= from) + (incomeBefore - expenseBefore)
+    //   + (building opening, if "All combined" and its date is on/before `from`).
+    // NOTE: per-bank opening_balance values are locked to 0 today (society-
+    // wide opening lives on bms_buildings.opening_balance). The per-bank
+    // loop is kept as a defensive zero-sum so the math survives any future
+    // schema change that re-enables per-bank seeds.
     let baseOpening = 0;
     for (const b of bankAccounts) {
       if (bankIds && !bankIds.has(b.id)) continue;
       if (b.opening_balance_date <= dateRange.from) baseOpening += b.opening_balance;
+    }
+    // Per-bank / cash-only views ignore the building opening to avoid
+    // double-counting cash that's already attributed to an account.
+    const buildingOpeningActive = bankFilter === "all";
+    if (
+      buildingOpeningActive &&
+      buildingOpeningDate <= dateRange.from
+    ) {
+      baseOpening += buildingOpening;
     }
     for (const [d, v] of realIncomeByDate) if (d < dateRange.from) baseOpening += v;
     for (const [d, v] of expenseByDate) if (d < dateRange.from) baseOpening -= v;
@@ -343,8 +370,21 @@ export function DayBookClient({
       }
     }
 
+    // Building-level seed within the range: rendered as its own muted
+    // "Opening balance set" line on the day card, separate from bank
+    // seeds so admins can tell the onboarding number from per-bank
+    // activations.
+    let buildingSeedDate: string | null = null;
+    if (
+      buildingOpeningActive &&
+      buildingOpeningDate > dateRange.from &&
+      buildingOpeningDate <= dateRange.to
+    ) {
+      buildingSeedDate = buildingOpeningDate;
+    }
+
     // --- 3. Walk the date axis carrying a running balance. Each day's
-    // closing = opening + real_income + seed - expenses.
+    // closing = opening + real_income + seed + building_seed - expenses.
     const dayList = eachDay(dateRange.from, dateRange.to);
     let running = baseOpening;
     return dayList.map((d): DayBookDay => {
@@ -352,7 +392,8 @@ export function DayBookClient({
       const realIncome = realIncomeByDate.get(d) ?? 0;
       const exp = expenseByDate.get(d) ?? 0;
       const seed = seedByDate.get(d) ?? 0;
-      const closing = opening + realIncome + seed - exp;
+      const buildingSeed = d === buildingSeedDate ? buildingOpening : 0;
+      const closing = opening + realIncome + seed + buildingSeed - exp;
       running = closing;
 
       const incomeList = incomeListByDate.get(d) ?? [];
@@ -360,7 +401,11 @@ export function DayBookClient({
       // A day is "empty" only when there are zero ledger entries AND no
       // seed activated — we still want to show seed activations as the
       // single income line they generated.
-      const isEmpty = incomeList.length === 0 && expenseList.length === 0 && seed === 0;
+      const isEmpty =
+        incomeList.length === 0 &&
+        expenseList.length === 0 &&
+        seed === 0 &&
+        buildingSeed === 0;
 
       return {
         date: d,
@@ -372,6 +417,7 @@ export function DayBookClient({
         realIncomeTotal: realIncome,
         expenseTotal: exp,
         seedAmount: seed,
+        buildingSeedAmount: buildingSeed,
         isEmpty,
       };
     });
@@ -381,9 +427,12 @@ export function DayBookClient({
     salaries,
     bankAccounts,
     bankIds,
+    bankFilter,
     inFilter,
     bankMap,
     dateRange,
+    buildingOpening,
+    buildingOpeningDate,
   ]);
 
   const bankFilterLabel = useMemo(() => {
@@ -541,6 +590,17 @@ function DayCard({ day }: { day: DayBookDay }) {
       </div>
 
       <div className="px-5 py-4 space-y-4">
+        {/* Building-level onboarding seed — distinct from a bank seed.
+            Rendered as a single muted line above the income section so
+            the auditor can tell it apart from the routine ledger. */}
+        {day.buildingSeedAmount > 0 && (
+          <p className="text-sm text-gray-500">
+            Opening balance set:{" "}
+            <span className="font-medium text-gray-700 tabular-nums">
+              {formatCurrency(day.buildingSeedAmount)}
+            </span>
+          </p>
+        )}
         {/* Income section */}
         {day.income.length > 0 || day.seedAmount > 0 ? (
           <section>

@@ -104,6 +104,25 @@ export function downloadDayBookCsv(opts: {
             .join(","),
         );
       }
+      // Building-level opening seed (society's onboarding cash on hand).
+      if (day.buildingSeedAmount > 0) {
+        lines.push(
+          [
+            day.date,
+            "Income",
+            "Opening Balance",
+            "Society onboarding seed",
+            "",
+            "",
+            "",
+            day.buildingSeedAmount,
+            "",
+            "Opening balance (onboarding)",
+          ]
+            .map(escapeCell)
+            .join(","),
+        );
+      }
       // Expense lines (incl. salary payments).
       for (const line of day.expenses) {
         lines.push(

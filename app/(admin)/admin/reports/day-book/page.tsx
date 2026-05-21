@@ -56,11 +56,17 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
   // balance forward day-by-day with the same O(N + D) memoized math
   // Cash Book uses.
   const [
+    { data: building },
     { data: bankAccounts },
     { data: payments },
     { data: expenses },
     { data: salaryPayments },
   ] = await Promise.all([
+    supabase
+      .from("bms_buildings")
+      .select("opening_balance_amount, opening_balance_date")
+      .eq("id", profile.building_id)
+      .single(),
     supabase
       .from("bms_bank_accounts")
       .select(
@@ -183,6 +189,10 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
     <DayBookClient
       buildingName={buildingName}
       initialDateRange={dateRange}
+      buildingOpening={Number(building?.opening_balance_amount ?? 0)}
+      buildingOpeningDate={
+        building?.opening_balance_date ?? new Date().toISOString().slice(0, 10)
+      }
       bankAccounts={(bankAccounts ?? []).map((b) => ({
         id: b.id,
         name: b.name,

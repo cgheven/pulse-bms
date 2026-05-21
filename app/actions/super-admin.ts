@@ -18,7 +18,24 @@ export type BuildingInput = {
   address?: string | null;
   city?: string | null;
   total_flats?: number | null;
+  // Onboarding-only fields. The opening balance captures the society's
+  // total cash + bank on the day they started using Pulse so Cash Book /
+  // Day Book can roll forward without years of historical imports. Both
+  // are optional — they default to 0 / today when omitted.
+  opening_balance_amount?: number | null;
+  opening_balance_date?: string | null;
 };
+
+function isValidIsoDateStr(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map((n) => Number(n));
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  );
+}
 
 export async function createBuilding(data: BuildingInput) {
   await requireNotDemo();
@@ -26,6 +43,22 @@ export async function createBuilding(data: BuildingInput) {
 
   if (!data.name || !data.name.trim()) {
     throw new Error("Building name is required");
+  }
+
+  // Opening balance is optional at creation — Super Admin can leave it
+  // at zero and let the building's own admin set it later from
+  // /admin/settings/opening-balance.
+  const today = new Date().toISOString().slice(0, 10);
+  const openingAmount = Number(data.opening_balance_amount ?? 0);
+  if (!Number.isFinite(openingAmount) || openingAmount < 0) {
+    throw new Error("Opening balance must be zero or a positive number.");
+  }
+  const openingDate = data.opening_balance_date?.trim() || today;
+  if (!isValidIsoDateStr(openingDate)) {
+    throw new Error("Pick a valid opening balance date.");
+  }
+  if (openingDate > today) {
+    throw new Error("Opening balance date cannot be in the future.");
   }
 
   // Sensible Pakistani-building defaults seeded once; the Union changes these later.
@@ -40,6 +73,12 @@ export async function createBuilding(data: BuildingInput) {
     voting_rule: "majority" as const,
     utility_cutoff_after_months: 3,
     is_active: true,
+    opening_balance_amount: openingAmount,
+    opening_balance_date: openingDate,
+    // Seed the legacy `fund_balance` column to match so the admin home
+    // hero + super_admin views stay consistent from row 0 — until the
+    // duplicate column is consolidated onto opening_balance_amount.
+    fund_balance: openingAmount,
   };
 
   const supabase = await createClient();

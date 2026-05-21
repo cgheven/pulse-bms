@@ -44,19 +44,6 @@ export async function downloadDayBookPdf(opts: {
   const marginBottom = 14;
   const rightX = pageWidth - marginRight;
 
-  // --- Header (drawn once, top of page 1)
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(20, 20, 20);
-  doc.text(meta.title, marginLeft, 17);
-
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(60, 60, 60);
-  doc.text(meta.buildingName, marginLeft, 24);
-
-  doc.setFontSize(9);
-  doc.setTextColor(100, 100, 100);
   const generated = new Date().toLocaleString("en-PK", {
     day: "2-digit",
     month: "short",
@@ -69,22 +56,44 @@ export async function downloadDayBookPdf(opts: {
     meta.filtersLine,
     `Generated: ${generated}`,
   ].filter(Boolean) as string[];
-  doc.text(metaParts.join("  ·  "), marginLeft, 30);
+  const metaLine = metaParts.join("  ·  ");
 
-  doc.setDrawColor(180, 180, 180);
-  doc.setLineWidth(0.2);
-  doc.line(marginLeft, 33, rightX, 33);
+  // Header drawn on EVERY page (page 1 here, subsequent pages via ensureSpace
+  // when it calls doc.addPage()). Multi-page Day Books always identify
+  // themselves at the top — auditor flipping pages knows what they're reading.
+  const HEADER_BOTTOM = 40; // y position right under the header divider
+  const drawHeader = () => {
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(20, 20, 20);
+    doc.text(meta.title, marginLeft, 17);
 
-  doc.setTextColor(0, 0, 0);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60, 60, 60);
+    doc.text(meta.buildingName, marginLeft, 24);
 
-  let y = 40; // running Y cursor
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(metaLine, marginLeft, 30);
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.line(marginLeft, 33, rightX, 33);
+
+    doc.setTextColor(0, 0, 0);
+  };
+
+  drawHeader();
+  let y = HEADER_BOTTOM; // running Y cursor
 
   // --- Helper: ensure `needed` mm of vertical space is available; new
-  // page + reset Y if not.
+  // page + redraw header + reset Y if not.
   const ensureSpace = (needed: number) => {
     if (y + needed > pageHeight - marginBottom) {
       doc.addPage();
-      y = 17;
+      drawHeader();
+      y = HEADER_BOTTOM;
     }
   };
 
@@ -142,6 +151,7 @@ export async function downloadDayBookPdf(opts: {
     const blockHeight =
       6 + // date header
       6 + // opening line
+      (day.buildingSeedAmount > 0 ? LINE_HEIGHT + 1 : 0) + // building opening note
       (day.income.length > 0 || day.seedAmount > 0
         ? 5 + day.income.length * LINE_HEIGHT + (day.seedAmount > 0 ? LINE_HEIGHT : 0) + 6
         : 0) +
@@ -177,6 +187,20 @@ export async function downloadDayBookPdf(opts: {
     {
       const lines = drawLine(`Opening Balance:`, `Rs. ${fmt(day.opening)}`, marginLeft);
       y += Math.max(6, lines * LINE_HEIGHT + 1);
+    }
+
+    // Building-level onboarding opening (one-time seed). Rendered as a
+    // muted standalone line so the auditor sees where the closing
+    // balance picked up this number — distinct from per-bank seeds.
+    if (day.buildingSeedAmount > 0) {
+      doc.setFontSize(9.5);
+      doc.setTextColor(110, 110, 110);
+      const lines = drawLine(
+        `Opening balance set:`,
+        `Rs. ${fmt(day.buildingSeedAmount)}`,
+        marginLeft,
+      );
+      y += lines * LINE_HEIGHT + 1;
     }
 
     doc.setTextColor(0, 0, 0);

@@ -260,31 +260,14 @@ function BankAccountForm({
             />
           </div>
 
-          <div>
-            <Label htmlFor="bal">Opening balance (Rs.)</Label>
-            <Input
-              id="bal"
-              type="number"
-              value={form.opening_balance}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  opening_balance: Number(e.target.value) || 0,
-                })
-              }
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="bdate">As of</Label>
-            <Input
-              id="bdate"
-              type="date"
-              value={form.opening_balance_date}
-              onChange={(e) =>
-                setForm({ ...form, opening_balance_date: e.target.value })
-              }
-            />
+          {/* Per-bank opening balance is intentionally NOT user-editable.
+              Society-wide opening is managed once via Settings →
+              Opening Balance to avoid double-counting in reports. */}
+          <div className="col-span-2">
+            <p className="text-xs text-muted-foreground">
+              Bank account opening balances are managed via Settings →
+              Opening Fund Balance (building-level).
+            </p>
           </div>
 
           {account && (

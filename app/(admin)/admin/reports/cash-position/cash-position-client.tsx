@@ -17,7 +17,7 @@ import {
   eachMonth,
   dayCount,
 } from "@/lib/reports/date-range";
-import { formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import type { DateRange, ReportColumn } from "@/lib/reports/types";
 
 type BankAccount = {
@@ -85,6 +85,14 @@ function buildDeltaMap(
  * seeded yet on that date and must NOT contribute to opening. Since the
  * set is tiny (one row per bank account, usually < 5) we walk it
  * per-date — that cost is negligible compared to the movement scan.
+ *
+ * NOTE: As of the Opening Balance feature, the canonical society-wide
+ * opening lives on bms_buildings.opening_balance (managed once via
+ * Settings → Opening Balance). Per-bank opening_balance values are
+ * locked to 0 by the bank-accounts server actions and a one-time
+ * normalization migration. This function therefore returns 0 in
+ * practice today — it's retained as a defensive zero-sum so the math
+ * stays correct if a future schema change re-enables per-bank seeds.
  */
 function bankBaseOn(
   date: string,
@@ -102,12 +110,21 @@ function bankBaseOn(
 export function CashPositionClient({
   buildingName,
   initialDateRange,
+  buildingOpening,
+  buildingOpeningDate,
   bankAccounts,
   payments,
   expenses,
 }: {
   buildingName: string;
   initialDateRange: DateRange;
+  // Building-level onboarding seed — total cash + bank the society had
+  // when they started using Pulse. Folded into the running balance ONLY
+  // when the bank filter is "All combined"; per-bank and cash-only views
+  // already track each account's own opening, so adding the building
+  // figure on top would double-count.
+  buildingOpening: number;
+  buildingOpeningDate: string;
   bankAccounts: BankAccount[];
   payments: Movement[];
   expenses: Movement[];
@@ -161,6 +178,12 @@ export function CashPositionClient({
     [expenses, bankIds, includesNullAsCash],
   );
 
+  // Building-level opening only contributes to the "All combined" view —
+  // per-bank and Cash-only views already track each account's own
+  // opening_balance, so adding the building figure on top would
+  // double-count cash that's already in some bank.
+  const buildingOpeningActive = bankFilter === "all";
+
   const rows: Row[] = useMemo(() => {
     // Opening balance on dateRange.from = bankBaseOn(from) + sum of
     // movement deltas strictly before `from`. We compute this once per
@@ -171,6 +194,13 @@ export function CashPositionClient({
     // into that day's income delta via the seed-as-of-D check below.
     const baseOpening =
       bankBaseOn(dateRange.from, bankAccounts, bankIds) +
+      // Building seed counts in the opening only when its as-of date is
+      // already in the past relative to the visible window. Mid-range
+      // seeds are added to seedByDate below so they appear as that
+      // day's income, not as part of the period opening.
+      (buildingOpeningActive && buildingOpeningDate <= dateRange.from
+        ? buildingOpening
+        : 0) +
       (() => {
         // sum of deltas strictly before `from`
         let s = 0;
@@ -197,6 +227,15 @@ export function CashPositionClient({
         ) {
           seedDelta += b.opening_balance;
         }
+      }
+      // Building seed activates inside the visible range too — same
+      // treatment as a bank seed (one-time income on its as-of date).
+      if (
+        buildingOpeningActive &&
+        buildingOpeningDate > dateRange.from &&
+        buildingOpeningDate <= dateRange.to
+      ) {
+        seedDelta += buildingOpening;
       }
       const closing = baseOpening + income + seedDelta - exp;
       return [
@@ -225,6 +264,18 @@ export function CashPositionClient({
           (seedByDate.get(b.opening_balance_date) ?? 0) + b.opening_balance,
         );
       }
+    }
+    // Building seed within the visible range — same treatment as a
+    // bank seed: appears as income on its as-of date.
+    if (
+      buildingOpeningActive &&
+      buildingOpeningDate > dateRange.from &&
+      buildingOpeningDate <= dateRange.to
+    ) {
+      seedByDate.set(
+        buildingOpeningDate,
+        (seedByDate.get(buildingOpeningDate) ?? 0) + buildingOpening,
+      );
     }
 
     if (granularity === "monthly") {
@@ -282,6 +333,9 @@ export function CashPositionClient({
     bankIds,
     incomeByDate,
     expenseByDate,
+    buildingOpeningActive,
+    buildingOpening,
+    buildingOpeningDate,
   ]);
 
   const columns: ReportColumn<Row>[] = useMemo(
@@ -392,27 +446,48 @@ export function CashPositionClient({
 
   const filtersLine = `Bank: ${bankFilterLabel} · Breakdown: ${granularity}`;
 
+  // Inline annotation: when the building's onboarding opening is folded
+  // into the first row, surface it so the auditor knows where the
+  // initial number came from. Skipped on per-bank / cash-only filters
+  // because the building opening doesn't apply there.
+  const showBuildingOpeningNote =
+    buildingOpeningActive && buildingOpening > 0;
+  const buildingOpeningNote = showBuildingOpeningNote
+    ? buildingOpeningDate <= dateRange.from
+      ? `↳ includes opening balance of ${formatCurrency(buildingOpening)} from ${formatDate(buildingOpeningDate)}`
+      : buildingOpeningDate <= dateRange.to
+        ? `↳ opening balance of ${formatCurrency(buildingOpening)} seeded on ${formatDate(buildingOpeningDate)}`
+        : null
+    : null;
+
   return (
-    <ReportShell
-      title="Cash Book"
-      subtitle="Opening / income / expense / closing — daily, monthly or one line."
-      buildingName={buildingName}
-      reportName="cash-position"
-      filename={`cash-position_${buildingName.replace(/\s+/g, "_")}`}
-      dateRange={dateRange}
-      setDateRange={setDateRange}
-      extraFilters={extraFilters}
-      filtersLine={filtersLine}
-      columns={columns}
-      visibleColumns={visibleColumns}
-      enabledIds={enabledIds}
-      setColumn={setColumn}
-      rows={rows}
-      // Totals row in Cash Position would double-count income/expense
-      // across rows (closing already encodes the running balance), so
-      // we suppress it. The PDF/CSV exporters honour this flag.
-      showTotals={false}
-      emptyText="No movements in this period."
-    />
+    <div className="space-y-2">
+      <ReportShell
+        title="Cash Book"
+        subtitle="Opening / income / expense / closing — daily, monthly or one line."
+        buildingName={buildingName}
+        reportName="cash-position"
+        filename={`cash-position_${buildingName.replace(/\s+/g, "_")}`}
+        dateRange={dateRange}
+        setDateRange={setDateRange}
+        extraFilters={extraFilters}
+        filtersLine={filtersLine}
+        columns={columns}
+        visibleColumns={visibleColumns}
+        enabledIds={enabledIds}
+        setColumn={setColumn}
+        rows={rows}
+        // Totals row in Cash Position would double-count income/expense
+        // across rows (closing already encodes the running balance), so
+        // we suppress it. The PDF/CSV exporters honour this flag.
+        showTotals={false}
+        emptyText="No movements in this period."
+      />
+      {buildingOpeningNote && (
+        <p className="text-xs text-muted-foreground pl-1">
+          {buildingOpeningNote}
+        </p>
+      )}
+    </div>
   );
 }

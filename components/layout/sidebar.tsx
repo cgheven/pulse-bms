@@ -29,7 +29,6 @@ import {
   Coins,
   HandCoins,
   FileSpreadsheet,
-  Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -86,7 +85,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "Settings",
       items: [
-        { href: "/admin/settings/bank-accounts", label: "Bank Accounts", icon: Landmark },
+        { href: "/admin/settings", label: "Settings", icon: Settings },
       ],
     },
     {

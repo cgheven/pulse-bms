@@ -59,37 +59,55 @@ async function CashPositionData({
   // gte(from) — we still need history to compute opening_on(from).
   // We DO lte(to) so we don't drag in future rows admins haven't seen yet
   // (e.g. post-dated salary entries).
-  const [{ data: bankAccounts }, { data: payments }, { data: expenses }, { data: salaryPayments }] =
-    await Promise.all([
-      supabase
-        .from("bms_bank_accounts")
-        .select(
-          "id, name, type, opening_balance, opening_balance_date, is_active",
-        )
-        .eq("building_id", profile.building_id)
-        .order("type", { ascending: false })
-        .order("name"),
-      supabase
-        .from("bms_payments")
-        .select("id, payment_date, amount, bank_account_id")
-        .eq("building_id", profile.building_id)
-        .lte("payment_date", dateRange.to),
-      supabase
-        .from("bms_expenses")
-        .select("id, expense_date, amount, bank_account_id")
-        .eq("building_id", profile.building_id)
-        .lte("expense_date", dateRange.to),
-      supabase
-        .from("bms_salary_payments")
-        .select("id, payment_date, amount, bank_account_id")
-        .eq("building_id", profile.building_id)
-        .lte("payment_date", dateRange.to),
-    ]);
+  //
+  // We also pull the building-level opening (a single onboarding number
+  // for societies that joined Pulse mid-fiscal-year) so the "All combined"
+  // view can seed the running balance without forcing years of imports.
+  const [
+    { data: building },
+    { data: bankAccounts },
+    { data: payments },
+    { data: expenses },
+    { data: salaryPayments },
+  ] = await Promise.all([
+    supabase
+      .from("bms_buildings")
+      .select("opening_balance_amount, opening_balance_date")
+      .eq("id", profile.building_id)
+      .single(),
+    supabase
+      .from("bms_bank_accounts")
+      .select(
+        "id, name, type, opening_balance, opening_balance_date, is_active",
+      )
+      .eq("building_id", profile.building_id)
+      .order("type", { ascending: false })
+      .order("name"),
+    supabase
+      .from("bms_payments")
+      .select("id, payment_date, amount, bank_account_id")
+      .eq("building_id", profile.building_id)
+      .lte("payment_date", dateRange.to),
+    supabase
+      .from("bms_expenses")
+      .select("id, expense_date, amount, bank_account_id")
+      .eq("building_id", profile.building_id)
+      .lte("expense_date", dateRange.to),
+    supabase
+      .from("bms_salary_payments")
+      .select("id, payment_date, amount, bank_account_id")
+      .eq("building_id", profile.building_id)
+      .lte("payment_date", dateRange.to),
+  ]);
 
   return (
     <CashPositionClient
       buildingName={buildingName}
       initialDateRange={dateRange}
+      buildingOpening={Number(building?.opening_balance_amount ?? 0)}
+      buildingOpeningDate={
+        building?.opening_balance_date ?? new Date().toISOString().slice(0, 10)
+      }
       bankAccounts={(bankAccounts ?? []).map((b) => ({
         id: b.id,
         name: b.name,

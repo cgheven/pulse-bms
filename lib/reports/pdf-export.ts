@@ -33,25 +33,12 @@ export async function downloadReportPdf<Row>(opts: {
   const autoTable = autoTableMod.default;
 
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const rightEdge = pageWidth - 14;
 
   // Premium B&W look — designed to print cleanly on plain paper and look
   // good in an auditor's binder. No accent colors. Grayscale only.
 
-  // Title
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(20, 20, 20);
-  doc.text(meta.title, 14, 17);
-
-  // Building name
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(60, 60, 60);
-  doc.text(meta.buildingName, 14, 24);
-
-  // Meta line (period + filters + generated time, all on one line via separators)
-  doc.setFontSize(9);
-  doc.setTextColor(100, 100, 100);
   const generated = new Date().toLocaleString("en-PK", {
     day: "2-digit",
     month: "short",
@@ -64,14 +51,33 @@ export async function downloadReportPdf<Row>(opts: {
     meta.filtersLine,
     `Generated: ${generated}`,
   ].filter(Boolean) as string[];
-  doc.text(metaParts.join("  ·  "), 14, 30);
+  const metaLine = metaParts.join("  ·  ");
 
-  // Thin divider between header block and table
-  doc.setDrawColor(180, 180, 180);
-  doc.setLineWidth(0.2);
-  doc.line(14, 33, 283, 33);
+  // Header block — drawn on EVERY page via the autotable didDrawPage hook
+  // below so multi-page reports always identify themselves at the top.
+  const drawHeader = () => {
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(20, 20, 20);
+    doc.text(meta.title, 14, 17);
 
-  doc.setTextColor(0, 0, 0);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60, 60, 60);
+    doc.text(meta.buildingName, 14, 24);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(metaLine, 14, 30);
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.line(14, 33, rightEdge, 33);
+
+    doc.setTextColor(0, 0, 0);
+  };
+
+  drawHeader();
 
   const body: (string | number)[][] = rows.map((r) =>
     columns.map((c) => {
@@ -139,6 +145,12 @@ export async function downloadReportPdf<Row>(opts: {
         };
         data.cell.styles.lineColor = [100, 100, 100];
       }
+    },
+    // Redraw header on every page so multi-page reports always identify
+    // themselves at the top — auditor flipping pages always sees title,
+    // building, period, generated timestamp.
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1) drawHeader();
     },
     margin: { left: 14, right: 14, top: 37, bottom: 14 },
   });
