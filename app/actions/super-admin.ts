@@ -51,6 +51,19 @@ export async function createBuilding(data: BuildingInput) {
 
   if (error) throw new Error(error.message);
 
+  // Every building needs at least one bank/cash account so the payment
+  // and expense forms aren't stuck on an empty dropdown. Seed a default
+  // Cash drawer with zero opening balance dated today; the building's
+  // admin can rename or add more in /admin/settings/bank-accounts.
+  await supabase.from("bms_bank_accounts").insert({
+    building_id: row.id,
+    name: "Cash",
+    type: "cash",
+    opening_balance: 0,
+    opening_balance_date: new Date().toISOString().slice(0, 10),
+    is_active: true,
+  });
+
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,

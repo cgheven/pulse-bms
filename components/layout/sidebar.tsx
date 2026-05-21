@@ -28,6 +28,8 @@ import {
   Car,
   Coins,
   HandCoins,
+  FileSpreadsheet,
+  Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -78,7 +80,13 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/admin/maintenance",  label: "Maintenance",  icon: Receipt },
         { href: "/admin/other-income", label: "Other Income", icon: Coins },
         { href: "/admin/expenses",     label: "Expenses",     icon: Wallet },
-        { href: "/admin/finance",      label: "Finance",      icon: LineChart },
+        { href: "/admin/reports",      label: "Reports",      icon: FileSpreadsheet },
+      ],
+    },
+    {
+      label: "Settings",
+      items: [
+        { href: "/admin/settings/bank-accounts", label: "Bank Accounts", icon: Landmark },
       ],
     },
     {
@@ -102,6 +110,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { href: "/union", label: "Dashboard", icon: LayoutDashboard },
         { href: "/union/collections", label: "Collections", icon: HandCoins },
+        { href: "/admin/reports", label: "Reports", icon: FileSpreadsheet },
       ],
     },
     {
@@ -118,12 +127,6 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/union/expenses", label: "Expenses", icon: Receipt },
         { href: "/union/facility", label: "Facility", icon: Wrench },
         { href: "/union/vehicles", label: "Vehicles", icon: Car },
-      ],
-    },
-    {
-      label: "Finance",
-      items: [
-        { href: "/union/finance", label: "Finance", icon: LineChart },
       ],
     },
     {

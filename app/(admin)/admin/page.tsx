@@ -1237,10 +1237,10 @@ function ActionFooter() {
   return (
     <nav className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
       <ActionLink
-        href="/admin/finance"
+        href="/admin/reports"
         icon={<TrendingUp className="w-4 h-4" />}
-        title="Full finance"
-        sub="P&L · trends · download statement"
+        title="Reports"
+        sub="P&L · ledger · CSV / PDF download"
       />
       <ActionLink
         href="/admin/maintenance?tab=invoices"

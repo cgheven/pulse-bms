@@ -144,6 +144,24 @@ export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
   other: "Other",
 };
 
+/**
+ * A bank account (or cash drawer) used to receive payments and pay
+ * expenses. Every building has at least one row (the auto-seeded "Cash"
+ * account). Used by the Reports module to compute per-account opening /
+ * closing balances and to filter Cash Position by bank.
+ */
+export type BankAccount = {
+  id: string;
+  building_id: string;
+  name: string;
+  type: "cash" | "bank";
+  account_number_masked: string | null;
+  opening_balance: number;
+  opening_balance_date: string;
+  is_active: boolean;
+  created_at: string;
+};
+
 export interface Vehicle {
   id: string;
   building_id: string;

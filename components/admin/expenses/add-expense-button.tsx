@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { ExpenseForm } from "./expense-form";
 
-export function AddExpenseButton() {
+export function AddExpenseButton({ buildingId }: { buildingId?: string | null }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -13,7 +13,7 @@ export function AddExpenseButton() {
         <Plus className="w-4 h-4" />
         Add Expense
       </Button>
-      <ExpenseForm open={open} onOpenChange={setOpen} />
+      <ExpenseForm open={open} onOpenChange={setOpen} buildingId={buildingId} />
     </>
   );
 }

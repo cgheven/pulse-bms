@@ -259,5 +259,6 @@ export async function paySalary(input: {
 
   revalidatePath(`/admin/staff/${input.staff_id}`);
   revalidatePath("/admin/staff");
+  revalidatePath("/admin/reports", "layout");
   return data;
 }

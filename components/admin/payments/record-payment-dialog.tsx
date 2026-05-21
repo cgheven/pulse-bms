@@ -127,6 +127,12 @@ export function RecordPaymentDialog({
   const [notes, setNotes] = useState("");
   const [residentId, setResidentId] = useState<string>("");
   const [residents, setResidents] = useState<Array<{ id: string; full_name: string }>>([]);
+  // Bank account this payment is deposited into. Defaults to the
+  // per-building "Cash" seed account once accounts load.
+  const [bankAccountId, setBankAccountId] = useState<string>("");
+  const [bankAccounts, setBankAccounts] = useState<
+    Array<{ id: string; name: string; type: "cash" | "bank" }>
+  >([]);
   // Receipt PDF is opt-in — chowkidars recording many small chunks shouldn't
   // get a download every time. Defaults to false; admin ticks to download.
   const [downloadPdf, setDownloadPdf] = useState(false);
@@ -265,6 +271,38 @@ export function RecordPaymentDialog({
     if (!open) userTouchedTarget.current = false;
   }, [open]);
 
+  // Load active bank accounts for the building. Cash row (auto-seeded per
+  // building) is selected by default — admin can switch to a real bank.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("bms_bank_accounts")
+        .select("id, name, type")
+        .eq("building_id", buildingId)
+        .eq("is_active", true)
+        .order("type", { ascending: false })
+        .order("name");
+      if (cancelled) return;
+      const rows = (data ?? []) as Array<{
+        id: string;
+        name: string;
+        type: "cash" | "bank";
+      }>;
+      setBankAccounts(rows);
+      setBankAccountId((current) => {
+        if (current) return current;
+        const cash = rows.find((r) => r.type === "cash") ?? rows[0];
+        return cash?.id ?? "";
+      });
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [buildingId]);
+
   const targetIsInvoice = useMemo(
     () => target !== "entry_fee" && target !== "other",
     [target],
@@ -316,6 +354,7 @@ export function RecordPaymentDialog({
               ? "other"
               : "maintenance",
           notes: notes || null,
+          bank_account_id: bankAccountId || null,
         };
         const row = await recordPayment(payload);
 
@@ -548,6 +587,24 @@ export function RecordPaymentDialog({
               onChange={(e) => setRef(e.target.value)}
               placeholder="Cheque or txn number"
             />
+          </div>
+          <div className="col-span-2">
+            <Label>Paid into</Label>
+            <Select
+              value={bankAccountId}
+              onValueChange={setBankAccountId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Pick bank or cash" />
+              </SelectTrigger>
+              <SelectContent>
+                {bankAccounts.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name} {b.type === "cash" ? "(Cash)" : "(Bank)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="col-span-2">
             <Label>Notes</Label>

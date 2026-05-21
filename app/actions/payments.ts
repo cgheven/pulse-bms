@@ -18,6 +18,11 @@ export type PaymentInput = {
   reference_no?: string | null;
   category?: "maintenance" | "entry_fee" | "fine" | "other";
   notes?: string | null;
+  /**
+   * Which bank account / cash drawer the money was deposited into.
+   * Nullable; defaults to the per-building Cash account at the form layer.
+   */
+  bank_account_id?: string | null;
 };
 
 // Receipt numbers are per-row (each chunk gets its own). 8-char tail of epoch
@@ -95,6 +100,21 @@ export async function recordPayment(input: PaymentInput) {
   if (!input.amount || input.amount <= 0) throw new Error("Amount must be positive");
 
   const supabase = await createClient();
+
+  // ── Cross-tenant guard: bank_account_id must belong to caller's building ─
+  // RLS blocks READING foreign rows, but the FK on bms_payments.bank_account_id
+  // happily accepts ANY uuid on INSERT. Without this check a malicious admin
+  // could attribute their building's cash to another building's account and
+  // silently mis-attribute the Cash Position / Bank reports.
+  if (input.bank_account_id) {
+    const { data: bankCheck } = await supabase
+      .from("bms_bank_accounts")
+      .select("id")
+      .eq("id", input.bank_account_id)
+      .eq("building_id", profile.building_id)
+      .maybeSingle();
+    if (!bankCheck) throw new Error("Invalid bank account");
+  }
 
   // ── Resolve receiver snapshot ─────────────────────────────────────
   // We snapshot WHO is recording this payment so the receipt + audit log
@@ -200,6 +220,7 @@ export async function recordPayment(input: PaymentInput) {
     received_by_profile_id,
     received_by_name,
     received_by_position,
+    bank_account_id: input.bank_account_id ?? null,
   };
 
   const { data: payment, error: payErr } = await supabase
@@ -312,6 +333,7 @@ export async function recordPayment(input: PaymentInput) {
           received_by_profile_id,
           received_by_name,
           received_by_position,
+          bank_account_id: input.bank_account_id ?? null,
         };
         const { data: spill, error: spillErr } = await supabase
           .from("bms_payments")
@@ -414,7 +436,7 @@ export async function recordPayment(input: PaymentInput) {
   revalidatePath("/admin/other-income");
   revalidatePath("/admin");
   revalidatePath("/admin/flats");
-  revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports", "layout");
   revalidatePath("/resident");
   revalidatePath("/resident/dues");
   revalidatePath("/resident/payments");
@@ -499,8 +521,8 @@ export async function deletePayment(id: string) {
 
   revalidatePath("/admin/maintenance");
   revalidatePath("/admin/other-income");
-  revalidatePath("/admin/finance");
   revalidatePath("/admin");
+  revalidatePath("/admin/reports", "layout");
   revalidatePath("/union/collections");
   return { ok: true };
 }

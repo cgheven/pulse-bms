@@ -93,11 +93,6 @@ export default function ExpensesPage({
 }) {
   return (
     <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between gap-3">
-        <h1>Expenses</h1>
-        <AddExpenseButton />
-      </div>
-
       <Suspense fallback={<TableSkeleton rows={6} />}>
         <ExpensesContent searchParams={searchParams} />
       </Suspense>
@@ -146,6 +141,11 @@ async function ExpensesContent({
   });
 
   return (
+    <>
+    <div className="flex items-center justify-between gap-3 mb-2">
+      <h1>Expenses</h1>
+      <AddExpenseButton buildingId={profile.building_id} />
+    </div>
     <Tabs defaultValue="list">
       <TabsList>
         <TabsTrigger value="list">All expenses</TabsTrigger>
@@ -225,6 +225,7 @@ async function ExpensesContent({
                     </td>
                     <td className="px-3 py-3 text-right">
                       <ExpenseRowActions
+                        buildingId={profile.building_id}
                         expense={{
                           id: e.id,
                           category: e.category,
@@ -236,6 +237,8 @@ async function ExpensesContent({
                           recurrence: e.recurrence,
                           vendor: e.vendor,
                           receipt_url: e.receipt_url,
+                          is_bill: e.is_bill,
+                          bank_account_id: e.bank_account_id,
                         }}
                       />
                     </td>
@@ -276,5 +279,6 @@ async function ExpensesContent({
         </p>
       </TabsContent>
     </Tabs>
+    </>
   );
 }

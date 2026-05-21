@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,9 @@ import {
   type ExpenseRecurrence,
 } from "@/app/actions/expenses";
 import { friendlyErrorMessage } from "@/lib/toast-error";
+import { createClient } from "@/lib/supabase/client";
+
+type BankAccountOption = { id: string; name: string; type: "cash" | "bank" };
 
 // Salaries are NOT here — they live in /admin/staff (bms_salary_payments).
 // Keeping them separate avoids double-entry and lets us track per-staff slips.
@@ -79,14 +82,22 @@ export function ExpenseForm({
   open,
   onOpenChange,
   expense,
+  buildingId,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   expense?: (ExpenseInput & { id: string }) | null;
+  /**
+   * Active building scope — used to filter bank account options the admin
+   * can pick from. Threaded explicitly so this client component never
+   * needs to derive scope from cookies / RLS alone.
+   */
+  buildingId?: string | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
   const [form, setForm] = useState<ExpenseInput>({
     category: (expense?.category as ExpenseCategory) ?? "utilities",
     subcategory: expense?.subcategory ?? "",
@@ -97,7 +108,40 @@ export function ExpenseForm({
     is_recurring: expense?.is_recurring ?? false,
     recurrence: (expense?.recurrence as ExpenseRecurrence) ?? null,
     vendor: expense?.vendor ?? "",
+    is_bill: expense?.is_bill ?? false,
+    bank_account_id: expense?.bank_account_id ?? null,
   });
+
+  // Load active bank accounts for the current building so the admin can
+  // pick which account this expense was paid from. The default Cash row
+  // seeded by the migration is auto-selected if nothing has been chosen.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!buildingId) return;
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("bms_bank_accounts")
+        .select("id, name, type")
+        .eq("building_id", buildingId)
+        .eq("is_active", true)
+        .order("type", { ascending: false }) // 'cash' first
+        .order("name");
+      if (cancelled) return;
+      const rows = (data ?? []) as BankAccountOption[];
+      setBankAccounts(rows);
+      // Auto-select the first cash account if nothing is picked yet.
+      setForm((f) => {
+        if (f.bank_account_id) return f;
+        const cash = rows.find((r) => r.type === "cash") ?? rows[0];
+        return cash ? { ...f, bank_account_id: cash.id } : f;
+      });
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [buildingId]);
 
   const submit = () => {
     setError(null);
@@ -245,6 +289,45 @@ export function ExpenseForm({
             />
           </div>
 
+          <div>
+            <Label>Paid from</Label>
+            <Select
+              value={form.bank_account_id ?? ""}
+              onValueChange={(v) =>
+                setForm({ ...form, bank_account_id: v || null })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Pick bank or cash" />
+              </SelectTrigger>
+              <SelectContent>
+                {bankAccounts.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name} {b.type === "cash" ? "(Cash)" : "(Bank)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* is_bill toggle — distinguishes recurring utility BILLS from
+              operating EXPENSES. Drives which Reports module page the row
+              shows up on (Bills vs Expenses). */}
+          <div className="sm:col-span-2 flex items-center gap-2">
+            <input
+              id="isbill"
+              type="checkbox"
+              className="h-5 w-5"
+              checked={!!form.is_bill}
+              onChange={(e) =>
+                setForm({ ...form, is_bill: e.target.checked })
+              }
+            />
+            <Label htmlFor="isbill">
+              Is this a recurring utility bill? (K-Electric, SSGC, internet,
+              lift AMC, security contract, etc.)
+            </Label>
+          </div>
 
           <div className="sm:col-span-2 flex items-center gap-2">
             <input

@@ -21,9 +21,17 @@ type ExpenseRow = {
   recurrence: ExpenseRecurrence;
   vendor: string | null;
   receipt_url: string | null;
+  is_bill?: boolean | null;
+  bank_account_id?: string | null;
 };
 
-export function ExpenseRowActions({ expense }: { expense: ExpenseRow }) {
+export function ExpenseRowActions({
+  expense,
+  buildingId,
+}: {
+  expense: ExpenseRow;
+  buildingId?: string | null;
+}) {
   const router = useRouter();
   const [edit, setEdit] = useState(false);
   const [del, setDel] = useState(false);
@@ -57,6 +65,7 @@ export function ExpenseRowActions({ expense }: { expense: ExpenseRow }) {
       <ExpenseForm
         open={edit}
         onOpenChange={setEdit}
+        buildingId={buildingId}
         expense={{
           id: expense.id,
           category: expense.category,
@@ -68,6 +77,8 @@ export function ExpenseRowActions({ expense }: { expense: ExpenseRow }) {
           recurrence: expense.recurrence,
           vendor: expense.vendor,
           receipt_url: expense.receipt_url,
+          is_bill: !!expense.is_bill,
+          bank_account_id: expense.bank_account_id ?? null,
         }}
       />
       <ConfirmDialog
