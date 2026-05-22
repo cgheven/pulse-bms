@@ -23,6 +23,9 @@ type ExpenseRow = {
   receipt_url: string | null;
   is_bill?: boolean | null;
   bank_account_id?: string | null;
+  bill_account_id?: string | null;
+  units_consumed?: number | null;
+  due_date?: string | null;
 };
 
 export function ExpenseRowActions({
@@ -79,6 +82,9 @@ export function ExpenseRowActions({
           receipt_url: expense.receipt_url,
           is_bill: !!expense.is_bill,
           bank_account_id: expense.bank_account_id ?? null,
+          bill_account_id: expense.bill_account_id ?? null,
+          units_consumed: expense.units_consumed ?? null,
+          due_date: expense.due_date ?? null,
         }}
       />
       <ConfirmDialog

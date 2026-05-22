@@ -117,3 +117,60 @@ export async function updateOpeningBalance(input: OpeningBalanceInput) {
   revalidatePath(`/super-admin/buildings/${profile.building_id}`);
   revalidatePath("/resident/transparency");
 }
+
+/* ────────────────────────────────────────────────────────────── */
+/* Building info (city)                                          */
+/* ────────────────────────────────────────────────────────────── */
+
+// City drives the Bill Accounts provider preset list. We expose this in
+// a tiny "Building Info" panel on Settings so admins can pick which
+// regional utilities show up.
+//
+// Admin can't UPDATE bms_buildings directly (write policy is super_admin
+// only). We funnel through bms_update_building_info — a SECURITY DEFINER
+// RPC that whitelists the city column and validates role + demo flag.
+export type BuildingInfoInput = { city: string };
+
+export async function updateBuildingInfo(input: BuildingInfoInput) {
+  await requireNotDemo();
+  const { profile, user } = await requireRole(["admin", "super_admin"]);
+
+  if (!profile.building_id) throw new Error("No building assigned");
+
+  const city = input.city?.trim();
+  if (!city) throw new Error("City is required");
+
+  const supabase = await createClient();
+
+  // Capture previous city for the audit trail.
+  const { data: previous, error: readErr } = await supabase
+    .from("bms_buildings")
+    .select("city")
+    .eq("id", profile.building_id)
+    .single();
+  if (readErr) throw new Error(readErr.message);
+
+  const { error: updErr } = await supabase.rpc("bms_update_building_info", {
+    p_city: city,
+  });
+  if (updErr) throw new Error(updErr.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    building_id: profile.building_id,
+    action: "building.info.update",
+    entity: "building",
+    entity_id: profile.building_id,
+    meta: {
+      before: { city: previous?.city ?? null },
+      after: { city },
+    },
+  });
+
+  // Settings shows the form. Bill Accounts page rebuilds the provider
+  // dropdown from city → both need busting.
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/bill-accounts");
+}

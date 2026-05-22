@@ -29,6 +29,7 @@ import {
   Coins,
   HandCoins,
   FileSpreadsheet,
+  Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -79,6 +80,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/admin/maintenance",  label: "Maintenance",  icon: Receipt },
         { href: "/admin/other-income", label: "Other Income", icon: Coins },
         { href: "/admin/projects",     label: "Projects",     icon: Sparkles },
+        { href: "/admin/bill-accounts",label: "Bill Accounts",icon: Plug },
         { href: "/admin/expenses",     label: "Expenses",     icon: Wallet },
         { href: "/admin/reports",      label: "Reports",      icon: FileSpreadsheet },
       ],

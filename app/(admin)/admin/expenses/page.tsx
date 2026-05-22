@@ -239,6 +239,9 @@ async function ExpensesContent({
                           receipt_url: e.receipt_url,
                           is_bill: e.is_bill,
                           bank_account_id: e.bank_account_id,
+                          bill_account_id: e.bill_account_id,
+                          units_consumed: e.units_consumed ?? null,
+                          due_date: e.due_date ?? null,
                         }}
                       />
                     </td>

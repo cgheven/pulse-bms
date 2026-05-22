@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
 import { OpeningBalanceForm } from "@/components/admin/settings/opening-balance-form";
+import { BuildingInfoForm } from "@/components/admin/settings/building-info-form";
 import { BankAccountsClient } from "./bank-accounts-client";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,19 @@ export default function SettingsPage() {
           Configure how your building&rsquo;s money is tracked in Pulse.
         </p>
       </div>
+
+      <section id="building-info" className="space-y-3 scroll-mt-24">
+        <div>
+          <h2 className="text-xl font-semibold">Building Info</h2>
+          <p className="text-sm text-muted-foreground">
+            City drives the Bill Accounts provider list. Pick wherever
+            your building is registered.
+          </p>
+        </div>
+        <Suspense fallback={<TableSkeleton rows={1} />}>
+          <BuildingInfoSection />
+        </Suspense>
+      </section>
 
       <section id="opening-fund-balance" className="space-y-3 scroll-mt-24">
         <div>
@@ -51,6 +65,28 @@ export default function SettingsPage() {
       </section>
     </div>
   );
+}
+
+// --- Building info section --------------------------------------------------
+
+async function BuildingInfoSection() {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+  if (!profile.building_id) {
+    return (
+      <div className="card-soft">
+        <p className="text-muted-foreground mt-2">No building assigned.</p>
+      </div>
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: building } = await supabase
+    .from("bms_buildings")
+    .select("city")
+    .eq("id", profile.building_id)
+    .single();
+
+  return <BuildingInfoForm initialCity={building?.city ?? null} />;
 }
 
 // --- Opening balance section ------------------------------------------------

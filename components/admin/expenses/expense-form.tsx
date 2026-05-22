@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -29,8 +32,27 @@ import {
 } from "@/app/actions/expenses";
 import { friendlyErrorMessage } from "@/lib/toast-error";
 import { createClient } from "@/lib/supabase/client";
+import {
+  CATEGORY_LABEL,
+  CATEGORY_ORDER,
+  expenseCategoryForProvider,
+  providerCategoryFor,
+  providerLabelFor,
+  type ProviderCategory,
+} from "@/lib/bill-providers";
 
 type BankAccountOption = { id: string; name: string; type: "cash" | "bank" };
+
+// Light-weight subset of bms_bill_accounts the picker needs. Loaded
+// client-side when the dialog opens (only when is_bill is on).
+type BillAccountOption = {
+  id: string;
+  provider: string;
+  provider_label: string | null;
+  nickname: string;
+  account_number: string;
+  location: string | null;
+};
 
 // Salaries are NOT here — they live in /admin/staff (bms_salary_payments).
 // Keeping them separate avoids double-entry and lets us track per-staff slips.
@@ -83,6 +105,7 @@ export function ExpenseForm({
   onOpenChange,
   expense,
   buildingId,
+  prefill,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -93,11 +116,18 @@ export function ExpenseForm({
    * needs to derive scope from cookies / RLS alone.
    */
   buildingId?: string | null;
+  /**
+   * Optional URL-driven prefill (deep-link from Bill Accounts "Add Bill").
+   * Applied once when the dialog opens for a fresh create. Ignored when
+   * editing an existing expense (expense prop wins).
+   */
+  prefill?: Partial<ExpenseInput> | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
+  const [billAccounts, setBillAccounts] = useState<BillAccountOption[]>([]);
   const [form, setForm] = useState<ExpenseInput>({
     category: (expense?.category as ExpenseCategory) ?? "utilities",
     subcategory: expense?.subcategory ?? "",
@@ -108,9 +138,57 @@ export function ExpenseForm({
     is_recurring: expense?.is_recurring ?? false,
     recurrence: (expense?.recurrence as ExpenseRecurrence) ?? null,
     vendor: expense?.vendor ?? "",
-    is_bill: expense?.is_bill ?? false,
+    is_bill: expense?.is_bill ?? prefill?.is_bill ?? false,
     bank_account_id: expense?.bank_account_id ?? null,
+    bill_account_id:
+      expense?.bill_account_id ?? prefill?.bill_account_id ?? null,
+    units_consumed: expense?.units_consumed ?? null,
+    due_date: expense?.due_date ?? null,
   });
+
+  // Separate string state for the units input so the user can briefly
+  // hold an empty / partial value ("3" while typing "3.5") without us
+  // coercing to 0 mid-keystroke. Coerced to number | null on submit.
+  const [unitsInput, setUnitsInput] = useState<string>(
+    expense?.units_consumed != null ? String(expense.units_consumed) : "",
+  );
+
+  // When the dialog re-opens for a create with a fresh prefill (deep-link
+  // from Bill Accounts "Add Bill"), apply the prefill on top of current
+  // form state. Edit mode is unaffected — `expense` always wins.
+  useEffect(() => {
+    if (!open || expense || !prefill) return;
+    setForm((f) => ({
+      ...f,
+      is_bill: prefill.is_bill ?? f.is_bill,
+      bill_account_id: prefill.bill_account_id ?? f.bill_account_id,
+    }));
+  }, [open, expense, prefill]);
+
+  // When the prefill carries a bill_account_id and bill accounts have
+  // finished loading, auto-fill category + subcategory + vendor +
+  // description from the matched account. Mirrors what the picker does
+  // when the user changes account manually, so deep-link arrivals get
+  // the same clean state.
+  useEffect(() => {
+    if (!open || expense || !prefill?.bill_account_id) return;
+    if (billAccounts.length === 0) return;
+    const picked = billAccounts.find((b) => b.id === prefill.bill_account_id);
+    if (!picked) return;
+    const { category, subcategory } = expenseCategoryForProvider(picked.provider);
+    const providerLbl = providerLabelFor(picked.provider, picked.provider_label);
+    setForm((f) => ({
+      ...f,
+      category: f.category === "utilities" ? category : f.category,
+      subcategory: f.subcategory ? f.subcategory : subcategory,
+      vendor:
+        f.vendor && f.vendor.trim() ? f.vendor : `${providerLbl} – ${picked.nickname}`,
+      description:
+        f.description && f.description.trim()
+          ? f.description
+          : `Account #${picked.account_number}`,
+    }));
+  }, [open, expense, prefill, billAccounts]);
 
   // Load active bank accounts for the current building so the admin can
   // pick which account this expense was paid from. The default Cash row
@@ -143,14 +221,71 @@ export function ExpenseForm({
     };
   }, [buildingId]);
 
+  // Load active bill accounts the first time the user flips on is_bill.
+  // Lazy load so the form is snappy when the user isn't recording a bill.
+  useEffect(() => {
+    let cancelled = false;
+    if (!buildingId || !form.is_bill) return;
+    if (billAccounts.length > 0) return;
+    async function loadBills() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("bms_bill_accounts")
+        .select("id, provider, provider_label, nickname, account_number, location")
+        .eq("building_id", buildingId)
+        .eq("is_active", true)
+        .order("nickname");
+      if (cancelled) return;
+      setBillAccounts((data ?? []) as BillAccountOption[]);
+    }
+    loadBills();
+    return () => {
+      cancelled = true;
+    };
+  }, [buildingId, form.is_bill, billAccounts.length]);
+
+  // Bill accounts grouped by provider category for the dropdown.
+  const billAccountsByCat = useMemo(() => {
+    const map = new Map<ProviderCategory, BillAccountOption[]>();
+    for (const b of billAccounts) {
+      const cat = providerCategoryFor(b.provider);
+      const list = map.get(cat) ?? [];
+      list.push(b);
+      map.set(cat, list);
+    }
+    return map;
+  }, [billAccounts]);
+
+  // Units field is shown whenever this expense is flagged as a bill.
+  // Optional — admin leaves blank for flat-fee bills (internet, AMC).
+  const showUnitsField = !!form.is_bill;
+
   const submit = () => {
     setError(null);
+    // Coerce the units input string to number | null. Empty / hidden
+    // field → null. If the field is currently hidden (is_bill off, no
+    // bill account, or category doesn't support units) we also clear
+    // the value so toggling is_bill back off doesn't ship a stale
+    // reading on save.
+    let unitsValue: number | null = null;
+    if (showUnitsField) {
+      const trimmed = unitsInput.trim();
+      if (trimmed !== "") {
+        const n = Number(trimmed);
+        if (Number.isNaN(n) || n < 0) {
+          setError("Units consumed must be 0 or more");
+          return;
+        }
+        unitsValue = n;
+      }
+    }
+    const payload: ExpenseInput = { ...form, units_consumed: unitsValue };
     start(async () => {
       try {
         if (expense?.id) {
-          await updateExpense(expense.id, form);
+          await updateExpense(expense.id, payload);
         } else {
-          await createExpense(form);
+          await createExpense(payload);
         }
         onOpenChange(false);
         router.refresh();
@@ -160,89 +295,103 @@ export function ExpenseForm({
     });
   };
 
+  const billMode = !!form.is_bill;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{expense ? "Edit expense" : "Add expense"}</DialogTitle>
+          <DialogTitle>
+            {expense ? "Edit" : "Add"} {billMode ? "bill" : "expense"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <Label>Category</Label>
-            <Select
-              value={form.category}
-              onValueChange={(v) => {
-                // Category changed — reset subcategory so user picks fresh
-                setForm({ ...form, category: v as ExpenseCategory, subcategory: "" });
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(CATEGORIES).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {(() => {
-            const presets = SUBCATS_BY_CATEGORY[form.category] ?? [];
-            const currentValue = form.subcategory ?? "";
-            const isPreset = presets.some((p) => p.value === currentValue);
-            const showCustom =
-              presets.length === 0 || (currentValue !== "" && !isPreset);
-            const selectValue = showCustom ? CUSTOM_SENTINEL : currentValue;
-
-            return (
+          {/* Category + Subcategory only shown in EXPENSE mode. Bill mode
+              derives both from the picked bill account's provider — no
+              point asking admin to pick "Utilities → Corridor Electricity"
+              when they already told us this is a K-Electric bill. */}
+          {!billMode && (
+            <>
               <div>
-                <Label htmlFor="sub">Subcategory</Label>
-                {presets.length > 0 ? (
-                  <Select
-                    value={selectValue}
-                    onValueChange={(v) => {
-                      if (v === CUSTOM_SENTINEL) {
-                        // switch to custom: clear so the input is empty + focusable
-                        setForm({ ...form, subcategory: "" });
-                      } else {
-                        setForm({ ...form, subcategory: v });
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose subcategory" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {presets.map((p) => (
-                        <SelectItem key={p.value} value={p.value}>
-                          {p.label}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value={CUSTOM_SENTINEL}>
-                        Other (specify…)
+                <Label>Category</Label>
+                <Select
+                  value={form.category}
+                  onValueChange={(v) => {
+                    setForm({
+                      ...form,
+                      category: v as ExpenseCategory,
+                      subcategory: "",
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(CATEGORIES).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>
+                        {v}
                       </SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : null}
-                {showCustom && (
-                  <Input
-                    id="sub"
-                    className={presets.length > 0 ? "mt-2" : ""}
-                    value={currentValue}
-                    onChange={(e) =>
-                      setForm({ ...form, subcategory: e.target.value })
-                    }
-                    placeholder="Type custom subcategory"
-                    autoFocus={presets.length > 0}
-                  />
-                )}
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            );
-          })()}
+
+              {(() => {
+                const presets = SUBCATS_BY_CATEGORY[form.category] ?? [];
+                const currentValue = form.subcategory ?? "";
+                const isPreset = presets.some((p) => p.value === currentValue);
+                const showCustom =
+                  presets.length === 0 || (currentValue !== "" && !isPreset);
+                const selectValue = showCustom ? CUSTOM_SENTINEL : currentValue;
+
+                return (
+                  <div>
+                    <Label htmlFor="sub">Subcategory</Label>
+                    {presets.length > 0 ? (
+                      <Select
+                        value={selectValue}
+                        onValueChange={(v) => {
+                          if (v === CUSTOM_SENTINEL) {
+                            setForm({ ...form, subcategory: "" });
+                          } else {
+                            setForm({ ...form, subcategory: v });
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose subcategory" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {presets.map((p) => (
+                            <SelectItem key={p.value} value={p.value}>
+                              {p.label}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={CUSTOM_SENTINEL}>
+                            Other (specify…)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : null}
+                    {showCustom && (
+                      <Input
+                        id="sub"
+                        className={presets.length > 0 ? "mt-2" : ""}
+                        value={currentValue}
+                        onChange={(e) =>
+                          setForm({ ...form, subcategory: e.target.value })
+                        }
+                        placeholder="Type custom subcategory"
+                        autoFocus={presets.length > 0}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
 
           <div className="sm:col-span-2">
             <Label htmlFor="desc">Description</Label>
@@ -252,7 +401,9 @@ export function ExpenseForm({
               onChange={(e) =>
                 setForm({ ...form, description: e.target.value })
               }
-              placeholder="What was this expense for?"
+              placeholder={
+                billMode ? "Auto-filled from bill account" : "What was this expense for?"
+              }
             />
           </div>
 
@@ -269,7 +420,7 @@ export function ExpenseForm({
           </div>
 
           <div>
-            <Label htmlFor="date">Date</Label>
+            <Label htmlFor="date">{billMode ? "Date paid" : "Date"}</Label>
             <Input
               id="date"
               type="date"
@@ -279,6 +430,131 @@ export function ExpenseForm({
               }
             />
           </div>
+
+          {/* Due date — only meaningful for bills. Compared against the
+              paid date in reports to flag late payments. */}
+          {billMode && (
+            <div>
+              <Label htmlFor="due">Due date</Label>
+              <Input
+                id="due"
+                type="date"
+                value={form.due_date ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, due_date: e.target.value || null })
+                }
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                As printed on the challan. Used to flag late payments.
+              </p>
+            </div>
+          )}
+
+          {form.is_bill && (
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Bill account</Label>
+                <Link
+                  href="/admin/bill-accounts"
+                  className="text-xs text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Manage Bill Accounts &rarr;
+                </Link>
+              </div>
+              <Select
+                value={form.bill_account_id ?? ""}
+                onValueChange={(v) => {
+                  const picked = billAccounts.find((b) => b.id === v);
+                  if (!picked) {
+                    setForm({ ...form, bill_account_id: v || null });
+                    return;
+                  }
+                  // Auto-fill everything we can derive from the bill
+                  // account: vendor (provider + nickname), description
+                  // (account #), expense category + subcategory (from
+                  // provider category). Admin can override any of these
+                  // after picking.
+                  const providerLbl = providerLabelFor(
+                    picked.provider,
+                    picked.provider_label,
+                  );
+                  const { category, subcategory } = expenseCategoryForProvider(
+                    picked.provider,
+                  );
+                  setForm({
+                    ...form,
+                    bill_account_id: picked.id,
+                    category,
+                    subcategory,
+                    vendor:
+                      form.vendor && form.vendor.trim()
+                        ? form.vendor
+                        : `${providerLbl} – ${picked.nickname}`,
+                    description:
+                      form.description && form.description.trim()
+                        ? form.description
+                        : `Account #${picked.account_number}`,
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pick a bill account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {billAccounts.length === 0 && (
+                    <div className="px-2 py-3 text-sm text-muted-foreground">
+                      No active bill accounts yet.{" "}
+                      <Link
+                        href="/admin/bill-accounts"
+                        className="text-primary hover:underline"
+                      >
+                        Add one
+                      </Link>
+                      .
+                    </div>
+                  )}
+                  {CATEGORY_ORDER.filter((c) => billAccountsByCat.has(c)).map(
+                    (cat) => (
+                      <SelectGroup key={cat}>
+                        <SelectLabel>{CATEGORY_LABEL[cat]}</SelectLabel>
+                        {(billAccountsByCat.get(cat) ?? []).map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.nickname} ({b.account_number})
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Units consumed — single optional field. Shown for any bill
+              regardless of category. Admin leaves it blank for flat-fee
+              bills (internet, AMC). Matches how PK challans actually
+              print "units" — no kWh/HM³/m³ distinction. */}
+          {showUnitsField && (
+            <div>
+              <Label htmlFor="units">Units consumed (optional)</Label>
+              <Input
+                id="units"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step="1"
+                value={unitsInput}
+                onChange={(e) => setUnitsInput(e.target.value)}
+                placeholder="e.g. 300"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                As printed on the bill. Lets the committee spot usage
+                spikes month-over-month.
+              </p>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="vendor">Vendor (optional)</Label>
@@ -310,24 +586,47 @@ export function ExpenseForm({
             </Select>
           </div>
 
-          {/* is_bill toggle — distinguishes recurring utility BILLS from
-              operating EXPENSES. Drives which Reports module page the row
-              shows up on (Bills vs Expenses). */}
-          <div className="sm:col-span-2 flex items-center gap-2">
-            <input
-              id="isbill"
-              type="checkbox"
-              className="h-5 w-5"
-              checked={!!form.is_bill}
-              onChange={(e) =>
-                setForm({ ...form, is_bill: e.target.checked })
-              }
-            />
-            <Label htmlFor="isbill">
-              Is this a recurring utility bill? (K-Electric, SSGC, internet,
-              lift AMC, security contract, etc.)
-            </Label>
-          </div>
+          {/* Mode switch — small text link in the corner. Hidden when
+              editing an existing row (mode is fixed once recorded). */}
+          {!expense && (
+            <div className="sm:col-span-2 text-xs text-muted-foreground">
+              {billMode ? (
+                <>
+                  Not a utility bill?{" "}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        is_bill: false,
+                        bill_account_id: null,
+                      })
+                    }
+                    className="text-primary hover:underline"
+                  >
+                    Switch to general expense
+                  </button>
+                </>
+              ) : (
+                <>
+                  Recording a utility bill?{" "}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        is_bill: true,
+                        category: "utilities",
+                      })
+                    }
+                    className="text-primary hover:underline"
+                  >
+                    Switch to bill mode
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="sm:col-span-2 flex items-center gap-2">
             <input
@@ -388,7 +687,13 @@ export function ExpenseForm({
               pending || !form.description.trim() || form.amount <= 0
             }
           >
-            {pending ? "Saving..." : expense ? "Save" : "Add expense"}
+            {pending
+              ? "Saving..."
+              : expense
+                ? "Save"
+                : billMode
+                  ? "Record bill"
+                  : "Add expense"}
           </Button>
         </DialogFooter>
       </DialogContent>
