@@ -48,6 +48,13 @@ export type PresetProject = {
   id: string;
   name: string;
   /**
+   * Preselects the flat picker when the dialog opens from a contributor
+   * row. The matching resident auto-loads via the existing flat-change
+   * effect, so the admin lands on a fully pre-filled form and just clicks
+   * Save.
+   */
+  flat_id?: string;
+  /**
    * Defaults the Amount input to (expected − paid). Pass 0 if the project
    * is voluntary or the flat has no per-flat expected amount.
    */
@@ -133,7 +140,9 @@ export function RecordPaymentDialog({
     (presetProject ? "project" : null) ??
     (defaultCategory === "maintenance" ? "" : nonMaintenanceFallback);
 
-  const [flat_id, setFlatId] = useState(presetInvoice?.flat_id ?? "");
+  const [flat_id, setFlatId] = useState(
+    presetInvoice?.flat_id ?? presetProject?.flat_id ?? "",
+  );
   const [target, setTarget] = useState<string>(initialTarget);
   // target values:
   //   "<invoice_id>" => maintenance payment

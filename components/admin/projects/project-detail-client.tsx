@@ -376,6 +376,7 @@ export function ProjectDetailClient({
           presetProject={{
             id: project.id,
             name: project.name,
+            flat_id: presetFlatId ?? undefined,
             amount_due: presetAmountDue,
           }}
         />
