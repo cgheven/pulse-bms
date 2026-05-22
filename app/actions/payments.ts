@@ -16,13 +16,21 @@ export type PaymentInput = {
   payment_date?: string;
   payment_mode?: "cash" | "bank_transfer" | "cheque" | "online" | "other";
   reference_no?: string | null;
-  category?: "maintenance" | "entry_fee" | "fine" | "other";
+  category?: "maintenance" | "entry_fee" | "fine" | "other" | "project";
   notes?: string | null;
   /**
    * Which bank account / cash drawer the money was deposited into.
    * Nullable; defaults to the per-building Cash account at the form layer.
    */
   bank_account_id?: string | null;
+  /**
+   * Project Fund row this payment belongs to. Only set for
+   * `category === 'project'` contributions. Validated cross-tenant
+   * (must belong to caller's building) and stamped atomically on the
+   * INSERT — no follow-up UPDATE so we can't leak orphan rows if the
+   * stamp fails midway.
+   */
+  project_id?: string | null;
 };
 
 // Receipt numbers are per-row (each chunk gets its own). 8-char tail of epoch
@@ -114,6 +122,23 @@ export async function recordPayment(input: PaymentInput) {
       .eq("building_id", profile.building_id)
       .maybeSingle();
     if (!bankCheck) throw new Error("Invalid bank account");
+  }
+
+  // ── Cross-tenant guard: project_id must belong to caller's building ─
+  // Same defence-in-depth as the bank check above. Stamping happens
+  // atomically on the INSERT below — no follow-up UPDATE — so we MUST
+  // validate the fk up-front; the DB's RLS won't backstop a cross-tenant
+  // INSERT (RLS gates reads; FK gates referential integrity but not
+  // tenancy). Empty/null is fine — only `category === 'project'` rows
+  // carry a project_id; everyone else passes null.
+  if (input.project_id) {
+    const { data: projCheck } = await supabase
+      .from("bms_projects")
+      .select("id")
+      .eq("id", input.project_id)
+      .eq("building_id", profile.building_id)
+      .maybeSingle();
+    if (!projCheck) throw new Error("Invalid project");
   }
 
   // ── Resolve receiver snapshot ─────────────────────────────────────
@@ -221,6 +246,10 @@ export async function recordPayment(input: PaymentInput) {
     received_by_name,
     received_by_position,
     bank_account_id: input.bank_account_id ?? null,
+    // Stamped atomically with row creation so the Projects report can
+    // never see an orphan `category='project'` row missing its project_id.
+    // Validated cross-tenant above.
+    project_id: input.project_id ?? null,
   };
 
   const { data: payment, error: payErr } = await supabase
@@ -310,6 +339,12 @@ export async function recordPayment(input: PaymentInput) {
         if (capacity <= 0) continue;
         const apply = Math.min(capacity, remainingOverflow);
 
+        // Spillover only runs when the parent row has an invoice_id, which
+        // project contributions never have (they pass invoice_id: null). So
+        // we deliberately do NOT propagate project_id here — project payments
+        // are one-shot, never carry forward to a "future project". This
+        // branch is unreachable for category='project' but the omission is
+        // intentional belt-and-braces.
         const spillRow = {
           building_id: profile.building_id,
           invoice_id: fi.id,

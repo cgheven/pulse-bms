@@ -72,6 +72,10 @@ export default async function ResidentHomePage() {
         <BillAndNotices profileId={profile.id} buildingId={profile.building_id} />
       </Suspense>
 
+      <Suspense fallback={null}>
+        <ProjectsTile profileId={profile.id} buildingId={profile.building_id} />
+      </Suspense>
+
       {/* Quiet footer links — render instantly, no data needed */}
       <nav className="pt-2 border-t border-border flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
         <Link
@@ -381,6 +385,109 @@ async function BillAndNotices({
         </Link>
       </div>
     </div>
+  );
+}
+
+/**
+ * Compact home-screen tile that surfaces active project funds. Render-cheap:
+ * skips entirely when the building has no active projects so layout doesn't
+ * shift. Shows the resident's expected/paid totals when their flat has
+ * shares, otherwise an aggregate community line.
+ */
+async function ProjectsTile({
+  profileId,
+  buildingId,
+}: {
+  profileId: string;
+  buildingId: string | null;
+}) {
+  if (!buildingId) return null;
+  const supabase = await createClient();
+
+  const { data: residentRow } = await supabase
+    .from("bms_residents")
+    .select("flat_id")
+    .eq("profile_id", profileId)
+    .eq("building_id", buildingId)
+    .eq("is_active", true)
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const flatId = (residentRow as { flat_id: string } | null)?.flat_id ?? null;
+
+  const { data: activeProjects } = await supabase
+    .from("bms_projects")
+    .select("id, name, contribution_rule, default_per_flat")
+    .eq("building_id", buildingId)
+    .eq("status", "active");
+
+  const projects = (activeProjects ?? []) as Array<{
+    id: string;
+    name: string;
+    contribution_rule: "equal" | "custom" | "voluntary";
+    default_per_flat: number | null;
+  }>;
+  if (projects.length === 0) return null;
+
+  const projectIds = projects.map((p) => p.id);
+
+  // Pull THIS flat's shares + payments across active projects in parallel.
+  const [{ data: shares }, { data: payments }] = await Promise.all([
+    flatId
+      ? supabase
+          .from("bms_project_shares")
+          .select("project_id, expected_amount")
+          .eq("flat_id", flatId)
+          .in("project_id", projectIds)
+      : Promise.resolve({ data: [] }),
+    flatId
+      ? supabase
+          .from("bms_payments")
+          .select("project_id, amount")
+          .eq("flat_id", flatId)
+          .eq("building_id", buildingId)
+          .in("project_id", projectIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  let totalExpected = 0;
+  let totalPaid = 0;
+  for (const p of projects) {
+    const share =
+      ((shares ?? []) as Array<{ project_id: string; expected_amount: number }>).find(
+        (s) => s.project_id === p.id,
+      )?.expected_amount ?? (p.contribution_rule === "voluntary" ? 0 : p.default_per_flat ?? 0);
+    totalExpected += Number(share ?? 0);
+  }
+  for (const p of (payments ?? []) as Array<{ amount: number }>) {
+    totalPaid += Number(p.amount ?? 0);
+  }
+  const due = Math.max(0, totalExpected - totalPaid);
+
+  return (
+    <Link
+      href="/resident/projects"
+      className="group block rounded-xl border border-primary/20 bg-gradient-to-br from-primary/8 via-card to-card p-4 sm:p-5 hover:border-primary/40 transition-colors"
+    >
+      <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex w-10 h-10 sm:w-12 sm:h-12 items-center justify-center rounded-lg bg-primary/15 border border-primary/25 text-primary shrink-0">
+          <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-semibold tracking-tight">
+              Active Projects ({projects.length})
+            </h2>
+          </div>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            {flatId
+              ? `${formatCurrency(totalPaid)} paid · ${formatCurrency(due)} due`
+              : "View building fundraisers."}
+          </p>
+        </div>
+        <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+      </div>
+    </Link>
   );
 }
 

@@ -78,6 +78,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { href: "/admin/maintenance",  label: "Maintenance",  icon: Receipt },
         { href: "/admin/other-income", label: "Other Income", icon: Coins },
+        { href: "/admin/projects",     label: "Projects",     icon: Sparkles },
         { href: "/admin/expenses",     label: "Expenses",     icon: Wallet },
         { href: "/admin/reports",      label: "Reports",      icon: FileSpreadsheet },
       ],
@@ -109,6 +110,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { href: "/union", label: "Dashboard", icon: LayoutDashboard },
         { href: "/union/collections", label: "Collections", icon: HandCoins },
+        { href: "/union/projects", label: "Projects", icon: Sparkles },
         { href: "/admin/reports", label: "Reports", icon: FileSpreadsheet },
       ],
     },
@@ -167,6 +169,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "Building",
       items: [
+        { href: "/resident/projects",     label: "Projects",     icon: Sparkles },
         { href: "/resident/transparency", label: "Transparency", icon: Eye },
         { href: "/resident/notices",      label: "Notices",      icon: Megaphone },
       ],

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Wallet, Receipt, HandCoins, Coins, Banknote, BookText } from "lucide-react";
+import { Wallet, Receipt, HandCoins, Coins, Banknote, BookText, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 export type ReportTabId =
   | "expenses"
   | "bills"
+  | "projects"
   | "maintenance-collection"
   | "overall-collection"
   | "day-book"
@@ -38,6 +39,12 @@ const TABS: { id: ReportTabId; label: string; icon: typeof Wallet; href: string 
   },
   { id: "expenses", label: "Expenses", icon: Wallet, href: "/admin/reports/expenses" },
   { id: "bills", label: "Bills", icon: Receipt, href: "/admin/reports/bills" },
+  {
+    id: "projects",
+    label: "Projects",
+    icon: Sparkles,
+    href: "/admin/reports/projects",
+  },
   {
     id: "day-book",
     label: "Day Book",

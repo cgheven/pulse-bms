@@ -42,7 +42,17 @@ type PendingInv = {
   paid_total: number;
 };
 
-export type PaymentCategoryDefault = "maintenance" | "entry_fee" | "fine" | "other";
+export type PaymentCategoryDefault = "maintenance" | "entry_fee" | "fine" | "other" | "project";
+
+export type PresetProject = {
+  id: string;
+  name: string;
+  /**
+   * Defaults the Amount input to (expected − paid). Pass 0 if the project
+   * is voluntary or the flat has no per-flat expected amount.
+   */
+  amount_due?: number;
+};
 
 export function RecordPaymentDialog({
   trigger,
@@ -50,6 +60,7 @@ export function RecordPaymentDialog({
   buildingName,
   buildingId,
   presetInvoice,
+  presetProject,
   defaultCategory = "maintenance",
   open: controlledOpen,
   onOpenChange,
@@ -71,6 +82,13 @@ export function RecordPaymentDialog({
     billing_month: string;
     amount_due: number;
   };
+  /**
+   * Pre-fills the dialog for a project contribution. The "Pay against"
+   * dropdown shows the project as the active target (and locks it), the
+   * Flat picker is left open so the recorder picks who paid, and Amount
+   * defaults to `amount_due` (expected − paid) when provided.
+   */
+  presetProject?: PresetProject;
   /**
    * Pre-selects the "Pay against" target when the dialog opens.
    *   - "maintenance" (default): if the chosen flat has an unpaid current-month
@@ -103,9 +121,16 @@ export function RecordPaymentDialog({
   // empty-string fallback avoids the surprising "Entry fee" pre-selection on
   // a fully-paid flat opened from the Maintenance page.
   const nonMaintenanceFallback: string =
-    defaultCategory === "fine" ? "other" : defaultCategory === "other" ? "other" : "entry_fee";
+    defaultCategory === "fine"
+      ? "other"
+      : defaultCategory === "other"
+      ? "other"
+      : defaultCategory === "project"
+      ? "project"
+      : "entry_fee";
   const initialTarget =
     presetInvoice?.invoice_id ??
+    (presetProject ? "project" : null) ??
     (defaultCategory === "maintenance" ? "" : nonMaintenanceFallback);
 
   const [flat_id, setFlatId] = useState(presetInvoice?.flat_id ?? "");
@@ -114,8 +139,13 @@ export function RecordPaymentDialog({
   //   "<invoice_id>" => maintenance payment
   //   "entry_fee"   => entry fee
   //   "other"       => other
+  //   "project"     => project contribution (uses presetProject)
   const [amount, setAmount] = useState<string>(
-    presetInvoice ? String(presetInvoice.amount_due) : "",
+    presetInvoice
+      ? String(presetInvoice.amount_due)
+      : presetProject?.amount_due != null
+      ? String(presetProject.amount_due)
+      : "",
   );
   const [payment_date, setPaymentDate] = useState(
     new Date().toISOString().slice(0, 10),
@@ -304,9 +334,10 @@ export function RecordPaymentDialog({
   }, [buildingId]);
 
   const targetIsInvoice = useMemo(
-    () => target !== "entry_fee" && target !== "other",
+    () => target !== "entry_fee" && target !== "other" && target !== "project",
     [target],
   );
+  const targetIsProject = target === "project";
 
   const selectedFlat = flats.find((f) => f.id === flat_id);
 
@@ -352,9 +383,19 @@ export function RecordPaymentDialog({
               ? "entry_fee"
               : target === "other"
               ? "other"
+              : targetIsProject
+              ? "project"
               : "maintenance",
-          notes: notes || null,
+          notes:
+            notes ||
+            (targetIsProject && presetProject
+              ? `Contribution to ${presetProject.name}`
+              : null),
           bank_account_id: bankAccountId || null,
+          // project_id is stamped atomically inside recordPayment now — no
+          // more client-side follow-up UPDATE (which skipped the building
+          // scope and silently dropped errors). Server validates cross-tenant.
+          project_id: targetIsProject ? presetProject?.id ?? null : null,
         };
         const row = await recordPayment(payload);
 
@@ -477,7 +518,10 @@ export function RecordPaymentDialog({
 
           <div className="col-span-2">
             <Label>Pay against</Label>
-            <Select value={target} onValueChange={(v) => {
+            <Select
+              value={target}
+              disabled={!!presetProject}
+              onValueChange={(v) => {
               userTouchedTarget.current = true;
               setTarget(v);
               if (v === "entry_fee" || v === "other") {
@@ -486,6 +530,12 @@ export function RecordPaymentDialog({
                 // amount fresh instead of accidentally booking the invoice
                 // total against an entry fee.
                 setAmount("");
+              } else if (v === "project") {
+                if (presetProject?.amount_due != null) {
+                  setAmount(String(Math.max(0, presetProject.amount_due)));
+                } else {
+                  setAmount("");
+                }
               } else {
                 const inv = invoices.find((i) => i.id === v);
                 if (inv) setAmount(String(Math.max(0, inv.amount - inv.paid_total)));
@@ -495,6 +545,11 @@ export function RecordPaymentDialog({
                 <SelectValue placeholder="Pick invoice or category" />
               </SelectTrigger>
               <SelectContent>
+                {presetProject && (
+                  <SelectItem value="project">
+                    Project: {presetProject.name}
+                  </SelectItem>
+                )}
                 {invoices.map((inv) => {
                   const remaining = Math.max(0, inv.amount - inv.paid_total);
                   return (
