@@ -50,6 +50,24 @@ export type ActivityType =
   | "quote_sent"
   | "status_change";
 
+/**
+ * Follow-up "channel" the rep used to contact the prospect. Maps to one
+ * of the underlying ActivityType values for storage so the existing
+ * timeline icons + analytics keep working. The structured Log-a-Follow-up
+ * card UI uses these channels; the legacy free-form logActivity entry
+ * point still writes raw ActivityType (used by the demo-credentials
+ * auto-log path).
+ */
+export type FollowupChannel = "call" | "whatsapp" | "meeting" | "demo" | "other";
+
+const CHANNEL_TO_ACTIVITY: Record<FollowupChannel, ActivityType> = {
+  call: "call",
+  whatsapp: "whatsapp_sent",
+  meeting: "meeting",
+  demo: "demo",
+  other: "note",
+};
+
 export type LeadInput = {
   building_name: string;
   area?: string | null;
@@ -137,6 +155,15 @@ function validateAndNormalize(input: LeadInput) {
     throw new Error("Quoted amount must be zero or a positive number.");
   }
 
+  // NOTE: next_followup_date is intentionally NOT returned here. That
+  // column is now derived state owned by the activity sync logic in
+  // logFollowup — every contact attempt carries its own
+  // followup_due_date, and the lead's denormalised
+  // bms_leads.next_followup_date is updated to the MAX across the lead's
+  // activities. createLead / updateLead must never overwrite it from
+  // form input (which would clobber the latest activity-derived value).
+  // We keep the LeadInput field optional for action-contract back-compat,
+  // but silently drop it here.
   return {
     building_name,
     area: trimOrNull(input.area),
@@ -149,7 +176,6 @@ function validateAndNormalize(input: LeadInput) {
     source: input.source,
     status: input.status ?? "new",
     temperature: input.temperature,
-    next_followup_date: trimOrNull(input.next_followup_date),
     quoted_amount: quoted,
     notes: trimOrNull(input.notes),
   };
@@ -433,6 +459,93 @@ export async function logActivity(
   // We DON'T write to the global audit log for every activity — that
   // would flood it. Activity timeline IS the lead's audit trail.
   revalidatePath(`${LEADS_PATH}/${lead_id}`);
+}
+
+/**
+ * Structured follow-up entry — the primary "log a contact attempt"
+ * surface on the lead detail page. Each call inserts one activity row
+ * with the channel-mapped activity_type, the verbatim response received,
+ * and an optional next-follow-up date. The lead's denormalised
+ * bms_leads.next_followup_date is then synced to the MAX
+ * followup_due_date across all of this lead's activities so the
+ * Due-today / Overdue KPIs (which still read next_followup_date) stay
+ * accurate even if reps log entries out of order.
+ *
+ * Note: the legacy `logActivity` entry point is kept intact for the
+ * WhatsApp template auto-log path (SendDemoButton / WhatsappButton),
+ * which fires-and-forgets a raw ActivityType without a follow-up date.
+ */
+export async function logFollowup(opts: {
+  lead_id: string;
+  channel: FollowupChannel;
+  response: string;
+  next_followup_date?: string | null; // YYYY-MM-DD or null
+}) {
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
+  if (!opts.lead_id) throw new Error("Lead id required.");
+  const response = opts.response?.trim();
+  if (!response) {
+    throw new Error("Please describe what response you received.");
+  }
+
+  const supabase = await createClient();
+  // Archive guard — re-uses the same protection createLead/updateLead use.
+  await loadActiveLead(supabase, opts.lead_id);
+
+  const next =
+    opts.next_followup_date && String(opts.next_followup_date).trim()
+      ? String(opts.next_followup_date).trim()
+      : null;
+
+  // 1) Insert the activity row.
+  const { error: actErr } = await supabase
+    .from("bms_lead_activities")
+    .insert({
+      lead_id: opts.lead_id,
+      activity_type: CHANNEL_TO_ACTIVITY[opts.channel],
+      note: response,
+      followup_due_date: next,
+      meta: { channel: opts.channel },
+      actor_id: user.id,
+    });
+  if (actErr) throw new Error(actErr.message);
+
+  // 2) Sync the denormalised next_followup_date on bms_leads.
+  // Always read the current MAX across all activities (could be the new
+  // row, an older row, or null if no activity has a date set) so the
+  // KPI surface stays accurate regardless of insert order.
+  const { data: latest } = await supabase
+    .from("bms_lead_activities")
+    .select("followup_due_date")
+    .eq("lead_id", opts.lead_id)
+    .not("followup_due_date", "is", null)
+    .order("followup_due_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error: leadErr } = await supabase
+    .from("bms_leads")
+    .update({ next_followup_date: latest?.followup_due_date ?? null })
+    .eq("id", opts.lead_id);
+  if (leadErr) throw new Error(leadErr.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    action: "lead.followup",
+    entity: "lead",
+    entity_id: opts.lead_id,
+    meta: {
+      channel: opts.channel,
+      next_followup_date: next,
+    },
+  });
+
+  revalidatePath(`${LEADS_PATH}/${opts.lead_id}`);
+  revalidatePath(LEADS_PATH);
+  revalidatePath("/super-admin");
 }
 
 /**

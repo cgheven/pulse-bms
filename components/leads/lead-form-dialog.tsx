@@ -37,7 +37,6 @@ import {
   WHATSAPP_TEMPLATES,
   buildWhatsappLink,
 } from "@/lib/whatsapp-templates";
-import { cn } from "@/lib/utils";
 
 type Mode = "create" | "edit";
 
@@ -53,7 +52,6 @@ export type LeadFormValues = {
   email: string;
   source: LeadSource;
   status: LeadStatus;
-  next_followup_date: string;
   quoted_amount: string;
   notes: string;
 };
@@ -69,7 +67,6 @@ const DEFAULTS: LeadFormValues = {
   email: "",
   source: "cold_visit",
   status: "new",
-  next_followup_date: "",
   quoted_amount: "",
   notes: "",
 };
@@ -183,7 +180,11 @@ export function LeadFormDialog({
       // we later want to drop the column entirely, change LeadInput
       // and the DB column in lockstep.
       temperature: "warm",
-      next_followup_date: values.next_followup_date || null,
+      // next_followup_date is intentionally NOT sent — that column is
+      // derived from bms_lead_activities.followup_due_date via the
+      // logFollowup action. The Edit Lead dialog no longer surfaces a
+      // date input, and createLead/updateLead defensively drop the
+      // field anyway so a stale client can't clobber the derived value.
       quoted_amount:
         values.quoted_amount === "" ? null : Number(values.quoted_amount),
       notes: values.notes || null,
@@ -517,43 +518,31 @@ export function LeadFormDialog({
                 </Select>
               </div>
             </div>
-            <div
-              className={cn(
-                "grid gap-3",
-                showQuoted ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1",
-              )}
-            >
+            {/*
+              The "Next follow-up" date input was removed from this
+              dialog. Follow-up scheduling now lives on each activity
+              row (via the Log a Follow-up form on the detail page) and
+              the lead's next_followup_date is derived from the latest
+              activity's followup_due_date. Surfacing a manual date here
+              would let a stale Save Lead click clobber that derived
+              value, so the field is gone.
+            */}
+            {showQuoted && (
               <div className="space-y-2">
-                <Label htmlFor="followup" className="text-base">
-                  Next follow-up
+                <Label htmlFor="quoted" className="text-base">
+                  Quoted amount (PKR)
                 </Label>
                 <Input
-                  id="followup"
-                  type="date"
+                  id="quoted"
+                  type="number"
+                  min={0}
                   className="h-12 text-base"
-                  value={values.next_followup_date}
-                  onChange={(e) =>
-                    set("next_followup_date", e.target.value)
-                  }
+                  placeholder="e.g. 150000"
+                  value={values.quoted_amount}
+                  onChange={(e) => set("quoted_amount", e.target.value)}
                 />
               </div>
-              {showQuoted && (
-                <div className="space-y-2">
-                  <Label htmlFor="quoted" className="text-base">
-                    Quoted amount (PKR)
-                  </Label>
-                  <Input
-                    id="quoted"
-                    type="number"
-                    min={0}
-                    className="h-12 text-base"
-                    placeholder="e.g. 150000"
-                    value={values.quoted_amount}
-                    onChange={(e) => set("quoted_amount", e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
+            )}
           </section>
 
           {/* Notes */}

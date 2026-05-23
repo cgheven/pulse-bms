@@ -31,7 +31,7 @@ import {
 import { displayPkPhone } from "@/lib/pk-phone";
 import { WhatsappButton } from "@/components/leads/whatsapp-button";
 import { LeadDetailActions } from "@/components/leads/lead-detail-actions";
-import { ActivityForm } from "@/components/leads/activity-form";
+import { LogFollowupForm } from "@/components/leads/log-followup-form";
 import { NotesCard } from "@/components/leads/notes-card";
 import type {
   LeadStatus,
@@ -39,6 +39,7 @@ import type {
   LeadRole,
   LeadSource,
   ActivityType,
+  FollowupChannel,
 } from "@/app/actions/leads";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +71,7 @@ type Activity = {
   activity_type: ActivityType;
   note: string | null;
   meta: Record<string, unknown> | null;
+  followup_due_date: string | null;
   actor_id: string | null;
   created_at: string;
 };
@@ -139,6 +141,26 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
   status_change: "Status changed",
 };
 
+// When an activity was logged via the structured "Log a Follow-up" form
+// it carries a `meta.channel` value (one of the 5 channels). The channel
+// pill rendered next to the activity title uses these labels + icons so
+// the timeline reads at a glance.
+const CHANNEL_LABEL: Record<FollowupChannel, string> = {
+  call: "Call",
+  whatsapp: "WhatsApp",
+  meeting: "Meeting",
+  demo: "Demo",
+  other: "Other",
+};
+
+const CHANNEL_ICON: Record<FollowupChannel, React.ComponentType<{ className?: string }>> = {
+  call: PhoneCall,
+  whatsapp: MessageCircle,
+  meeting: Handshake,
+  demo: Video,
+  other: StickyNote,
+};
+
 function daysSince(iso: string): number {
   const then = new Date(iso).getTime();
   return Math.max(0, Math.floor((Date.now() - then) / 86400000));
@@ -167,7 +189,9 @@ export default async function LeadDetailPage({
 
   const { data: activities } = await supabase
     .from("bms_lead_activities")
-    .select("id, lead_id, activity_type, note, meta, actor_id, created_at")
+    .select(
+      "id, lead_id, activity_type, note, meta, followup_due_date, actor_id, created_at",
+    )
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
 
@@ -213,6 +237,9 @@ export default async function LeadDetailPage({
   const ownerName = profile.full_name || user.email || "Pulse BMS";
 
   // Pre-shape lead for edit dialog (strings instead of numbers/nulls).
+  // next_followup_date intentionally omitted — see LeadFormValues. The
+  // Edit Lead dialog no longer renders that field; follow-ups are owned
+  // by the activity timeline.
   const editInitial = {
     id: l.id,
     building_name: l.building_name,
@@ -227,7 +254,6 @@ export default async function LeadDetailPage({
     source: l.source,
     status: l.status,
     temperature: l.temperature,
-    next_followup_date: l.next_followup_date ?? "",
     quoted_amount: l.quoted_amount == null ? "" : String(l.quoted_amount),
     notes: l.notes ?? "",
   };
@@ -294,7 +320,7 @@ export default async function LeadDetailPage({
         {/* Right column */}
         <div className="lg:col-span-3 space-y-4">
           <h2 className="text-lg font-semibold">Activity</h2>
-          <ActivityForm leadId={l.id} />
+          <LogFollowupForm leadId={l.id} />
           <ActivityTimeline
             activities={(activities ?? []) as Activity[]}
             actorNames={actorNames}
@@ -436,7 +462,15 @@ function ActivityTimeline({
   return (
     <div className="space-y-3">
       {activities.map((a) => {
-        const Icon = ACTIVITY_ICON[a.activity_type];
+        // Prefer the channel icon when the activity was logged via the
+        // structured Log-a-Follow-up form (meta.channel set). Falls back
+        // to the activity_type icon for legacy rows + status_change /
+        // quote_sent / whatsapp_received entries.
+        const channel = readChannel(a.meta);
+        const Icon = channel ? CHANNEL_ICON[channel] : ACTIVITY_ICON[a.activity_type];
+        const title = channel
+          ? CHANNEL_LABEL[channel]
+          : ACTIVITY_LABEL[a.activity_type];
         const actorName = a.actor_id ? actorNames[a.actor_id] || "—" : "—";
         return (
           <div key={a.id} className="card-soft">
@@ -446,14 +480,29 @@ function ActivityTimeline({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between flex-wrap gap-1">
-                  <div className="text-sm font-semibold">
-                    {ACTIVITY_LABEL[a.activity_type]}
+                  <div className="inline-flex items-center gap-2">
+                    <span className="text-sm font-semibold">{title}</span>
+                    {channel && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full bg-primary/10 text-primary font-medium">
+                        <Icon className="w-3 h-3" />
+                        {CHANNEL_LABEL[channel]}
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatRelative(a.created_at)} · {actorName}
+                  <div
+                    className="text-xs text-muted-foreground"
+                    title={formatRelative(a.created_at)}
+                  >
+                    {formatActivityTimestamp(a.created_at)} · {actorName}
                   </div>
                 </div>
                 <ActivityBody activity={a} />
+                {a.followup_due_date && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md bg-warning/10 text-warning font-medium">
+                    <Clock className="w-3.5 h-3.5" />
+                    Next follow-up: {formatDate(a.followup_due_date)}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -461,6 +510,47 @@ function ActivityTimeline({
       })}
     </div>
   );
+}
+
+/**
+ * Audit-quality timestamp on each timeline row — absolute date + time
+ * so a rep reviewing past follow-ups can answer "when exactly did we
+ * call?" without guessing. The relative-time string lives on the
+ * title attribute as a quick hover.
+ */
+function formatActivityTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-PK", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
+}
+
+/**
+ * Pull `meta.channel` off an activity row, narrowing to a FollowupChannel.
+ * Returns null for legacy activities (no meta or unrecognised value) so
+ * the timeline falls back to the activity_type icon.
+ */
+function readChannel(
+  meta: Record<string, unknown> | null,
+): FollowupChannel | null {
+  if (!meta || typeof meta !== "object") return null;
+  const c = (meta as { channel?: unknown }).channel;
+  if (
+    c === "call" ||
+    c === "whatsapp" ||
+    c === "meeting" ||
+    c === "demo" ||
+    c === "other"
+  ) {
+    return c;
+  }
+  return null;
 }
 
 function ActivityBody({ activity }: { activity: Activity }) {
