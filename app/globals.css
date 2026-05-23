@@ -198,4 +198,47 @@
   #print-area tfoot       { display: table-footer-group; }
   #print-area tr          { page-break-inside: avoid; page-break-after: auto; }
   #print-area .keep-together { page-break-inside: avoid; }
+
+  /* ── Paper-receipt page (Karachi receipt-book emulation) ─────────────
+     The receipt component sets its own `receipt-page` wrapper. When the
+     resident hits Print, hide everything else and show only the receipt
+     in A5 portrait so it prints one-per-page on a half-A4 sheet. The
+     print-hidden class (e.g. on the toolbar buttons) is suppressed too.
+     We override the generic #print-area rules above by giving these
+     rules higher specificity via :where()-free direct selectors. */
+  body:has(.receipt-page) * { visibility: hidden !important; }
+  body:has(.receipt-page) .receipt-page,
+  body:has(.receipt-page) .receipt-page * { visibility: visible !important; }
+  .receipt-page {
+    position: absolute !important;
+    left: 0 !important; top: 0 !important;
+    width: 148mm !important;
+    margin: 0 !important;
+    background: white !important;
+    color: black !important;
+    /* Force colors (brand stripe, PAID pill, TOTAL amount) to print
+       as-is on color-capable printers. Without this Chrome/Safari
+       strip background colors by default. */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Same flag inside the receipt — ensures nested pills/stripes keep
+     their backgrounds on print. */
+  .receipt-page * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print-hidden { display: none !important; }
+}
+
+/* A5 portrait page setup for receipts. `@page` is a top-level at-rule
+   (can't be nested inside a selector) — browsers apply this whenever
+   the document contains an element using A5 print styling. The earlier
+   `@page { size: A4 }` rule under @media print covers reports; this one
+   complements it for the receipt route. The browser's print dialog
+   ultimately wins, but setting size on @page lets the user pick "Save
+   as PDF → A5" by default. */
+@page receipt {
+  size: A5 portrait;
+  margin: 10mm;
 }

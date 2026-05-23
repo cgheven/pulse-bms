@@ -142,6 +142,10 @@ export function ProjectDetailClient({
         payment_mode: c.payment_mode,
         category: "project",
         receipt_no: c.receipt_no,
+        // Project contribution rows don't carry the pre-migration text id
+        // through the projects loader yet — fall back to null so the legacy
+        // line just hides. Safe because PaymentsList already null-guards.
+        legacy_receipt_no: null,
         recorded_by_name: null,
         reference_no: null,
         invoice_id: null,
@@ -321,11 +325,7 @@ export function ProjectDetailClient({
               No contributions recorded yet.
             </p>
           ) : (
-            <PaymentsList
-              payments={paymentRows}
-              buildingName={buildingName}
-              buildingId={buildingId}
-            />
+            <PaymentsList payments={paymentRows} />
           )}
         </div>
       </div>

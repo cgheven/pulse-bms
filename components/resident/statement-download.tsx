@@ -81,7 +81,7 @@ export function StatementDownload({
             .order("expense_date", { ascending: true }),
         ]);
 
-        type Pay = { amount: number; payment_date: string | null; payment_mode: string | null; reference_no: string | null; category: string | null; receipt_no: string | null; bms_flats: { flat_number: string } | { flat_number: string }[] | null };
+        type Pay = { amount: number; payment_date: string | null; payment_mode: string | null; reference_no: string | null; category: string | null; receipt_no: number | null; bms_flats: { flat_number: string } | { flat_number: string }[] | null };
         type Exp = { amount: number; expense_date: string | null; category: string; subcategory: string | null; description: string; vendor: string | null };
 
         const rows: Row[] = [];

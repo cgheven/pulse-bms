@@ -5,6 +5,7 @@ import { rangeFromSearchParams } from "@/lib/reports/date-range";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
 import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
 import { MaintenanceCollectionClient } from "./maintenance-collection-client";
+import { formatReceiptNo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ async function MaintenanceCollectionData({
     payment_date: string;
     amount: number | string;
     payment_mode: string;
-    receipt_no: string | null;
+    receipt_no: number | null;
     flat_id: string;
     bank_account_id: string | null;
     received_by_name: string | null;
@@ -119,7 +120,7 @@ async function MaintenanceCollectionData({
       payment_date: r.payment_date,
       amount: Number(r.amount ?? 0),
       payment_mode: r.payment_mode,
-      receipt_no: r.receipt_no ?? "",
+      receipt_no: formatReceiptNo(r.receipt_no),
       flat_id: r.flat_id,
       flat_number: flat?.flat_number ?? "—",
       resident_name: resident?.full_name ?? "—",

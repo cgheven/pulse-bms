@@ -24,8 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
 import { recordPayment, type PaymentInput } from "@/app/actions/payments";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { downloadReceiptPdf } from "@/components/admin/billing/receipt-pdf";
+import { formatCurrency, formatDate, formatReceiptNo } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
 export type FlatPickerOption = {
@@ -408,50 +407,19 @@ export function RecordPaymentDialog({
         };
         const row = await recordPayment(payload);
 
-        // Generate PDF receipt
-        let invoice_number: string | null = null;
-        let billing_month: string | null = null;
-        if (targetIsInvoice) {
-          const inv = invoices.find((i) => i.id === target);
-          invoice_number = inv?.invoice_number ?? null;
-          billing_month = inv?.billing_month ?? null;
-        }
-        const residentName = residents.find((r) => r.id === residentId)?.full_name ?? null;
+        const receiptStr = formatReceiptNo(row.receipt_no as number | null);
 
-        // Running balance for the receipt — computed from the live view of
-        // the invoice + the just-recorded chunk (capped to the invoice).
-        const invoiceAmount = selectedInvoice?.amount ?? null;
-        const totalPaidSoFar =
-          selectedInvoice != null
-            ? selectedInvoice.paid_total + Number(row.amount)
-            : null;
-        const stillDue =
-          invoiceAmount != null && totalPaidSoFar != null
-            ? Math.max(0, invoiceAmount - totalPaidSoFar)
-            : null;
-
-        if (downloadPdf) {
-          downloadReceiptPdf({
-            receipt_no: row.receipt_no,
-            payment_date: row.payment_date,
-            building_name: buildingName,
-            flat_number: selectedFlat?.flat_number ?? "—",
-            resident_name: residentName,
-            amount: Number(row.amount),
-            payment_mode: row.payment_mode,
-            reference_no: row.reference_no,
-            category: row.category,
-            invoice_number,
-            billing_month,
-            invoice_amount: invoiceAmount,
-            total_paid_so_far: totalPaidSoFar,
-            still_due: stillDue,
-            // Receiver was resolved server-side and returned on the row; the
-            // PDF shows it on the "Received by" line so the resident knows
-            // exactly which committee officer took the cash.
-            received_by_name: (row as { received_by_name?: string | null }).received_by_name ?? null,
-            received_by_position: (row as { received_by_position?: string | null }).received_by_position ?? null,
-          });
+        // When the admin asked for an immediate PDF, pop the printable
+        // receipt page in a new tab — the page hosts Print + Download
+        // buttons so we keep ONE canonical receipt layout instead of
+        // shipping a separate jsPDF code path from the dialog. The browser
+        // pop-up may be blocked; the success toast still links to it.
+        if (downloadPdf && typeof window !== "undefined") {
+          window.open(
+            `/admin/payments/${row.id}/receipt`,
+            "_blank",
+            "noopener,noreferrer",
+          );
         }
 
         if (row.overflow > 0) {
@@ -463,11 +431,26 @@ export function RecordPaymentDialog({
           });
         }
 
+        // Success toast — surfaces the new monotonic receipt number AND a
+        // direct link to the printable receipt page so the admin can hand
+        // the resident a copy without hunting through the payments list.
+        // The receipt URL opens in a new tab (target="_blank") so the
+        // dialog's parent page state survives the click.
         toast({
-          title: "Payment recorded",
-          description: downloadPdf
-            ? `Receipt ${row.receipt_no} downloaded.`
-            : `Receipt ${row.receipt_no} saved. Download anytime from Payments.`,
+          title: `Payment recorded · Receipt #${receiptStr || row.receipt_no}`,
+          description: (
+            <span>
+              {downloadPdf ? "Opened receipt. " : "Saved. "}
+              <a
+                href={`/admin/payments/${row.id}/receipt`}
+                target="_blank"
+                rel="noopener"
+                className="underline text-primary"
+              >
+                Open printable receipt
+              </a>
+            </span>
+          ),
         });
         setOpen(false);
         router.refresh();

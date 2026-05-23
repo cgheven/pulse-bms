@@ -173,7 +173,7 @@ async function Inner({
     string,
     Array<{
       id: string;
-      receipt_no: string | null;
+      receipt_no: number | null;
       payment_date: string | null;
       amount: number;
       payment_mode: string | null;
@@ -190,7 +190,7 @@ async function Inner({
     payment_date: string | null;
     amount: number;
     payment_mode: string | null;
-    receipt_no: string | null;
+    receipt_no: number | null;
     invoice_id: string | null;
     received_by_name: string | null;
     received_by_position: string | null;

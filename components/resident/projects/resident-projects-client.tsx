@@ -8,9 +8,9 @@ import {
   MessageCircle,
   EyeOff,
 } from "lucide-react";
-import { cn, formatCurrency, formatDate, formatLakh } from "@/lib/utils";
+import Link from "next/link";
+import { cn, formatCurrency, formatDate, formatLakh, formatReceiptNo } from "@/lib/utils";
 import { ProjectProgressBar } from "@/components/projects/progress-bar";
-import { ReceiptButton } from "@/components/resident/receipt-button";
 import type { ProjectSummary } from "@/lib/projects";
 
 export type ResidentProjectView = {
@@ -21,7 +21,7 @@ export type ResidentProjectView = {
   // history block on each card.
   myContributions: Array<{
     id: string;
-    receipt_no: string | null;
+    receipt_no: number | null;
     payment_date: string | null;
     amount: number;
     payment_mode: string | null;
@@ -311,29 +311,18 @@ function ResidentProjectCard({
                     <div className="text-xs text-muted-foreground">
                       {p.payment_date ? formatDate(p.payment_date) : "—"} ·{" "}
                       {p.payment_mode ?? "—"}
-                      {p.receipt_no ? ` · ${p.receipt_no}` : ""}
+                      {p.receipt_no ? ` · ${formatReceiptNo(p.receipt_no)}` : ""}
                     </div>
                   </div>
                   {p.receipt_no && (
-                    <ReceiptButton
-                      data={{
-                        building_name: buildingName,
-                        building_address: buildingAddress,
-                        building_city: buildingCity,
-                        flat_number: flatNumber,
-                        resident_name: residentName,
-                        receipt_no: p.receipt_no,
-                        invoice_number: p.invoice_number,
-                        payment_date: p.payment_date,
-                        payment_mode: p.payment_mode,
-                        category: "Project",
-                        billing_month: p.billing_month,
-                        amount: p.amount,
-                        received_by_name: p.received_by_name,
-                        received_by_position: p.received_by_position,
-                      }}
-                      label="Receipt"
-                    />
+                    <Link
+                      href={`/resident/payments/${p.id}/receipt`}
+                      target="_blank"
+                      rel="noopener"
+                      className="text-primary hover:underline text-xs"
+                    >
+                      Receipt
+                    </Link>
                   )}
                 </li>
               ))}

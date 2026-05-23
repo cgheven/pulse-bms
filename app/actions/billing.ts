@@ -133,9 +133,8 @@ export async function generateMonthlyInvoices(params: { month: string }) {
         const apply = Math.min(creditAmt, remaining);
 
         // Record the credit as a real payment chunk so it appears in the
-        // payment history and on receipts.
-        const ts = Date.now().toString().slice(-8);
-        const salt = Math.random().toString(36).slice(2, 5).toUpperCase();
+        // payment history and on receipts. receipt_no is auto-allocated by
+        // the bms_payments_receipt_no_trg trigger.
         const { error: payErr } = await supabase.from("bms_payments").insert({
           building_id: profile.building_id,
           invoice_id: row.id,
@@ -145,7 +144,6 @@ export async function generateMonthlyInvoices(params: { month: string }) {
           payment_mode: PAYMENT_MODE.CREDIT_CARRYFORWARD,
           reference_no: null,
           category: "maintenance",
-          receipt_no: `RCPT-${buildingPrefix}-${ts}-${salt}`,
           notes: "Credit applied from previous overpayment",
           recorded_by: user.id,
         });

@@ -5,6 +5,7 @@ import { rangeFromSearchParams } from "@/lib/reports/date-range";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
 import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
 import { ProjectsReportClient } from "./projects-report-client";
+import { formatReceiptNo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -150,7 +151,7 @@ async function ProjectsData({ searchParams }: { searchParams: SearchParams }) {
       payment_date: string;
       amount: number;
       payment_mode: string;
-      receipt_no: string | null;
+      receipt_no: number | null;
       flat_id: string | null;
       resident_id: string | null;
       received_by_name: string | null;
@@ -163,7 +164,7 @@ async function ProjectsData({ searchParams }: { searchParams: SearchParams }) {
       payment_date: row.payment_date,
       amount: Number(row.amount ?? 0),
       payment_mode: row.payment_mode,
-      receipt_no: row.receipt_no ?? null,
+      receipt_no: formatReceiptNo(row.receipt_no) || null,
       flat_number: row.flat_id ? flatMap.get(row.flat_id) ?? "—" : "—",
       resident_name: row.resident_id ? residentMap.get(row.resident_id) ?? null : null,
       received_by_name: row.received_by_name,

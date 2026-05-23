@@ -287,9 +287,12 @@ with paid_invs as (
   where building_id = '99999999-9999-9999-9999-999999999999'
     and status = 'paid'
 )
+-- receipt_no is allocated by bms_payments_receipt_no_trg trigger
+-- (per-building monotonic integer). legacy_receipt_no retained for
+-- pre-migration demo rows; not seeded for new rows.
 insert into public.bms_payments (
   id, building_id, invoice_id, flat_id, resident_id,
-  amount, payment_date, payment_mode, category, receipt_no, notes
+  amount, payment_date, payment_mode, category, notes
 )
 select
   md5('99999999-9999-9999-9999-999999999999:pay:' || id::text)::uuid,
@@ -301,7 +304,6 @@ select
   billing_month + interval '7 days',
   'bank',
   'maintenance',
-  'RCPT-DEMO-' || substr(md5(id::text), 1, 8),
   null
 from paid_invs
 on conflict (id) do nothing;

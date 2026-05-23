@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency, formatDate, formatLakh, formatPhone } from "@/lib/utils";
+import { formatCurrency, formatDate, formatLakh, formatPhone, formatReceiptNo } from "@/lib/utils";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { FlatFormDialog } from "@/components/admin/flats/flat-form-dialog";
 import { Button } from "@/components/ui/button";
@@ -258,7 +258,7 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
                 {payments.map((p) => (
                   <tr key={p.id} className="border-b border-border last:border-0">
                     <td className="py-2">{p.payment_date ? formatDate(p.payment_date) : "—"}</td>
-                    <td className="py-2 font-mono text-xs">{p.receipt_no}</td>
+                    <td className="py-2 font-mono text-xs">{formatReceiptNo(p.receipt_no as number | null) || "—"}</td>
                     <td className="py-2">{p.payment_mode}</td>
                     <td className="py-2">{p.category}</td>
                     <td className="py-2 text-right font-semibold">{formatCurrency(Number(p.amount))}</td>

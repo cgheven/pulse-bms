@@ -309,7 +309,7 @@ export type ContributionRow = {
   payment_date: string;
   amount: number;
   payment_mode: string;
-  receipt_no: string | null;
+  receipt_no: number | null;
   flat_id: string;
   flat_number: string;
   resident_name: string | null;

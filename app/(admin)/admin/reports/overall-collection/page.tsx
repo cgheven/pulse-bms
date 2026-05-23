@@ -5,6 +5,7 @@ import { rangeFromSearchParams } from "@/lib/reports/date-range";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
 import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
 import { OverallCollectionClient } from "./overall-collection-client";
+import { formatReceiptNo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ async function OverallCollectionData({
     amount: number | string;
     payment_mode: string;
     category: string;
-    receipt_no: string | null;
+    receipt_no: number | null;
     flat_id: string;
     bank_account_id: string | null;
     received_by_name: string | null;
@@ -120,7 +121,7 @@ async function OverallCollectionData({
       category: /transfer/i.test(r.notes ?? "")
         ? "transfer_fee"
         : r.category,
-      receipt_no: r.receipt_no ?? "",
+      receipt_no: formatReceiptNo(r.receipt_no),
       flat_id: r.flat_id,
       flat_number: flat?.flat_number ?? "—",
       resident_name: resident?.full_name ?? "—",

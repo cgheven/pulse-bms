@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatReceiptNo } from "@/lib/utils";
 import { toIntlNoPlus } from "@/lib/phone";
 import { PAYMENT_MODE } from "@/types";
 import { PaymentsList, type PaymentRow } from "@/components/admin/payments/payments-list";
@@ -38,7 +38,7 @@ type Payment = {
   amount: number;
   payment_mode: string | null;
   reference_no: string | null;
-  receipt_no: string | null;
+  receipt_no: number | null;
   received_by_name: string | null;
   received_by_position: string | null;
 };
@@ -353,7 +353,7 @@ export function FlatHistoryModal({
                             )}
                           </td>
                           <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                            {p.receipt_no ?? "—"}
+                            {formatReceiptNo(p.receipt_no) || "—"}
                           </td>
                         </tr>
                       ))}
@@ -390,9 +390,8 @@ export function UnionRecentPaymentsTable({
     <>
       <PaymentsList
         payments={payments}
-        buildingName={buildingName}
-        buildingId={buildingId}
         onFlatClick={(flat) => setSelected(flat)}
+        receiptRoutePrefix="/union/payments"
       />
       <FlatHistoryModal
         open={!!selected}

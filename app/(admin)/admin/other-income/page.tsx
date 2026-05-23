@@ -214,11 +214,7 @@ async function OtherIncomeTable() {
 
   return (
     <div className="space-y-3">
-      <PaymentsList
-        payments={data.rows}
-        buildingName={data.buildingName}
-        buildingId={data.buildingId}
-      />
+      <PaymentsList payments={data.rows} />
       <CrossLinkFooter />
     </div>
   );
@@ -254,7 +250,7 @@ async function loadOtherIncomeData() {
     supabase
       .from("bms_payments")
       .select(
-        "id, payment_date, flat_id, resident_id, amount, payment_mode, category, receipt_no, recorded_by, invoice_id, reference_no, received_by_name, received_by_position",
+        "id, payment_date, flat_id, resident_id, amount, payment_mode, category, receipt_no, legacy_receipt_no, recorded_by, invoice_id, reference_no, received_by_name, received_by_position",
       )
       .eq("building_id", profile.building_id)
       .in("category", ["entry_fee", "fine", "other"])
@@ -317,6 +313,7 @@ async function loadOtherIncomeData() {
     payment_mode: p.payment_mode,
     category: p.category,
     receipt_no: p.receipt_no,
+    legacy_receipt_no: (p as { legacy_receipt_no?: string | null }).legacy_receipt_no ?? null,
     recorded_by_name: p.recorded_by ? recMap.get(p.recorded_by) ?? null : null,
     reference_no: p.reference_no,
     invoice_id: p.invoice_id ?? null,

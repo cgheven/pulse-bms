@@ -10,11 +10,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { downloadReceiptPdf } from "@/components/admin/billing/receipt-pdf";
-import { createClient } from "@/lib/supabase/client";
+import { formatCurrency, formatDate, formatReceiptNo } from "@/lib/utils";
 import { PAYMENT_MODE } from "@/types";
 
 // User-friendly labels for payment modes. The DB stores raw enums
@@ -38,7 +34,15 @@ export type PaymentRow = {
   amount: number;
   payment_mode: string | null;
   category: string | null;
-  receipt_no: string | null;
+  /** Per-building monotonic integer (e.g. 174 renders as "000174"). */
+  receipt_no: number | null;
+  /**
+   * Pre-migration text receipt id (e.g. "RCPT-DEMO-PROJ-018"). Rendered
+   * as a small subdued line under the new receipt_no so admins / union
+   * staff can still find a row by its paper-book id during the
+   * transition. Null on rows recorded post-migration.
+   */
+  legacy_receipt_no: string | null;
   recorded_by_name: string | null;
   reference_no: string | null;
   invoice_id: string | null;
@@ -59,13 +63,10 @@ export type PaymentRow = {
 
 export function PaymentsList({
   payments,
-  buildingName,
-  buildingId,
   onFlatClick,
+  receiptRoutePrefix = "/admin/payments",
 }: {
   payments: PaymentRow[];
-  buildingName: string;
-  buildingId: string;
   /**
    * Optional click handler for the flat number cell. When provided, the flat
    * number renders as a button that calls this handler (used by the union
@@ -73,68 +74,21 @@ export function PaymentsList({
    * cell renders as a link to /admin/flats/<id> (the admin default).
    */
   onFlatClick?: (flat: { id: string; flat_number: string }) => void;
+  /**
+   * Base path for the per-row "Receipt" link. Defaults to the admin route;
+   * union/collections passes "/union/payments" so officers land on the
+   * union-scoped receipt route instead of the admin one.
+   */
+  receiptRoutePrefix?: string;
 }) {
   const [q, setQ] = useState("");
   const [modeFilter, setModeFilter] = useState("all");
   const [catFilter, setCatFilter] = useState("all");
 
-  // Fetch invoice total + total_paid_so_far ONLY for the row being clicked.
-  // Avoids N+1 — the list view never preloads these. Filters are explicit
-  // on building_id (defence in depth alongside RLS). When invoice_id is null
-  // (entry_fee / fine / other), the receipt builder gracefully omits the
-  // running-balance block.
-  async function buildReceiptForRow(p: PaymentRow) {
-    let invoice_amount: number | undefined;
-    let total_paid_so_far: number | undefined;
-    let still_due: number | undefined;
-
-    if (p.invoice_id && p.payment_date) {
-      const supabase = createClient();
-      const [{ data: invRow }, { data: paidRows }] = await Promise.all([
-        supabase
-          .from("bms_invoices")
-          .select("amount")
-          .eq("id", p.invoice_id)
-          .eq("building_id", buildingId)
-          .single(),
-        // Everything up to and including this chunk's date — the receipt
-        // shows the running balance AT THE TIME of the chunk, not "as of now".
-        supabase
-          .from("bms_payments")
-          .select("amount")
-          .eq("invoice_id", p.invoice_id)
-          .eq("building_id", buildingId)
-          .lte("payment_date", p.payment_date),
-      ]);
-      if (invRow) invoice_amount = Number(invRow.amount);
-      total_paid_so_far = (paidRows ?? []).reduce(
-        (s, r) => s + Number((r as { amount: number }).amount ?? 0),
-        0,
-      );
-      if (invoice_amount != null) {
-        still_due = Math.max(0, invoice_amount - total_paid_so_far);
-      }
-    }
-
-    downloadReceiptPdf({
-      receipt_no: p.receipt_no ?? "",
-      payment_date: p.payment_date,
-      building_name: buildingName,
-      flat_number: p.flat_number,
-      resident_name: p.resident_name,
-      amount: Number(p.amount),
-      payment_mode: p.payment_mode,
-      reference_no: p.reference_no,
-      category: p.category,
-      invoice_number: p.invoice_number,
-      billing_month: p.billing_month,
-      invoice_amount,
-      total_paid_so_far,
-      still_due,
-      received_by_name: p.received_by_name,
-      received_by_position: p.received_by_position,
-    });
-  }
+  // Per-row receipt rendering is delegated to the dedicated receipt route
+  // (`<receiptRoutePrefix>/<id>/receipt`) — the user opens it in a new tab
+  // and chooses Print or Download from there. We deliberately don't ship
+  // a second PDF code path from this list so the layout stays canonical.
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -142,10 +96,11 @@ export function PaymentsList({
       if (modeFilter !== "all" && p.payment_mode !== modeFilter) return false;
       if (catFilter !== "all" && p.category !== catFilter) return false;
       if (s) {
+        const receiptStr = formatReceiptNo(p.receipt_no).toLowerCase();
         if (
           !p.flat_number.toLowerCase().includes(s) &&
           !(p.resident_name ?? "").toLowerCase().includes(s) &&
-          !(p.receipt_no ?? "").toLowerCase().includes(s) &&
+          !receiptStr.includes(s) &&
           !(p.reference_no ?? "").toLowerCase().includes(s)
         )
           return false;
@@ -256,18 +211,28 @@ export function PaymentsList({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{p.receipt_no}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                    <div>{formatReceiptNo(p.receipt_no) || "—"}</div>
+                    {p.legacy_receipt_no && (
+                      <div className="text-[10px] text-muted-foreground/70 mt-0.5 font-normal normal-case">
+                        Legacy: {p.legacy_receipt_no}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Download receipt"
-                      onClick={() => {
-                        void buildReceiptForRow(p);
-                      }}
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
+                    {p.receipt_no != null ? (
+                      <Link
+                        href={`${receiptRoutePrefix}/${p.id}/receipt`}
+                        target="_blank"
+                        rel="noopener"
+                        className="text-primary hover:underline text-xs px-2 py-1 inline-block"
+                        aria-label="Open printable receipt"
+                      >
+                        Receipt
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

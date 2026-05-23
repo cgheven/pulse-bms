@@ -98,3 +98,14 @@ export function getMemberStatusColor(status: string): string {
 export function capitalize(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+/**
+ * Render a per-building receipt sequence as a 6-digit zero-padded string
+ * to mirror the paper receipt-book convention used by Karachi societies
+ * (e.g. `174` → `"000174"`). Pass `null`/`undefined`/0 → empty string so
+ * callers can fall back to a placeholder.
+ */
+export function formatReceiptNo(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n <= 0) return "";
+  return String(Math.trunc(n)).padStart(6, "0");
+}

@@ -1,9 +1,9 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { DuesPill } from "@/components/resident/dues-pill";
-import { ReceiptButton, type ReceiptData } from "@/components/resident/receipt-button";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 import { AlertTriangle } from "lucide-react";
 
@@ -28,7 +28,7 @@ type PaymentRow = {
   payment_mode: string | null;
   reference_no: string | null;
   category: string | null;
-  receipt_no: string | null;
+  receipt_no: number | null;
   notes: string | null;
   received_by_name: string | null;
   received_by_position: string | null;
@@ -47,7 +47,7 @@ export default async function ResidentDuesPage() {
       </header>
 
       <Suspense fallback={<KpiRowSkeleton count={3} />}>
-        <DuesContent profileId={profile.id} buildingId={profile.building_id} residentName={profile.full_name} />
+        <DuesContent profileId={profile.id} buildingId={profile.building_id} />
       </Suspense>
     </div>
   );
@@ -56,29 +56,21 @@ export default async function ResidentDuesPage() {
 async function DuesContent({
   profileId,
   buildingId,
-  residentName,
 }: {
   profileId: string;
   buildingId: string | null;
-  residentName: string | null;
 }) {
   const supabase = await createClient();
 
-  const [{ data: building }, { data: residentRows }] = await Promise.all([
-    buildingId
-      ? supabase
-          .from("bms_buildings")
-          .select("name, address, city")
-          .eq("id", buildingId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from("bms_residents")
-      .select("flat_id, is_primary, bms_flats(id, flat_number)")
-      .eq("profile_id", profileId)
-      .eq("is_active", true)
-      .order("is_primary", { ascending: false }),
-  ]);
+  // Receipt PDF rendering moved to /resident/payments/[id]/receipt — this
+  // page no longer needs to preload building / resident name.
+  const { data: residentRows } = await supabase
+    .from("bms_residents")
+    .select("flat_id, is_primary, bms_flats(id, flat_number)")
+    .eq("profile_id", profileId)
+    .eq("is_active", true)
+    .order("is_primary", { ascending: false });
+  void buildingId;
 
   type FlatBasic = { id: string; flat_number: string };
   type ResidentRow = {
@@ -204,8 +196,6 @@ async function DuesContent({
             paidByInvoice={paidByInvoice}
             flatNumberById={flatNumberById}
             lastPaymentByInvoice={lastPaymentByInvoice}
-            building={building ?? null}
-            residentName={residentName}
             showFlat={multiFlat}
           />
         )}
@@ -220,8 +210,6 @@ async function DuesContent({
             paidByInvoice={paidByInvoice}
             flatNumberById={flatNumberById}
             lastPaymentByInvoice={lastPaymentByInvoice}
-            building={building ?? null}
-            residentName={residentName}
             showFlat={multiFlat}
           />
         )}
@@ -290,16 +278,12 @@ function DuesTable({
   paidByInvoice,
   flatNumberById,
   lastPaymentByInvoice,
-  building,
-  residentName,
   showFlat,
 }: {
   rows: InvoiceRow[];
   paidByInvoice: Map<string, number>;
   flatNumberById: Map<string, string>;
   lastPaymentByInvoice: Map<string, PaymentRow>;
-  building: { name: string; address: string | null; city: string | null } | null;
-  residentName: string | null;
   showFlat: boolean;
 }) {
   return (
@@ -321,32 +305,6 @@ function DuesTable({
             const paid = paidByInvoice.get(i.id) ?? 0;
             const lp = lastPaymentByInvoice.get(i.id);
             const flatNum = flatNumberById.get(i.flat_id) ?? "—";
-            const invoiceAmount = Number(i.amount);
-            const stillDue = Math.max(0, invoiceAmount - paid);
-            const receipt: ReceiptData = {
-              building_name: building?.name ?? "Building",
-              building_address: building?.address,
-              building_city: building?.city,
-              flat_number: flatNum,
-              resident_name: residentName,
-              receipt_no: lp?.receipt_no ?? null,
-              invoice_number: i.invoice_number,
-              payment_date: lp?.payment_date ?? null,
-              payment_mode: lp?.payment_mode ?? null,
-              reference_no: lp?.reference_no ?? null,
-              category: lp?.category ?? "Maintenance",
-              billing_month: i.billing_month,
-              // Receipt shows the LAST chunk amount paid for this invoice
-              // (or total if no payments). The running breakdown below
-              // (total_paid_so_far + still_due) tells the full story.
-              amount: lp ? Number(lp.amount ?? 0) : 0,
-              notes: lp?.notes ?? i.notes,
-              total_paid_so_far: paid,
-              still_due: stillDue,
-              invoice_amount: invoiceAmount,
-              received_by_name: lp?.received_by_name ?? null,
-              received_by_position: lp?.received_by_position ?? null,
-            };
             return (
               <tr key={i.id} className="border-t border-border hover:bg-secondary/40">
                 <td className="px-4 py-3 font-medium tabular-nums">
@@ -371,7 +329,14 @@ function DuesTable({
                 </td>
                 <td className="px-4 py-3 text-right">
                   {paid > 0 && lp ? (
-                    <ReceiptButton data={receipt} label="Download" />
+                    <Link
+                      href={`/resident/payments/${lp.id}/receipt`}
+                      target="_blank"
+                      rel="noopener"
+                      className="text-primary hover:underline text-xs"
+                    >
+                      Receipt
+                    </Link>
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}

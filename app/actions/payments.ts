@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAYMENT_MODE } from "@/types";
 import { unionPositionLabel, UNION_POSITION_PRIORITY } from "@/lib/union-positions";
+import { formatReceiptNo } from "@/lib/utils";
 
 export type PaymentInput = {
   flat_id: string;
@@ -33,16 +34,14 @@ export type PaymentInput = {
   project_id?: string | null;
 };
 
-// Receipt numbers are per-row (each chunk gets its own). 8-char tail of epoch
-// ms keeps them short while staying unique within a building for ~3 years of
-// volume; we add a 3-char random suffix when we know we're inserting > 1 row
-// in the same call (overflow split) to avoid colliding within the same ms.
-function makeReceiptNo(buildingPrefix: string, salt?: string) {
-  const ts = Date.now().toString().slice(-8);
-  return salt
-    ? `RCPT-${buildingPrefix}-${ts}-${salt}`
-    : `RCPT-${buildingPrefix}-${ts}`;
-}
+// Receipt numbers are now allocated by the `bms_payments_receipt_no_trg`
+// BEFORE INSERT trigger as per-building monotonic integers (see migration
+// 20260523020000_bms_payments_receipt_no.sql). The TS layer no longer
+// generates `receipt_no` — we simply omit it from the insert payload and
+// the trigger fills `(building_id, max(receipt_no)+1)` under a row lock on
+// bms_buildings to serialise concurrent inserts. The old string format
+// ("RCPT-BLD-12345678") survives on every legacy row as `legacy_receipt_no`
+// for audit traceability.
 
 /**
  * Sum all payment chunks against an invoice. Used to decide invoice status
@@ -212,14 +211,6 @@ export async function recordPayment(input: PaymentInput) {
     if (lockErr) throw new Error(lockErr.message);
   }
 
-  const { data: building } = await supabase
-    .from("bms_buildings")
-    .select("name")
-    .eq("id", profile.building_id)
-    .single();
-  const buildingPrefix =
-    (building?.name ?? "B").slice(0, 3).replace(/[^A-Z0-9]/gi, "").toUpperCase() || "BLD";
-
   // Map TS "bank_transfer" → DB "bank" (legacy DB enum). The check constraint
   // in the migration knows only `cash|bank|online|cheque|credit_carryforward`.
   const dbPaymentMode = (() => {
@@ -239,7 +230,7 @@ export async function recordPayment(input: PaymentInput) {
     payment_mode: dbPaymentMode,
     reference_no: input.reference_no?.trim() || null,
     category: input.category || (input.invoice_id ? "maintenance" : "other"),
-    receipt_no: makeReceiptNo(buildingPrefix),
+    // receipt_no is auto-allocated by bms_payments_receipt_no_trg.
     notes: input.notes?.trim() || null,
     recorded_by: user.id,
     received_by_profile_id,
@@ -345,6 +336,11 @@ export async function recordPayment(input: PaymentInput) {
         // are one-shot, never carry forward to a "future project". This
         // branch is unreachable for category='project' but the omission is
         // intentional belt-and-braces.
+        // Format parent receipt_no as 6-digit string for the back-link
+        // (matches the paper-book convention shown on the printed receipt).
+        // `formatReceiptNo` returns "" for null — we gate the note text below
+        // so we don't write "Carry-forward from receipt " with a dangling space.
+        const parentReceiptStr = formatReceiptNo(payment.receipt_no);
         const spillRow = {
           building_id: profile.building_id,
           invoice_id: fi.id,
@@ -354,13 +350,15 @@ export async function recordPayment(input: PaymentInput) {
           payment_date:
             input.payment_date || new Date().toISOString().slice(0, 10),
           payment_mode: PAYMENT_MODE.CREDIT_CARRYFORWARD,
-          reference_no: payment.receipt_no, // back-link to parent chunk
+          // back-link to parent chunk; null when the parent receipt_no
+          // hasn't been allocated yet (should never happen because the
+          // trigger always runs, but the type allows it)
+          reference_no: parentReceiptStr || null,
           category: "maintenance" as const,
-          receipt_no: makeReceiptNo(
-            buildingPrefix,
-            Math.random().toString(36).slice(2, 5).toUpperCase(),
-          ),
-          notes: `Carry-forward from receipt ${payment.receipt_no}`,
+          // receipt_no auto-allocated by trigger
+          notes: parentReceiptStr
+            ? `Carry-forward from receipt ${parentReceiptStr}`
+            : "Carry-forward from earlier payment",
           recorded_by: user.id,
           // Spillover rows inherit the same receiver snapshot from the
           // parent chunk so "who collected what" stays consistent across
@@ -386,6 +384,7 @@ export async function recordPayment(input: PaymentInput) {
     // 3. Anything still left becomes a flat-level credit row to auto-apply
     //    on the next invoice generation.
     if (remainingOverflow > 0) {
+      const parentReceiptStr = formatReceiptNo(payment.receipt_no);
       const { data: credit, error: creditErr } = await supabase
         .from("bms_flat_credits")
         .insert({
@@ -393,7 +392,9 @@ export async function recordPayment(input: PaymentInput) {
           flat_id: input.flat_id,
           amount: remainingOverflow,
           source_payment_id: payment.id,
-          notes: `Surplus from receipt ${payment.receipt_no}`,
+          notes: parentReceiptStr
+            ? `Surplus from receipt ${parentReceiptStr}`
+            : "Surplus from earlier payment",
           created_by: user.id,
         })
         .select("id")

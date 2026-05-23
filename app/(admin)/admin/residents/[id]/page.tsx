@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency, formatCNIC, formatDate, formatPhone } from "@/lib/utils";
+import { formatCurrency, formatCNIC, formatDate, formatPhone, formatReceiptNo } from "@/lib/utils";
 import { ArrowLeft, Car, Pencil, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResidentFormDialog } from "@/components/admin/residents/resident-form-dialog";
@@ -211,7 +211,7 @@ async function PaymentsCard({ id }: { id: string }) {
                   <td className="py-2">
                     {p.payment_date ? formatDate(p.payment_date) : "—"}
                   </td>
-                  <td className="py-2 font-mono text-xs">{p.receipt_no}</td>
+                  <td className="py-2 font-mono text-xs">{formatReceiptNo(p.receipt_no as number | null) || "—"}</td>
                   <td className="py-2">{p.category}</td>
                   <td className="py-2 text-right font-semibold">
                     {formatCurrency(Number(p.amount))}
