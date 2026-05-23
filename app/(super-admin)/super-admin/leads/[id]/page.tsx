@@ -149,7 +149,7 @@ export default async function LeadDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { profile, user } = await requireRole("super_admin");
+  const { profile, user } = await requireRole(["super_admin", "sales"]);
   const { id } = await params;
 
   const supabase = await createClient();

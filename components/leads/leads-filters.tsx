@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -27,22 +26,13 @@ const STATUS_OPTIONS = [
   { value: "dormant", label: "Dormant" },
 ];
 
-const TEMP_OPTIONS = [
-  { value: "all", label: "All", emoji: "" },
-  { value: "hot", label: "Hot", emoji: "🔥" },
-  { value: "warm", label: "Warm", emoji: "🌡️" },
-  { value: "cold", label: "Cold", emoji: "❄️" },
-];
-
 export function LeadsFilters({
   status,
-  temperature,
   overdue,
   dueToday,
   q,
 }: {
   status: string;
-  temperature: string;
   overdue: boolean;
   dueToday: boolean;
   q: string;
@@ -95,30 +85,6 @@ export function LeadsFilters({
               ))}
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="flex items-center gap-1">
-          {TEMP_OPTIONS.map((t) => {
-            const active =
-              (temperature || "all") === t.value ||
-              (t.value === "all" && !temperature);
-            return (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => pushParams({ temperature: t.value })}
-                className={cn(
-                  "h-11 px-3 rounded-md border text-sm font-medium transition",
-                  active
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-secondary/40",
-                )}
-              >
-                {t.emoji && <span className="mr-1">{t.emoji}</span>}
-                {t.label}
-              </button>
-            );
-          })}
         </div>
 
         {/* dueToday & overdue are mutually exclusive — toggling one

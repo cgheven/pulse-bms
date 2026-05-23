@@ -1,19 +1,24 @@
 // Pulse BMS — shared types
 
-export type Role = "super_admin" | "admin" | "union" | "resident";
+export type Role = "super_admin" | "admin" | "union" | "resident" | "sales";
 
 export const ROLE_LABELS: Record<Role, string> = {
   super_admin: "Super Admin",
   admin:       "Admin",
   union:       "Union",
   resident:    "Resident",
+  sales:       "Sales",
 };
 
+// Sales lands directly on the Leads CRM — that is the ONLY surface they
+// have access to. requireRole(...) sends them here whenever they try to
+// hit anything else under /super-admin/*.
 export const ROLE_HOME: Record<Role, string> = {
   super_admin: "/super-admin",
   admin:       "/admin",
   union:       "/union",
   resident:    "/resident",
+  sales:       "/super-admin/leads",
 };
 
 export type Building = {

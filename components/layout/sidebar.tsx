@@ -54,10 +54,21 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "System",
       items: [
-        { href: "/super-admin/buildings", label: "Buildings", icon: Building2 },
-        { href: "/super-admin/admins",    label: "Admins",    icon: Shield },
-        { href: "/super-admin/leads",     label: "Leads",     icon: Target },
-        { href: "/super-admin/audit",     label: "Audit Log", icon: ScrollText },
+        { href: "/super-admin/buildings", label: "Buildings",    icon: Building2 },
+        { href: "/super-admin/admins",    label: "Admins",       icon: Shield },
+        { href: "/super-admin/teams",     label: "Team Members", icon: Users },
+        { href: "/super-admin/leads",     label: "Leads",        icon: Target },
+        { href: "/super-admin/audit",     label: "Audit Log",    icon: ScrollText },
+      ],
+    },
+  ],
+  // Sales-team members see ONLY the Leads CRM. Every other route under
+  // /super-admin/* will redirect them back here via requireRole().
+  sales: [
+    {
+      label: "Sales CRM",
+      items: [
+        { href: "/super-admin/leads", label: "Leads", icon: Target },
       ],
     },
   ],
@@ -186,6 +197,7 @@ const ROLE_HOME: Record<Role, string> = {
   admin:       "/admin",
   union:       "/union",
   resident:    "/resident",
+  sales:       "/super-admin/leads",
 };
 
 interface NavLinkProps {

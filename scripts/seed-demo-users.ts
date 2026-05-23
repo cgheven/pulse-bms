@@ -26,13 +26,18 @@ import { createHash } from "node:crypto";
 const DEMO_BUILDING_ID = "99999999-9999-9999-9999-999999999999";
 const DEMO_PASSWORD = "PulseDemo2026!";
 
-type Role = "admin" | "union" | "resident";
+type Role = "admin" | "union" | "resident" | "sales";
 
 // NOTE: No super_admin demo user. A super_admin without a building_id sees
 // every real building via the existing permissive SELECT policies (which
 // short-circuit on bms_is_super_admin()), so a demo super_admin would leak
 // real customer data on reads. Sales pitches to Union Presidents anyway —
 // admin / union / resident demo accounts cover every relevant view.
+//
+// Sales role IS included: a sales-team user only sees the Leads CRM
+// (RLS-bounded to bms_leads + bms_lead_activities). They have NO access
+// to customer building data, so they can't leak anything — and the demo
+// helps prospects see what a future sales rep view looks like.
 const DEMO_USERS: Array<{
   email: string;
   full_name: string;
@@ -56,6 +61,12 @@ const DEMO_USERS: Array<{
     full_name: "Ali Khan (Resident)",
     role: "resident",
     phone: "03000000004",
+  },
+  {
+    email: "sales@demo.pulse.app",
+    full_name: "Demo Sales Rep",
+    role: "sales",
+    phone: "03000000005",
   },
 ];
 
@@ -134,9 +145,10 @@ async function upsertDemoUser(
     userId = data.user.id;
   }
 
-  // All demo accounts live inside the demo building (super_admin demo dropped
-  // intentionally — see DEMO_USERS comment above).
-  const building_id = DEMO_BUILDING_ID;
+  // Sales-team members are NOT scoped to a building (leads are
+  // pre-customer); everyone else lives inside the demo building so the
+  // role-specific portals have realistic data to show.
+  const building_id = user.role === "sales" ? null : DEMO_BUILDING_ID;
 
   const { error: pErr } = await client.from("bms_profiles").upsert(
     {

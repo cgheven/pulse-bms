@@ -1,11 +1,14 @@
 "use server";
 
-// Sales CRM server actions. Every action requires super_admin role —
-// leads are prospect societies (not yet customers) and live outside the
-// per-building multi-tenant model. RLS on bms_leads + bms_lead_activities
-// enforces the same guard at the DB layer (defence in depth).
+// Sales CRM server actions. Every action requires super_admin OR sales
+// role — leads are prospect societies (not yet customers) and live
+// outside the per-building multi-tenant model. Sales-team members are
+// restricted to this module only; the rest of the app is locked down
+// for them at the route + sidebar layer. RLS on bms_leads +
+// bms_lead_activities enforces the same role check at the DB layer
+// (defence in depth).
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { normalizePkPhone, isValidPkPhone } from "@/lib/pk-phone";
@@ -153,7 +156,8 @@ function validateAndNormalize(input: LeadInput) {
 }
 
 export async function createLead(input: LeadInput) {
-  const { user, profile } = await requireRole("super_admin");
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
 
   const payload = validateAndNormalize(input);
 
@@ -202,7 +206,8 @@ export async function createLead(input: LeadInput) {
 }
 
 export async function updateLead(id: string, input: LeadInput) {
-  const { user, profile } = await requireRole("super_admin");
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
   if (!id) throw new Error("Lead id required.");
 
   const payload = validateAndNormalize(input);
@@ -259,7 +264,8 @@ export async function changeLeadStatus(
   status: LeadStatus,
   note?: string,
 ) {
-  const { user, profile } = await requireRole("super_admin");
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
   if (!id) throw new Error("Lead id required.");
 
   const supabase = await createClient();
@@ -315,7 +321,8 @@ export async function changeLeadStatus(
  * silently bumping the timestamp.
  */
 export async function archiveLead(id: string) {
-  const { user, profile } = await requireRole("super_admin");
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
   if (!id) throw new Error("Lead id required.");
 
   const supabase = await createClient();
@@ -357,7 +364,8 @@ export async function archiveLead(id: string) {
  * and when" stays answerable even though the row is gone.
  */
 export async function deleteLead(id: string) {
-  const { user, profile } = await requireRole("super_admin");
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
   if (!id) throw new Error("Lead id required.");
 
   const supabase = await createClient();
@@ -397,7 +405,8 @@ export async function logActivity(
   note?: string | null,
   meta?: Record<string, unknown>,
 ) {
-  const { user } = await requireRole("super_admin");
+  const { user } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
   if (!lead_id) throw new Error("Lead id required.");
 
   const cleanNote = trimOrNull(note);
@@ -431,7 +440,8 @@ export async function logActivity(
  * so the UI can do a quick "edit notes" without re-validating everything.
  */
 export async function updateLeadNotes(id: string, notes: string | null) {
-  const { user, profile } = await requireRole("super_admin");
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
   if (!id) throw new Error("Lead id required.");
 
   const supabase = await createClient();

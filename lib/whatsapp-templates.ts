@@ -69,6 +69,19 @@ export const WHATSAPP_TEMPLATES = {
       "Welcome aboard!\n" +
       "Pulse BMS",
   },
+  team_credentials: {
+    label: "Send team-member credentials",
+    body:
+      "Hello {{contact_name}},\n\n" +
+      "Welcome to the Pulse BMS sales team. Here are your login credentials:\n\n" +
+      "🌐 Sign in:\n" +
+      "https://bms.musabkhan.me/login\n\n" +
+      "Email: {{login_email}}\n" +
+      "Password: {{login_password}}\n\n" +
+      "You can change the password after first sign-in. Reach out if anything doesn't work.\n\n" +
+      "Best regards,\n" +
+      "Pulse Team",
+  },
   reengage: {
     label: "Re-engage dormant",
     body:
@@ -94,12 +107,20 @@ export const WHATSAPP_TEMPLATE_KEYS = Object.keys(
 export function buildWhatsappLink(
   phone: string,
   templateKey: WhatsappTemplateKey,
-  vars: { contact_name: string; owner_name: string },
+  vars: {
+    contact_name: string;
+    owner_name: string;
+    /** Optional credentials substituted for the team_credentials template. */
+    login_email?: string;
+    login_password?: string;
+  },
 ): string {
   const tpl = WHATSAPP_TEMPLATES[templateKey];
   const text = tpl.body
     .replaceAll("{{contact_name}}", vars.contact_name || "")
-    .replaceAll("{{owner_name}}", vars.owner_name || "");
+    .replaceAll("{{owner_name}}", vars.owner_name || "")
+    .replaceAll("{{login_email}}", vars.login_email || "")
+    .replaceAll("{{login_password}}", vars.login_password || "");
   const cleanPhone = phone.replace(/\D/g, "");
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
 }

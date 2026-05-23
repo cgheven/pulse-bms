@@ -1,9 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import {
-  Flame,
-  Snowflake,
-  Thermometer,
   Target,
   CalendarClock,
   AlertTriangle,
@@ -19,7 +16,6 @@ import { LeadRowDelete } from "@/components/leads/lead-row-delete";
 import { SendDemoButton } from "@/components/leads/send-demo-button";
 import type {
   LeadStatus,
-  LeadTemperature,
   LeadRole,
 } from "@/app/actions/leads";
 
@@ -35,7 +31,6 @@ type LeadRow = {
   contact_role: LeadRole;
   whatsapp_number: string;
   status: LeadStatus;
-  temperature: LeadTemperature;
   next_followup_date: string | null;
   created_at: string;
   updated_at: string;
@@ -72,12 +67,6 @@ const STATUS_PILL: Record<LeadStatus, string> = {
   dormant: "bg-muted text-muted-foreground",
 };
 
-const TEMP_EMOJI: Record<LeadTemperature, string> = {
-  hot: "🔥",
-  warm: "🌡️",
-  cold: "❄️",
-};
-
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -94,12 +83,11 @@ export default async function LeadsPage({
 }: {
   searchParams: SP;
 }) {
-  const { profile, user } = await requireRole("super_admin");
+  const { profile, user } = await requireRole(["super_admin", "sales"]);
   const ownerName = profile.full_name || user.email || "Pulse BMS";
   const sp = await searchParams;
 
   const status = typeof sp.status === "string" ? sp.status : "";
-  const temperature = typeof sp.temperature === "string" ? sp.temperature : "";
   // Two independent date filters. dueToday and overdue are mutually
   // exclusive at the UI layer; if a stale URL has both set, dueToday
   // wins (it's the more specific filter).
@@ -126,7 +114,6 @@ export default async function LeadsPage({
 
       <LeadsFilters
         status={status}
-        temperature={temperature}
         overdue={overdue}
         dueToday={dueToday}
         q={q}
@@ -135,7 +122,6 @@ export default async function LeadsPage({
       <Suspense fallback={<TableSkeleton rows={6} />}>
         <LeadsTable
           status={status}
-          temperature={temperature}
           overdue={overdue}
           dueToday={dueToday}
           q={q}
@@ -275,14 +261,12 @@ function Kpi({
 
 async function LeadsTable({
   status,
-  temperature,
   overdue,
   dueToday,
   q,
   ownerName,
 }: {
   status: string;
-  temperature: string;
   overdue: boolean;
   dueToday: boolean;
   q: string;
@@ -294,16 +278,13 @@ async function LeadsTable({
   let query = supabase
     .from("bms_leads")
     .select(
-      "id, building_name, area, city, flat_count_estimate, contact_name, contact_role, whatsapp_number, status, temperature, next_followup_date, created_at, updated_at",
+      "id, building_name, area, city, flat_count_estimate, contact_name, contact_role, whatsapp_number, status, next_followup_date, created_at, updated_at",
     )
     .is("archived_at", null)
     .order("created_at", { ascending: false });
 
   if (status && status !== "all") {
     query = query.eq("status", status);
-  }
-  if (temperature && temperature !== "all") {
-    query = query.eq("temperature", temperature);
   }
   // dueToday takes precedence over overdue (mutually exclusive — set in
   // the page loader). dueToday = follow-up scheduled for today on an
@@ -387,7 +368,6 @@ async function LeadsTable({
               <th className="px-4 py-3 text-sm font-semibold">Contact</th>
               <th className="px-4 py-3 text-sm font-semibold">WhatsApp</th>
               <th className="px-4 py-3 text-sm font-semibold">Status</th>
-              <th className="px-4 py-3 text-sm font-semibold text-center">Temp</th>
               <th className="px-4 py-3 text-sm font-semibold">Next follow-up</th>
               <th className="px-4 py-3 text-sm font-semibold">Last activity</th>
               <th className="px-4 py-3 text-sm font-semibold w-12 text-right">
@@ -446,9 +426,6 @@ async function LeadsTable({
                       {STATUS_LABEL[l.status]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    <TempIcon t={l.temperature} />
-                  </td>
                   <td className="px-4 py-3">
                     {l.next_followup_date ? (
                       <span
@@ -482,22 +459,3 @@ async function LeadsTable({
   );
 }
 
-function TempIcon({ t }: { t: LeadTemperature }) {
-  const cls =
-    t === "hot"
-      ? "text-destructive"
-      : t === "warm"
-      ? "text-warning"
-      : "text-info";
-  const Icon = t === "hot" ? Flame : t === "warm" ? Thermometer : Snowflake;
-  return (
-    <span
-      className={cn("inline-flex items-center justify-center", cls)}
-      title={t}
-      aria-label={t}
-    >
-      <span className="text-base mr-0.5">{TEMP_EMOJI[t]}</span>
-      <Icon className="w-3.5 h-3.5 hidden" />
-    </span>
-  );
-}
