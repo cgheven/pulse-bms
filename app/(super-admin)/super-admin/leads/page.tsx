@@ -17,6 +17,7 @@ import { SendDemoButton } from "@/components/leads/send-demo-button";
 import type {
   LeadStatus,
   LeadRole,
+  LeadSource,
 } from "@/app/actions/leads";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +32,19 @@ type LeadRow = {
   contact_role: LeadRole;
   whatsapp_number: string;
   status: LeadStatus;
+  source: LeadSource;
   next_followup_date: string | null;
   created_at: string;
   updated_at: string;
+};
+
+const SOURCE_LABEL: Record<LeadSource, string> = {
+  cold_visit: "Cold visit",
+  referral: "Referral",
+  whatsapp_inbound: "WhatsApp",
+  event: "Event",
+  other: "Other",
+  website: "Website",
 };
 
 const ROLE_LABEL: Record<LeadRole, string> = {
@@ -278,7 +289,7 @@ async function LeadsTable({
   let query = supabase
     .from("bms_leads")
     .select(
-      "id, building_name, area, city, flat_count_estimate, contact_name, contact_role, whatsapp_number, status, next_followup_date, created_at, updated_at",
+      "id, building_name, area, city, flat_count_estimate, contact_name, contact_role, whatsapp_number, status, source, next_followup_date, created_at, updated_at",
     )
     .is("archived_at", null)
     .order("created_at", { ascending: false });
@@ -395,6 +406,14 @@ async function LeadsTable({
                     >
                       {l.building_name}
                     </Link>
+                    {l.source === "website" && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
+                          <span className="w-1 h-1 rounded-full bg-primary" />
+                          From Website
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
                     {[l.area, l.city].filter(Boolean).join(", ") || "—"}

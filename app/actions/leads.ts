@@ -30,7 +30,8 @@ export type LeadSource =
   | "referral"
   | "whatsapp_inbound"
   | "event"
-  | "other";
+  | "other"
+  | "website";
 
 export type LeadRole =
   | "president"

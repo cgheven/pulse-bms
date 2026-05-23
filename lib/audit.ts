@@ -1,7 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function writeAuditLog(data: {
-  actor_id: string;
+  /** Null for anonymous / public-form submissions (e.g. /onboarding). */
+  actor_id: string | null;
   actor_email?: string | null;
   actor_role?: string | null;
   building_id?: string | null;

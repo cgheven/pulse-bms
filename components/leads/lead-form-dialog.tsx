@@ -86,6 +86,7 @@ const SOURCES: { value: LeadSource; label: string }[] = [
   { value: "referral", label: "Referral" },
   { value: "whatsapp_inbound", label: "WhatsApp inbound" },
   { value: "event", label: "Event / expo" },
+  { value: "website", label: "Website (onboarding form)" },
   { value: "other", label: "Other" },
 ];
 

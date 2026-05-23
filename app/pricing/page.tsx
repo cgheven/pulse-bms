@@ -4,12 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
-  BarChart3,
   Bell,
   Building2,
+  Calculator,
   Check,
-  FileText,
-  MessageSquare,
+  ShieldCheck,
   Shield,
   Sparkles,
   TrendingUp,
@@ -19,108 +18,222 @@ import {
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Constants
- *   — Base tier prices in PKR/mo (per building).
- *   — Annual save 20% — same toggle pattern as GMS.
- *   — Multi-building tiers: 2 / 5 / 10. Pricing benchmarked so per-building
- *     cost drops as you scale, mirroring the GMS multi-branch pattern.
- *   — Sales WhatsApp: 923332994029 (canonical Pakistani int'l form, no plus).
+ * Pricing model
+ *   ── Three tiers gated purely by flat count. All features are identical
+ *      across tiers — the only thing that changes is how much you pay per
+ *      flat as the society grows (volume discount).
+ *
+ *   ── Starter is a flat monthly fee (≤100 flats). Growth + Pro are
+ *      per-flat to scale revenue with society size.
+ *
+ *   ── 20% off annual prepay across every tier. No setup fee. No card to
+ *      start. Cancel anytime. Friction-removal beats per-rupee optimisation
+ *      for first-time PK SaaS buyers — this is intentional.
+ *
+ *   ── Sales WhatsApp: 923332994029 (Pakistani int'l form, no plus).
  * ───────────────────────────────────────────────────────────────────────── */
 
-const BASE_PRICES = { starter: 5000, growth: 15000, pro: 20000 } as const;
 const ANNUAL_DISCOUNT = 0.2;
 const SALES_WA = "923332994029";
 
-function waLink(text: string) {
-  return `https://wa.me/${SALES_WA}?text=${encodeURIComponent(text)}`;
-}
+type TierKey = "starter" | "growth" | "pro";
 
-const tiers = [
+const TIERS = [
   {
     key: "starter" as const,
     name: "Starter",
-    tagline: "For small buildings ready to ditch WhatsApp groups + Excel.",
+    range: "Up to 100 flats",
+    tagline: "Small buildings = Flat monthly fee.",
+    priceType: "flat" as const,
+    monthly: 15000,
+    perFlat: null as number | null,
     highlight: false,
-    cta: "Get Started",
-    href: "/login",
-    bullets: [
-      "Up to 50 flats",
-      "Maintenance invoices auto-generated every month",
-      "Payment tracking",
-      "Resident portal — dues, payments, notices in one tap",
-      "Defaulter list — see who hasn't paid this month",
-    ],
+    cta: "Talk to Sales",
+    messageTemplate:
+      "Hi, I'm interested in the Starter plan for Pulse. How do I get started?",
   },
   {
     key: "growth" as const,
     name: "Growth",
-    tagline: "Run your building like a startup.",
-    badge: "Most Popular",
+    range: "101 – 400 flats",
+    tagline: "Mid-sized societies = Pay per flat.",
+    priceType: "perFlat" as const,
+    monthly: null as number | null,
+    perFlat: 100,
     highlight: true,
-    cta: "Get Started",
-    href: "/login",
-    bullets: [
-      "Everything in Starter",
-      "Up to 150 flats",
-      "Expenses + staff salaries with monthly P&L",
-      "Transparency page — income, expenses, fund balance",
-      "Notice board for building-wide announcements",
-      "Complaints — residents raise, admin resolves",
-      "Defaulter privacy toggle",
-    ],
+    badge: "Most Popular",
+    cta: "Talk to Sales",
+    messageTemplate:
+      "Hi, I'm interested in the Growth plan for Pulse. My society has {{flats}} flats. How do I get started?",
   },
   {
     key: "pro" as const,
     name: "Pro",
-    tagline: "For large buildings that want the full Pulse experience.",
+    range: "401+ flats",
+    tagline: "Large societies = Best per-flat rate.",
+    priceType: "perFlat" as const,
+    monthly: null as number | null,
+    perFlat: 50,
     highlight: false,
     cta: "Talk to Sales",
-    href: waLink(
-      "Hi, I'm interested in the Pro plan for Pulse. How do I get started?",
-    ),
-    bullets: [
-      "Everything in Growth",
-      "Up to 500 flats",
-      "Union — proposals, voting, elections, meetings",
-      "Featured /find listings for rent/sale",
-      "Services marketplace for residents",
-      "Finance suite — PDF statements + CSV export",
-    ],
+    messageTemplate:
+      "Hi, I'm interested in the Pro plan for Pulse. Our society has {{flats}} flats. How do I get started?",
   },
 ];
 
-const buildingTiers = [
-  {
-    name: "Twin Tower",
-    buildings: 2,
-    price: 32000,
-    perBuilding: 16000,
-    savings: 8000,
-    badge: null,
-    highlight: false,
-    tagline: "Two towers, one society dashboard.",
-  },
-  {
-    name: "Society Block",
-    buildings: 5,
-    price: 70000,
-    perBuilding: 14000,
-    savings: 30000,
-    badge: "Most Popular",
-    highlight: true,
-    tagline: "DHA blocks, Bahria phases — the sweet spot.",
-  },
-  {
-    name: "Multi-Tower Society",
-    buildings: 10,
-    price: 125000,
-    perBuilding: 12500,
-    savings: 75000,
-    badge: "Best Value",
-    highlight: false,
-    tagline: "Mega societies. Lowest cost per tower.",
-  },
+/**
+ * Build the WhatsApp deeplink for a tier given the visitor's flat count.
+ * `{{flats}}` placeholder in the message template is replaced with the
+ * actual number; if no number was entered we fall back to "___" so the
+ * sales rep can ask in chat.
+ */
+function buildTierHref(template: string, flats: number): string {
+  const filled = template.replaceAll(
+    "{{flats}}",
+    flats > 0 ? String(flats) : "___",
+  );
+  return waLink(filled);
+}
+
+/**
+ * Single source of truth for tier-from-flats logic. Used by the
+ * calculator AND the highlight-which-card hint, so the page can't
+ * drift between display tiers and pricing tiers.
+ */
+function tierForFlats(flats: number): TierKey | null {
+  if (flats <= 0) return null;
+  if (flats <= 100) return "starter";
+  if (flats <= 400) return "growth";
+  return "pro";
+}
+
+function monthlyForFlats(flats: number): number {
+  if (flats <= 0) return 0;
+  if (flats <= 100) return 15000;
+  if (flats <= 400) return flats * 100;
+  return flats * 50;
+}
+
+/**
+ * Compact per-card calculator. Used only on Growth + Pro (Starter is a
+ * flat fee so there's nothing to calculate). Controlled — state lives
+ * on the parent card so the Talk-to-Sales CTA can read the same flat
+ * count and inject it into the WhatsApp message.
+ */
+function TierCalculator({
+  perFlat,
+  annual,
+  flatsInput,
+  setFlatsInput,
+}: {
+  perFlat: number;
+  annual: boolean;
+  flatsInput: string;
+  setFlatsInput: (v: string) => void;
+}) {
+  const flats = Math.max(0, Math.floor(Number(flatsInput) || 0));
+  const baseMonthly = flats * perFlat;
+  const monthly = annual ? Math.round(baseMonthly * (1 - ANNUAL_DISCOUNT)) : baseMonthly;
+  const annualBilled = Math.round(baseMonthly * (1 - ANNUAL_DISCOUNT)) * 12;
+
+  return (
+    <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/[0.08] to-primary/[0.02] p-3 space-y-2 shadow-[0_0_20px_-10px] shadow-primary/20">
+      <div className="relative">
+        <Calculator className="w-3.5 h-3.5 text-primary absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          placeholder="Calculate — enter flat count"
+          value={flatsInput}
+          onChange={(e) => setFlatsInput(e.target.value)}
+          className="w-full h-10 pl-9 pr-3 rounded-lg border border-primary/30 bg-card text-foreground text-sm font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder:text-muted-foreground/60 placeholder:font-medium placeholder:text-xs"
+        />
+      </div>
+      {flats > 0 && (
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-md bg-card border border-primary/20 px-2.5 py-1.5">
+            <div className="text-[9px] text-muted-foreground uppercase tracking-wider">
+              Monthly
+            </div>
+            <div className="font-bold tabular-nums text-foreground">
+              {monthly.toLocaleString("en-PK")}
+            </div>
+          </div>
+          <div className="rounded-md bg-primary/10 border border-primary/30 px-2.5 py-1.5">
+            <div className="text-[9px] text-primary uppercase tracking-wider">
+              Annual · save 20%
+            </div>
+            <div className="font-bold tabular-nums text-primary">
+              {annualBilled.toLocaleString("en-PK")}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Starter's mirror to the TierCalculator block. Same vertical footprint
+ * so all three cards stand at equal height in the grid — but instead of
+ * a calculation widget, this sells the *certainty* of a flat fee. The
+ * "no per-flat math" line turns the missing-calculator into a value
+ * prop, not visual emptiness.
+ */
+function FlatFeeNotice() {
+  return (
+    <div className="rounded-xl border-2 border-sidebar-border bg-gradient-to-br from-card to-card/40 p-3 space-y-2 shadow-[0_0_20px_-12px] shadow-foreground/10">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+          <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-primary uppercase tracking-widest leading-none">
+            Flat fee — locked
+          </p>
+          <p className="text-[11px] text-muted-foreground leading-tight mt-1">
+            No per-flat math. No surprises.
+          </p>
+        </div>
+      </div>
+      <div className="rounded-md bg-card/60 border border-sidebar-border px-2.5 py-1.5">
+        <div className="text-[9px] text-muted-foreground uppercase tracking-wider">
+          Same price · 1 — 100 flats
+        </div>
+        <div className="font-bold tabular-nums text-foreground text-sm">
+          PKR 15,000 / mo
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Feature list shown on EVERY tier — all plans get every feature; tiers
+// only differ on flat count + per-flat economics. Ordered top-down by
+// what PK committees ask about first. Each line bundles 2–3 sub-features
+// so the card stays skimmable without losing substance.
+const ALL_FEATURES = [
+  // Row 1 — the emotional hook + the core product
+  "One-tap WhatsApp reminders to defaulters",
+  "Auto maintenance bills + printable receipts",
+  // Row 2 — treasurer credibility + annual big-ticket pain
+  "Accountant-grade reports",
+  "Project funds — lift, paint, generator",
+  // Row 3 — operational pain killers
+  "Utility tracking — K-Electric, SSGC, water, AMCs",
+  "Union governance — proposals, voting, elections",
+  // Row 4 — transparency + secondary income visibility
+  "Resident portal — dues, payments, complaints",
+  "Rent + sale listings — visibility for the union",
+  // Row 5 — community softer value + access infrastructure
+  "Services marketplace — neighbors offer + find help",
+  "Multi-role access — admin, union, owner, resident",
 ];
+
+function waLink(text: string) {
+  return `https://wa.me/${SALES_WA}?text=${encodeURIComponent(text)}`;
+}
 
 const painPoints = [
   {
@@ -161,13 +274,13 @@ const features = [
   },
   {
     icon: Sparkles,
-    title: "Building services marketplace",
-    body: "B-104 fixes laptops. C-210 cooks biryani. Residents publish skills, neighbors WhatsApp them direct. Community without a Facebook group.",
+    title: "Receipts that look like real receipts",
+    body: "A5 printable receipt + PDF for every payment. Receipt numbers run sequentially per building. Auditor-friendly out of the box.",
   },
   {
     icon: Building2,
-    title: "Flats listed where buyers actually look",
-    body: "Public /find page surfaces your building's flats for rent and sale. Leads route to the Union on WhatsApp — Union brokers, owners win.",
+    title: "Bills you stop forgetting about",
+    body: "K-Electric, SSGC, water, internet, lift AMC — track every utility bill with units consumed, due date, and late-payment flagging.",
   },
   {
     icon: Users,
@@ -176,40 +289,126 @@ const features = [
   },
 ];
 
-const faqs = [
-  {
-    q: "Can I import my existing flat and resident data?",
-    a: "Pro tier includes dedicated data migration. On Starter and Growth you can bulk-import flats and residents via CSV.",
-  },
-  {
-    q: "What if I go over the flat limit on my plan?",
-    a: "We'll notify you and give you a grace period before prompting an upgrade. No sudden lockouts.",
-  },
-  {
-    q: "Can I switch plans later?",
-    a: "Upgrade or downgrade any time. Changes apply on your next billing cycle, prorated.",
-  },
-  {
-    q: "Is resident data safe?",
-    a: "Every row is encrypted at rest and in transit. Row-level security in the database means residents only see their own data. Full audit log of every admin action.",
-  },
-  {
-    q: "Do you support multiple buildings in one society?",
-    a: "Yes — see the Multi-Building Plans section. Each plan includes a centralized super-admin dashboard across all towers.",
-  },
-  {
-    q: "Can the public /find marketplace be turned off?",
-    a: "Yes. The Union holds a master switch in settings. Buildings stay private until the committee turns listings on.",
-  },
-];
+type Tier = (typeof TIERS)[number];
+
+/**
+ * One pricing card. Owns its own flat-count state (when applicable) so
+ * the calculator AND the Talk-to-Sales CTA can both read the same
+ * value. The CTA's WhatsApp URL is built dynamically from the input —
+ * if visitor entered 250 flats, the message that opens in WhatsApp
+ * already says "My society has 250 flats" instead of "___ flats".
+ */
+function TierCard({
+  tier,
+  annual,
+  applyDiscount,
+}: {
+  tier: Tier;
+  annual: boolean;
+  applyDiscount: (n: number) => number;
+}) {
+  const [flatsInput, setFlatsInput] = useState("");
+  const flats = Math.max(0, Math.floor(Number(flatsInput) || 0));
+
+  const isFlat = tier.priceType === "flat";
+  const headlineAmount = isFlat
+    ? applyDiscount(tier.monthly ?? 0)
+    : applyDiscount(tier.perFlat ?? 0);
+
+  // Build CTA href live — replaces {{flats}} with whatever the visitor
+  // typed (or "___" placeholder if empty / not applicable).
+  const ctaHref = buildTierHref(tier.messageTemplate, flats);
+
+  return (
+    <div
+      className={`relative h-full rounded-2xl border p-7 flex flex-col gap-6 ${
+        tier.highlight
+          ? "border-primary/40 bg-primary/[0.04] shadow-[0_0_60px_-10px] shadow-primary/20"
+          : "border-sidebar-border bg-card"
+      }`}
+    >
+      {"badge" in tier && tier.badge && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider shadow-lg">
+            {tier.badge}
+          </span>
+        </div>
+      )}
+
+      {/* Header block — tier name, range, price, tagline */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+          {tier.name}
+        </p>
+        <p className="text-[11px] font-medium text-primary mb-3">{tier.range}</p>
+
+        <div className="flex items-end gap-1 mb-1">
+          <span className="text-sm text-muted-foreground">PKR</span>
+          <span className="text-4xl font-bold text-foreground tabular-nums">
+            {headlineAmount.toLocaleString("en-PK")}
+          </span>
+          <span className="text-sm text-muted-foreground pb-1">
+            {isFlat ? "/mo" : "/flat /mo"}
+          </span>
+        </div>
+
+        {annual && (
+          <p className="text-xs text-primary mb-2">20% off — billed annually</p>
+        )}
+
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {tier.tagline}
+        </p>
+      </div>
+
+      {/* Info panel — calculator on Growth/Pro, flat-fee notice on Starter.
+          Both have equivalent vertical footprint so the three cards stand
+          at equal height in the grid. */}
+      {tier.perFlat != null ? (
+        <TierCalculator
+          perFlat={tier.perFlat}
+          annual={annual}
+          flatsInput={flatsInput}
+          setFlatsInput={setFlatsInput}
+        />
+      ) : (
+        <FlatFeeNotice />
+      )}
+
+      {/* Bottom group — CTA + footer hint. mt-auto pins this to the
+          bottom of the card so any uneven content above is absorbed as
+          flex slack, keeping CTAs aligned across all three cards. */}
+      <div className="mt-auto space-y-4">
+        <Link
+          href={ctaHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+            // Highlight CTA on Growth/Pro (per-flat tiers — calculator
+            // drives conversion). Starter keeps outline so the highlighted
+            // Growth card visually anchors.
+            tier.highlight || tier.perFlat != null
+              ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
+              : "border border-sidebar-border hover:border-primary/40 hover:bg-primary/5 text-foreground"
+          }`}
+        >
+          {tier.cta}
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+
+        <p className="text-[11px] text-center text-muted-foreground border-t border-sidebar-border pt-4">
+          All 10 features included →
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
-  const [societyAnnual, setSocietyAnnual] = useState(false);
 
-  function displayPrice(base: number) {
-    const amount = annual ? Math.round(base * (1 - ANNUAL_DISCOUNT)) : base;
-    return amount.toLocaleString("en-PK");
+  function applyDiscount(amount: number) {
+    return annual ? Math.round(amount * (1 - ANNUAL_DISCOUNT)) : amount;
   }
 
   return (
@@ -255,6 +454,10 @@ export default function PricingPage() {
           </span>
         </div>
 
+        <p className="text-muted-foreground text-sm max-w-lg">
+          No setup fees. No card to start. Every feature included in every tier.
+        </p>
+
         <div className="inline-flex items-center gap-1 p-1 rounded-xl border border-sidebar-border bg-card">
           <button
             onClick={() => setAnnual(false)}
@@ -290,241 +493,90 @@ export default function PricingPage() {
 
       {/* Pricing cards */}
       <section className="relative z-10 px-6 pb-16 max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {tiers.map((tier) => (
-            <div
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+          {TIERS.map((tier) => (
+            <TierCard
               key={tier.name}
-              className={`relative rounded-2xl border p-7 flex flex-col gap-6 ${
-                tier.highlight
-                  ? "border-primary/40 bg-primary/[0.04] shadow-[0_0_60px_-10px] shadow-primary/20"
-                  : "border-sidebar-border bg-card"
-              }`}
-            >
-              {tier.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider shadow-lg">
-                    {tier.badge}
-                  </span>
-                </div>
-              )}
-
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">
-                  {tier.name}
-                </p>
-                <div className="flex items-end gap-1 mb-1">
-                  <span className="text-sm text-muted-foreground">PKR</span>
-                  <span className="text-4xl font-bold text-foreground tabular-nums">
-                    {displayPrice(BASE_PRICES[tier.key])}
-                  </span>
-                  <span className="text-sm text-muted-foreground pb-1">/mo</span>
-                </div>
-                {annual && (
-                  <p className="text-xs text-primary mb-2">
-                    Billed as PKR{" "}
-                    {(
-                      Math.round(BASE_PRICES[tier.key] * (1 - ANNUAL_DISCOUNT)) *
-                      12
-                    ).toLocaleString("en-PK")}
-                    /year
-                  </p>
-                )}
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {tier.tagline}
-                </p>
-              </div>
-
-              <Link
-                href={tier.href}
-                target={tier.href.startsWith("http") ? "_blank" : undefined}
-                rel={tier.href.startsWith("http") ? "noopener noreferrer" : undefined}
-                className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                  tier.highlight
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
-                    : "border border-sidebar-border hover:border-primary/40 hover:bg-primary/5 text-foreground"
-                }`}
-              >
-                {tier.cta}
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-
-              <ul className="space-y-3">
-                {tier.bullets.map((bullet) => (
-                  <li key={bullet} className="flex items-start gap-2.5 text-sm">
-                    <Check
-                      className={`w-4 h-4 shrink-0 mt-0.5 ${
-                        tier.highlight ? "text-primary" : "text-muted-foreground"
-                      }`}
-                    />
-                    <span className="text-muted-foreground leading-relaxed">
-                      {bullet}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+              tier={tier}
+              annual={annual}
+              applyDiscount={applyDiscount}
+            />
           ))}
         </div>
+
         <p className="text-center text-xs text-muted-foreground/60 mt-6">
-          Prices in PKR.
+          Prices in PKR. Pay less per flat as your society grows.
         </p>
       </section>
 
-      {/* Multi-building pricing */}
-      <section className="relative z-10 px-6 pb-16 max-w-6xl mx-auto">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/5 mb-4">
-            <span className="text-xs font-semibold text-primary uppercase tracking-widest">
-              Running a society with multiple towers?
-            </span>
-          </div>
-          <h2 className="text-3xl font-serif font-normal tracking-tight mb-2">
-            Multi-Building Plans
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            All Pro features included. The more towers, the less you pay per
-            building.
-          </p>
-          <div className="inline-flex items-center gap-1 p-1 rounded-xl border border-sidebar-border bg-card mt-4">
-            <button
-              onClick={() => setSocietyAnnual(false)}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                !societyAnnual
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setSocietyAnnual(true)}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                societyAnnual
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Annual
-              <span
-                className={`text-xs px-1.5 py-0.5 rounded-md font-bold ${
-                  societyAnnual
-                    ? "bg-primary-foreground/20 text-primary-foreground"
-                    : "bg-primary/10 text-primary"
-                }`}
-              >
-                Save 20%
-              </span>
-            </button>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {buildingTiers.map((tier) => {
-            const monthly = societyAnnual
-              ? Math.round(tier.price * (1 - ANNUAL_DISCOUNT))
-              : tier.price;
-            const perBuilding = societyAnnual
-              ? Math.round(tier.perBuilding * (1 - ANNUAL_DISCOUNT))
-              : tier.perBuilding;
-            return (
-              <div
-                key={tier.buildings}
-                className={`relative rounded-2xl border p-7 flex flex-col gap-6 ${
-                  tier.highlight
-                    ? "border-primary/40 bg-primary/[0.04] shadow-[0_0_60px_-10px] shadow-primary/20"
-                    : "border-sidebar-border bg-card"
-                }`}
-              >
-                {tier.badge && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider shadow-lg">
-                      {tier.badge}
-                    </span>
-                  </div>
-                )}
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">
-                    {tier.name}
-                  </p>
-                  <div className="flex items-end gap-1 mb-1">
-                    <span className="text-sm text-muted-foreground">PKR</span>
-                    <span className="text-4xl font-bold text-foreground tabular-nums">
-                      {monthly.toLocaleString("en-PK")}
-                    </span>
-                    <span className="text-sm text-muted-foreground pb-1">
-                      /mo
-                    </span>
-                  </div>
-                  <p className="text-xs text-primary font-medium mb-1">
-                    PKR {perBuilding.toLocaleString("en-PK")}/building · Save
-                    PKR {tier.savings.toLocaleString("en-PK")} vs individual
-                    Pro plans
-                  </p>
-                  {societyAnnual && (
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Billed as PKR {(monthly * 12).toLocaleString("en-PK")}
-                      /year
-                    </p>
-                  )}
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {tier.tagline}
-                  </p>
-                </div>
-                <a
-                  href={waLink(
-                    `Hi, I'm interested in the ${tier.name} plan for Pulse. How do I get started?`,
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                    tier.highlight
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
-                      : "border border-sidebar-border hover:border-primary/40 hover:bg-primary/5 text-foreground"
-                  }`}
-                >
-                  Talk to Sales <ArrowRight className="w-3.5 h-3.5" />
-                </a>
-                <ul className="space-y-3">
-                  {[
-                    `${tier.buildings} buildings under one society account`,
-                    "Everything in Pro — all features included",
-                    "Up to 500 flats per building",
-                    "Centralized super-admin dashboard across all towers",
-                    "Dedicated onboarding for the society committee",
-                  ].map((bullet) => (
-                    <li
-                      key={bullet}
-                      className="flex items-start gap-2.5 text-sm"
-                    >
-                      <Check
-                        className={`w-4 h-4 shrink-0 mt-0.5 ${
-                          tier.highlight
-                            ? "text-primary"
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                      <span className="text-muted-foreground leading-relaxed">
-                        {bullet}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+      {/* Shared feature manifest — shown ONCE, applies to all tiers.
+          Editorial ledger treatment with serial numbers + hairline rows.
+          Matches Pulse's accountant-grade brand voice (Day Book / Cash
+          Book / receipt vouchers) rather than the generic SaaS check-grid. */}
+      <section className="relative z-10 px-6 pb-16 max-w-5xl mx-auto">
+        <div className="relative rounded-2xl border border-primary/20 bg-card overflow-hidden">
+          {/* Top accent rule — thin amber line, signals editorial doc */}
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+
+          {/* Header — kicker + serif headline + subline */}
+          <div className="px-6 sm:px-10 pt-8 pb-7 border-b border-sidebar-border/80 relative">
+            <div className="flex items-start justify-between gap-6 flex-wrap">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-primary mb-2">
+                  The Standard Stack
+                </p>
+                <h3 className="font-serif text-2xl sm:text-[28px] tracking-tight text-foreground leading-tight">
+                  Every plan ships with every feature.
+                </h3>
+                <p className="text-sm text-muted-foreground mt-2 max-w-md leading-relaxed">
+                  Tier choice is purely about flat count. The product surface
+                  itself is identical from Starter to Pro.
+                </p>
               </div>
-            );
-          })}
-        </div>
-        <p className="text-center text-xs text-muted-foreground/60 mt-6">
-          More than 10 buildings?{" "}
-          <a
-            href={waLink(
-              "Hi, I need a custom multi-building plan for Pulse. We manage more than 10 towers.",
+              <div className="hidden sm:flex flex-col items-end shrink-0">
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground/60">
+                  Manifest
+                </span>
+                <span className="text-3xl font-serif text-primary tabular-nums leading-none mt-1">
+                  10
+                </span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground/60 mt-1">
+                  items
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Ledger rows — mosaic grid with hairline gaps. Each tile
+              renders bg-card; the 1px gap between tiles reveals the
+              underlying border color, drawing crisp 1px dividers
+              between every cell with zero per-tile border logic. */}
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-px bg-sidebar-border/60">
+            {ALL_FEATURES.map((f, i) => (
+              <li
+                key={f}
+                className="group grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 bg-card px-6 sm:px-8 py-4 transition-colors hover:bg-primary/[0.03]"
+              >
+                <span className="font-mono text-[11px] font-semibold text-primary/70 group-hover:text-primary tabular-nums tracking-wider transition-colors">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="text-foreground text-[14px] leading-snug">
+                  {f}
+                </span>
+                <Check className="w-4 h-4 text-primary/50 group-hover:text-primary transition-colors shrink-0" />
+              </li>
+            ))}
+            {/* Filler tile for the empty slot when the list is odd-count.
+                Matches bg-card so the mosaic stays clean on the right edge
+                of the last row. */}
+            {ALL_FEATURES.length % 2 === 1 && (
+              <li aria-hidden className="hidden md:block bg-card" />
             )}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-muted-foreground transition-colors"
-          >
-            Contact us for a custom plan.
-          </a>
-        </p>
+          </ul>
+
+          {/* Bottom accent rule — mirror the top, closes the manifest */}
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+        </div>
       </section>
 
       {/* Pain points */}
@@ -547,9 +599,7 @@ export default function PricingPage() {
               <div className="mt-auto pt-3 border-t border-sidebar-border">
                 <div className="flex items-start gap-2">
                   <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                  <p className="text-xs text-foreground leading-relaxed">
-                    {fix}
-                  </p>
+                  <p className="text-xs text-foreground leading-relaxed">{fix}</p>
                 </div>
               </div>
             </div>
@@ -586,31 +636,6 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="relative z-10 px-6 py-12 max-w-3xl mx-auto">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-serif font-normal tracking-tight mb-2">
-            Common questions
-          </h2>
-          <p className="text-muted-foreground">
-            Anything else — WhatsApp us directly.
-          </p>
-        </div>
-        <div className="space-y-3">
-          {faqs.map(({ q, a }) => (
-            <div
-              key={q}
-              className="rounded-2xl border border-sidebar-border bg-card px-6 py-5"
-            >
-              <p className="font-semibold text-foreground mb-2">{q}</p>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {a}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* Bottom CTA */}
       <section className="relative z-10 px-6 py-16 max-w-4xl mx-auto text-center">
         <div className="rounded-3xl border border-primary/20 bg-primary/[0.04] p-12">
@@ -624,15 +649,15 @@ export default function PricingPage() {
           </h2>
           <p className="text-muted-foreground max-w-lg mx-auto mb-8 leading-relaxed">
             Maintenance dues go uncollected. Expenses go untracked. Residents
-            assume the worst about the committee. Most buildings fix all three
-            in their first week on Pulse.
+            assume the worst about the committee. Most buildings fix all three in
+            their first week on Pulse.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
-              href="/login"
+              href="/onboarding"
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all duration-200 shadow-lg shadow-primary/20 text-sm"
             >
-              Apply for Trial
+              Apply for Onboarding
               <ArrowRight className="w-4 h-4" />
             </Link>
             <a
@@ -643,7 +668,7 @@ export default function PricingPage() {
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-6 py-3 rounded-xl border border-sidebar-border hover:border-primary/40 text-foreground font-semibold transition-colors text-sm"
             >
-              Talk to sales
+              Talk to Sales
             </a>
           </div>
         </div>

@@ -111,6 +111,7 @@ const SOURCE_LABEL: Record<LeadSource, string> = {
   whatsapp_inbound: "WhatsApp inbound",
   event: "Event / expo",
   other: "Other",
+  website: "Website (onboarding form)",
 };
 
 const TEMP_EMOJI: Record<LeadTemperature, string> = {
