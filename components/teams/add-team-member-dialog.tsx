@@ -79,6 +79,13 @@ export function AddTeamMemberDialog({
   const [copied, setCopied] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [justCreated, setJustCreated] = useState<JustCreated | null>(null);
+  // Wall-clock time the success state mounted. Any button click in the
+  // first 350ms after mount is treated as a phantom event leaking from
+  // the form's submit-click and ignored. Without this guard, the click
+  // event that submitted the form bleeds onto whichever button now
+  // occupies the same DialogFooter slot (Done or Send) and triggers a
+  // ghost action (instant close OR ghost wa.me popup).
+  const [successMountedAt, setSuccessMountedAt] = useState(0);
 
   // Auto-generate password the moment the dialog opens for a fresh
   // create. Salesperson can still click "Generate" again or edit by
@@ -98,6 +105,14 @@ export function AddTeamMemberDialog({
     setCopied(false);
     setRole("sales");
     setJustCreated(null);
+    setSuccessMountedAt(0);
+  }
+
+  // True only after the success state has been visible long enough that
+  // any leftover click from the form's submit-click can no longer
+  // phantom-fire onto our buttons.
+  function isClickReady() {
+    return successMountedAt > 0 && Date.now() - successMountedAt > 350;
   }
 
   async function copyCredentials() {
@@ -175,14 +190,23 @@ export function AddTeamMemberDialog({
         });
         toast({ title: "Team member created" });
         router.refresh();
-        setJustCreated({
-          id: created.id,
-          full_name: created.full_name,
-          email: created.email,
-          phone: created.phone,
-          password: passwordSnapshot,
-          synthesized_email: created.synthesized_email,
-        });
+        // Defer the dialog content swap so the form's submit click event
+        // fully unwinds before the success-state buttons mount in the
+        // same DOM slot. Without this delay, Radix can carry the
+        // browser's mouseup/keyup event onto the new "Send via
+        // WhatsApp" button — which fires window.open() without the
+        // user's intent, triggering popup blockers.
+        setTimeout(() => {
+          setJustCreated({
+            id: created.id,
+            full_name: created.full_name,
+            email: created.email,
+            phone: created.phone,
+            password: passwordSnapshot,
+            synthesized_email: created.synthesized_email,
+          });
+          setSuccessMountedAt(Date.now());
+        }, 120);
       } catch (err) {
         toast({
           title: "Could not create team member",
@@ -197,7 +221,17 @@ export function AddTeamMemberDialog({
   if (justCreated) {
     return (
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+          className="sm:max-w-md"
+          // Lock the success dialog from auto-closing. The phantom
+          // mouseup leaking from the form's submit click was hitting
+          // the overlay and Radix was treating it as an outside-click
+          // → close. We force the user to dismiss via the X button in
+          // the corner, the Done button, or Send via WhatsApp.
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-6 h-6 text-success" />
@@ -246,7 +280,11 @@ export function AddTeamMemberDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleOpenChange(false)}
+              onClick={() => {
+                // Drop phantom click leaking from form submit.
+                if (!isClickReady()) return;
+                handleOpenChange(false);
+              }}
               className="h-11"
             >
               Done
@@ -254,6 +292,8 @@ export function AddTeamMemberDialog({
             <Button
               type="button"
               onClick={() => {
+                // Drop phantom click leaking from form submit.
+                if (!isClickReady()) return;
                 sendCredentialsOnWhatsapp();
                 handleOpenChange(false);
               }}

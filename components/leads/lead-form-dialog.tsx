@@ -30,7 +30,6 @@ import {
   logActivity,
   type LeadInput,
   type LeadStatus,
-  type LeadTemperature,
   type LeadSource,
   type LeadRole,
 } from "@/app/actions/leads";
@@ -54,7 +53,6 @@ export type LeadFormValues = {
   email: string;
   source: LeadSource;
   status: LeadStatus;
-  temperature: LeadTemperature;
   next_followup_date: string;
   quoted_amount: string;
   notes: string;
@@ -71,7 +69,6 @@ const DEFAULTS: LeadFormValues = {
   email: "",
   source: "cold_visit",
   status: "new",
-  temperature: "warm",
   next_followup_date: "",
   quoted_amount: "",
   notes: "",
@@ -102,12 +99,6 @@ const ROLES: { value: LeadRole; label: string }[] = [
   { value: "member", label: "Committee member" },
   { value: "admin", label: "Admin / Manager" },
   { value: "other", label: "Other" },
-];
-
-const TEMPS: { value: LeadTemperature; label: string; emoji: string }[] = [
-  { value: "hot", label: "Hot", emoji: "🔥" },
-  { value: "warm", label: "Warm", emoji: "🌡️" },
-  { value: "cold", label: "Cold", emoji: "❄️" },
 ];
 
 type JustCreated = {
@@ -146,6 +137,14 @@ export function LeadFormDialog({
   // After a successful CREATE we flip into the post-create success state
   // so the user can send demo credentials in one click before closing.
   const [justCreated, setJustCreated] = useState<JustCreated | null>(null);
+  // Wall-clock time the success state mounted. Any button click in the
+  // first 350ms is treated as a phantom event leaking from the form's
+  // submit-click (same DOM slot reuse) and ignored.
+  const [successMountedAt, setSuccessMountedAt] = useState(0);
+
+  function isClickReady() {
+    return successMountedAt > 0 && Date.now() - successMountedAt > 350;
+  }
 
   const set = <K extends keyof LeadFormValues>(k: K, v: LeadFormValues[K]) =>
     setValues((prev) => ({ ...prev, [k]: v }));
@@ -179,7 +178,11 @@ export function LeadFormDialog({
       email: values.email || null,
       source: values.source,
       status: values.status,
-      temperature: values.temperature,
+      // Temperature was removed from the form UI — every new/edited
+      // lead gets 'warm' so the action contract stays unchanged. If
+      // we later want to drop the column entirely, change LeadInput
+      // and the DB column in lockstep.
+      temperature: "warm",
       next_followup_date: values.next_followup_date || null,
       quoted_amount:
         values.quoted_amount === "" ? null : Number(values.quoted_amount),
@@ -192,16 +195,21 @@ export function LeadFormDialog({
           const created = await createLead(payload);
           toast({ title: "Lead added" });
           router.refresh();
-          // Switch to the post-create success state so the user can
-          // ship demo credentials right away. Do NOT close the dialog;
-          // the user closes via the success-state buttons.
-          setJustCreated({
-            id: created.id,
-            building_name: created.building_name,
-            contact_name: created.contact_name,
-            whatsapp_number: created.whatsapp_number,
-          });
-          setValues({ ...DEFAULTS });
+          // Defer the success-state swap so the form's submit-click
+          // event fully unwinds before the new buttons appear in the
+          // same DialogFooter slot. Without the delay, the click
+          // leaks onto the new buttons OR the dialog overlay and
+          // ghost-closes the dialog (or ghost-fires window.open).
+          setTimeout(() => {
+            setJustCreated({
+              id: created.id,
+              building_name: created.building_name,
+              contact_name: created.contact_name,
+              whatsapp_number: created.whatsapp_number,
+            });
+            setSuccessMountedAt(Date.now());
+            setValues({ ...DEFAULTS });
+          }, 120);
         } else if (initial?.id) {
           await updateLead(initial.id, payload);
           toast({ title: "Lead updated" });
@@ -224,7 +232,10 @@ export function LeadFormDialog({
     onOpenChange(o);
     if (!o) {
       // small delay so the close animation doesn't show the form flash
-      setTimeout(() => setJustCreated(null), 200);
+      setTimeout(() => {
+        setJustCreated(null);
+        setSuccessMountedAt(0);
+      }, 200);
     }
   }
 
@@ -266,7 +277,15 @@ export function LeadFormDialog({
   if (justCreated) {
     return (
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+          className="sm:max-w-md"
+          // Lock the success dialog from auto-closing on the phantom
+          // mouseup leaking from the form's submit click. User must
+          // dismiss via X, Skip, or Send buttons.
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-6 h-6 text-success" />
@@ -293,7 +312,10 @@ export function LeadFormDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleOpenChange(false)}
+              onClick={() => {
+                if (!isClickReady()) return;
+                handleOpenChange(false);
+              }}
               className="h-11"
             >
               Skip for now
@@ -301,6 +323,7 @@ export function LeadFormDialog({
             <Button
               type="button"
               onClick={() => {
+                if (!isClickReady()) return;
                 sendDemoCredentials();
                 handleOpenChange(false);
               }}
@@ -492,27 +515,6 @@ export function LeadFormDialog({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-base">Temperature</Label>
-              <div className="flex gap-2">
-                {TEMPS.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => set("temperature", t.value)}
-                    className={cn(
-                      "flex-1 h-12 px-4 rounded-md border-2 text-base font-medium transition",
-                      values.temperature === t.value
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-input bg-background text-muted-foreground hover:bg-secondary/40",
-                    )}
-                  >
-                    <span className="mr-2">{t.emoji}</span>
-                    {t.label}
-                  </button>
-                ))}
               </div>
             </div>
             <div
