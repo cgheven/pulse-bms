@@ -30,6 +30,7 @@ import {
   HandCoins,
   FileSpreadsheet,
   Plug,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -55,6 +56,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { href: "/super-admin/buildings", label: "Buildings", icon: Building2 },
         { href: "/super-admin/admins",    label: "Admins",    icon: Shield },
+        { href: "/super-admin/leads",     label: "Leads",     icon: Target },
         { href: "/super-admin/audit",     label: "Audit Log", icon: ScrollText },
       ],
     },

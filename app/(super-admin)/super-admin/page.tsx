@@ -1,9 +1,19 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Building2, Users, Wallet, AlertTriangle, FileText, Receipt } from "lucide-react";
+import {
+  Building2,
+  Users,
+  Wallet,
+  AlertTriangle,
+  FileText,
+  Receipt,
+  Target,
+  CalendarClock,
+  Trophy,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
-import { formatLakh, formatDate } from "@/lib/utils";
+import { formatLakh, formatDate, cn } from "@/lib/utils";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 
 
@@ -47,10 +57,156 @@ export default async function SuperAdminDashboard() {
         <SuperAdminKpis />
       </Suspense>
 
+      <Suspense fallback={<KpiRowSkeleton count={4} />}>
+        <SalesActivityCard />
+      </Suspense>
+
       <Suspense fallback={<TableSkeleton rows={6} />}>
         <RecentAudit />
       </Suspense>
     </div>
+  );
+}
+
+async function SalesActivityCard() {
+  const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = new Date(
+    new Date().getFullYear(),
+    new Date().getMonth(),
+    1,
+  ).toISOString();
+
+  const [activeRes, dueTodayRes, overdueRes, wonMonthRes] = await Promise.all([
+    supabase
+      .from("bms_leads")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
+      .not("status", "in", "(won,lost,dormant)"),
+    supabase
+      .from("bms_leads")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
+      .eq("next_followup_date", today)
+      .not("status", "in", "(won,lost)"),
+    supabase
+      .from("bms_leads")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
+      .lt("next_followup_date", today)
+      .not("next_followup_date", "is", null)
+      .not("status", "in", "(won,lost)"),
+    // "Won this month": filter on won_at (transition timestamp) — not
+    // updated_at, which is bumped by any edit and double-counts deals.
+    supabase
+      .from("bms_leads")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "won")
+      .not("won_at", "is", null)
+      .gte("won_at", monthStart),
+  ]);
+
+  const active = activeRes.count ?? 0;
+  const dueToday = dueTodayRes.count ?? 0;
+  const overdueCount = overdueRes.count ?? 0;
+  const wonMonth = wonMonthRes.count ?? 0;
+
+  return (
+    <div className="card-soft animate-fade-up animate-delay-150">
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+        <h2 className="text-base font-semibold tracking-tight">
+          Sales activity
+        </h2>
+        <Link
+          href="/super-admin/leads"
+          className="text-primary text-sm font-medium hover:underline"
+        >
+          Open Leads CRM →
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <SalesTile
+          label="Active leads"
+          value={active}
+          icon={Target}
+          href="/super-admin/leads"
+        />
+        <SalesTile
+          label="Due today"
+          value={dueToday}
+          icon={CalendarClock}
+          href="/super-admin/leads"
+          warn={dueToday > 0}
+        />
+        <SalesTile
+          label="Overdue"
+          value={overdueCount}
+          icon={AlertTriangle}
+          href="/super-admin/leads?overdue=1"
+          danger={overdueCount > 0}
+        />
+        <SalesTile
+          label="Won this month"
+          value={wonMonth}
+          icon={Trophy}
+          href="/super-admin/leads?status=won"
+          success={wonMonth > 0}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SalesTile({
+  label,
+  value,
+  icon: Icon,
+  href,
+  danger,
+  warn,
+  success,
+}: {
+  label: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  danger?: boolean;
+  warn?: boolean;
+  success?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="card-hover rounded-lg border border-border bg-card p-4 block"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+        <div
+          className={cn(
+            "flex w-8 h-8 items-center justify-center rounded-md shrink-0",
+            danger
+              ? "bg-destructive/15 text-destructive"
+              : warn
+              ? "bg-warning/15 text-warning"
+              : success
+              ? "bg-success/15 text-success"
+              : "bg-primary/10 text-primary",
+          )}
+        >
+          <Icon className="w-4 h-4" />
+        </div>
+      </div>
+      <div
+        className={cn(
+          "mt-1.5 text-3xl font-semibold tracking-tight tabular-nums",
+          danger ? "text-destructive" : "text-foreground",
+        )}
+      >
+        {value}
+      </div>
+    </Link>
   );
 }
 
