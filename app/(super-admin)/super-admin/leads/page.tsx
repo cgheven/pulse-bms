@@ -8,11 +8,13 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
-import { formatRelative, formatDate, cn } from "@/lib/utils";
+import { formatRelative, cn } from "@/lib/utils";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 import { LeadsFilters } from "@/components/leads/leads-filters";
 import { AddLeadButton } from "@/components/leads/lead-form-dialog";
 import { LeadRowDelete } from "@/components/leads/lead-row-delete";
+import { LeadRowFollowup } from "@/components/leads/lead-row-followup";
+import { LeadRowInterest } from "@/components/leads/lead-row-interest";
 import { SendDemoButton } from "@/components/leads/send-demo-button";
 import type {
   LeadStatus,
@@ -39,30 +41,6 @@ type LeadRow = {
   next_followup_date: string | null;
   created_at: string;
   updated_at: string;
-};
-
-// Interest pill — sales rep's read on conversion likelihood after
-// contacting the lead. Mirrors DB `temperature` (hot/warm/cold) with
-// user-facing High/Medium/Low labels.
-const INTEREST_PILL: Record<
-  LeadTemperature,
-  { label: string; emoji: string; cls: string }
-> = {
-  hot: {
-    label: "High",
-    emoji: "🔥",
-    cls: "bg-destructive/15 text-destructive border border-destructive/30",
-  },
-  warm: {
-    label: "Medium",
-    emoji: "🌡️",
-    cls: "bg-warning/15 text-warning border border-warning/30",
-  },
-  cold: {
-    label: "Low",
-    emoji: "❄️",
-    cls: "bg-info/15 text-info border border-info/30",
-  },
 };
 
 const SOURCE_LABEL: Record<LeadSource, string> = {
@@ -134,7 +112,7 @@ export default async function LeadsPage({
   const q = typeof sp.q === "string" ? sp.q : "";
 
   return (
-    <div className="space-y-5 animate-fade-up">
+    <div className="space-y-5 animate-fade-up min-w-0 w-full">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1>Leads</h1>
@@ -395,9 +373,9 @@ async function LeadsTable({
   }
 
   return (
-    <div className="card-soft p-0 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full">
+    <div className="card-soft p-0 overflow-hidden w-full max-w-full">
+      <div className="overflow-x-auto w-full">
+        <table className="w-full min-w-[820px]">
           <thead className="bg-secondary text-left">
             <tr>
               <th className="px-4 py-3 text-sm font-semibold">Building</th>
@@ -474,35 +452,14 @@ async function LeadsTable({
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {(() => {
-                      const p = INTEREST_PILL[l.temperature];
-                      return (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-semibold",
-                            p.cls,
-                          )}
-                          title={`Interest: ${p.label}`}
-                        >
-                          <span aria-hidden>{p.emoji}</span>
-                          {p.label}
-                        </span>
-                      );
-                    })()}
+                    <LeadRowInterest leadId={l.id} value={l.temperature} />
                   </td>
                   <td className="px-4 py-3">
-                    {l.next_followup_date ? (
-                      <span
-                        className={cn(
-                          "text-sm tabular-nums",
-                          isOverdue && "text-destructive font-semibold",
-                        )}
-                      >
-                        {formatDate(l.next_followup_date)}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    <LeadRowFollowup
+                      leadId={l.id}
+                      value={l.next_followup_date}
+                      isOverdue={isOverdue}
+                    />
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
                     {lastAt ? formatRelative(lastAt) : "—"}

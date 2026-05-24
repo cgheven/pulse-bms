@@ -306,6 +306,90 @@ export async function updateLead(id: string, input: LeadInput) {
   return row;
 }
 
+/**
+ * Inline interest-level update from the Leads list. Patches just the
+ * `temperature` column so the sales rep can flip High / Medium / Low
+ * straight from the row without opening the detail page.
+ */
+export async function updateLeadInterest(
+  id: string,
+  interest: LeadTemperature,
+) {
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
+  if (!id) throw new Error("Lead id required.");
+
+  const supabase = await createClient();
+  // Archive guard — archived leads stay read-only.
+  await loadActiveLead(supabase, id);
+
+  const { error } = await supabase
+    .from("bms_leads")
+    .update({ temperature: interest })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    action: "lead.update_interest",
+    entity: "lead",
+    entity_id: id,
+    meta: { temperature: interest },
+  });
+
+  revalidatePath(LEADS_PATH);
+  revalidatePath(`${LEADS_PATH}/${id}`);
+}
+
+/**
+ * Inline follow-up date edit from the Leads list. Patches the
+ * `next_followup_date` column directly so the sales rep can re-schedule
+ * straight from the row without opening the detail page.
+ *
+ * NOTE: This column is also derived from the latest `followup_due_date`
+ * across the lead's activities (see `logFollowup`). A manual edit here
+ * lives until the next activity-driven sync rewrites it — which is the
+ * intended behaviour ("change of plans" vs "I just contacted them").
+ */
+export async function setLeadNextFollowup(
+  id: string,
+  date: string | null,
+) {
+  const { user, profile } = await requireRole(["super_admin", "sales"]);
+  await requireNotDemo();
+  if (!id) throw new Error("Lead id required.");
+
+  const clean =
+    date && date.trim() && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())
+      ? date.trim()
+      : null;
+
+  const supabase = await createClient();
+  await loadActiveLead(supabase, id);
+
+  const { error } = await supabase
+    .from("bms_leads")
+    .update({ next_followup_date: clean })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    action: "lead.update_next_followup",
+    entity: "lead",
+    entity_id: id,
+    meta: { next_followup_date: clean },
+  });
+
+  revalidatePath(LEADS_PATH);
+  revalidatePath(`${LEADS_PATH}/${id}`);
+  revalidatePath("/super-admin");
+}
+
 export async function changeLeadStatus(
   id: string,
   status: LeadStatus,
