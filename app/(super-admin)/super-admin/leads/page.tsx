@@ -18,6 +18,7 @@ import type {
   LeadStatus,
   LeadRole,
   LeadSource,
+  LeadTemperature,
 } from "@/app/actions/leads";
 
 export const dynamic = "force-dynamic";
@@ -33,9 +34,35 @@ type LeadRow = {
   whatsapp_number: string;
   status: LeadStatus;
   source: LeadSource;
+  /** DB column `temperature` — surfaced to user as Interest level. */
+  temperature: LeadTemperature;
   next_followup_date: string | null;
   created_at: string;
   updated_at: string;
+};
+
+// Interest pill — sales rep's read on conversion likelihood after
+// contacting the lead. Mirrors DB `temperature` (hot/warm/cold) with
+// user-facing High/Medium/Low labels.
+const INTEREST_PILL: Record<
+  LeadTemperature,
+  { label: string; emoji: string; cls: string }
+> = {
+  hot: {
+    label: "High",
+    emoji: "🔥",
+    cls: "bg-destructive/15 text-destructive border border-destructive/30",
+  },
+  warm: {
+    label: "Medium",
+    emoji: "🌡️",
+    cls: "bg-warning/15 text-warning border border-warning/30",
+  },
+  cold: {
+    label: "Low",
+    emoji: "❄️",
+    cls: "bg-info/15 text-info border border-info/30",
+  },
 };
 
 const SOURCE_LABEL: Record<LeadSource, string> = {
@@ -289,7 +316,7 @@ async function LeadsTable({
   let query = supabase
     .from("bms_leads")
     .select(
-      "id, building_name, area, city, flat_count_estimate, contact_name, contact_role, whatsapp_number, status, source, next_followup_date, created_at, updated_at",
+      "id, building_name, area, city, flat_count_estimate, contact_name, contact_role, whatsapp_number, status, source, temperature, next_followup_date, created_at, updated_at",
     )
     .is("archived_at", null)
     .order("created_at", { ascending: false });
@@ -379,6 +406,7 @@ async function LeadsTable({
               <th className="px-4 py-3 text-sm font-semibold">Contact</th>
               <th className="px-4 py-3 text-sm font-semibold">WhatsApp</th>
               <th className="px-4 py-3 text-sm font-semibold">Status</th>
+              <th className="px-4 py-3 text-sm font-semibold">Interest</th>
               <th className="px-4 py-3 text-sm font-semibold">Next follow-up</th>
               <th className="px-4 py-3 text-sm font-semibold">Last activity</th>
               <th className="px-4 py-3 text-sm font-semibold w-12 text-right">
@@ -444,6 +472,23 @@ async function LeadsTable({
                     >
                       {STATUS_LABEL[l.status]}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const p = INTEREST_PILL[l.temperature];
+                      return (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-semibold",
+                            p.cls,
+                          )}
+                          title={`Interest: ${p.label}`}
+                        >
+                          <span aria-hidden>{p.emoji}</span>
+                          {p.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     {l.next_followup_date ? (

@@ -10,6 +10,7 @@ import {
   Calendar,
   Coins,
   Clock,
+  Flame,
   StickyNote,
   PhoneCall,
   MessageCircle,
@@ -255,7 +256,8 @@ export default async function LeadDetailPage({
     email: l.email ?? "",
     source: l.source,
     status: l.status,
-    temperature: l.temperature,
+    // Form surfaces the DB `temperature` column as "Interest level".
+    interest: l.temperature,
     quoted_amount: l.quoted_amount == null ? "" : String(l.quoted_amount),
     maintenance_per_flat:
       l.maintenance_per_flat == null ? "" : String(l.maintenance_per_flat),
@@ -438,9 +440,23 @@ function PipelineCard({
           </span>
         </Row>
       )}
+      <Row icon={Flame}>
+        <span>
+          Interest:{" "}
+          <span className="font-medium">
+            {INTEREST_LABEL[lead.temperature]}
+          </span>
+        </span>
+      </Row>
     </div>
   );
 }
+
+const INTEREST_LABEL: Record<LeadTemperature, string> = {
+  hot: "🔥 High — likely to close",
+  warm: "🌡️ Medium — needs nurture",
+  cold: "❄️ Low — not promising",
+};
 
 function Row({
   icon: Icon,

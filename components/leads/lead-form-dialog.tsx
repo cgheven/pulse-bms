@@ -32,11 +32,13 @@ import {
   type LeadStatus,
   type LeadSource,
   type LeadRole,
+  type LeadTemperature,
 } from "@/app/actions/leads";
 import {
   WHATSAPP_TEMPLATES,
   buildWhatsappLink,
 } from "@/lib/whatsapp-templates";
+import { cn } from "@/lib/utils";
 
 type Mode = "create" | "edit";
 
@@ -54,6 +56,10 @@ export type LeadFormValues = {
   status: LeadStatus;
   quoted_amount: string;
   maintenance_per_flat: string;
+  // Stored on the DB as `temperature` (hot/warm/cold) — surfaced to the
+  // user as "Interest level" (High/Medium/Low) so the post-contact
+  // conversion-likelihood signal reads naturally to sales reps.
+  interest: LeadTemperature;
   notes: string;
 };
 
@@ -70,8 +76,20 @@ const DEFAULTS: LeadFormValues = {
   status: "new",
   quoted_amount: "",
   maintenance_per_flat: "",
+  interest: "warm",
   notes: "",
 };
+
+const INTEREST_OPTIONS: {
+  value: LeadTemperature;
+  label: string;
+  emoji: string;
+  hint: string;
+}[] = [
+  { value: "hot", label: "High", emoji: "🔥", hint: "Likely to close" },
+  { value: "warm", label: "Medium", emoji: "🌡️", hint: "Needs nurture" },
+  { value: "cold", label: "Low", emoji: "❄️", hint: "Not promising" },
+];
 
 const STATUSES: { value: LeadStatus; label: string }[] = [
   { value: "new", label: "New" },
@@ -178,11 +196,10 @@ export function LeadFormDialog({
       email: values.email || null,
       source: values.source,
       status: values.status,
-      // Temperature was removed from the form UI — every new/edited
-      // lead gets 'warm' so the action contract stays unchanged. If
-      // we later want to drop the column entirely, change LeadInput
-      // and the DB column in lockstep.
-      temperature: "warm",
+      // `temperature` (DB enum: hot/warm/cold) is surfaced to users
+      // as "Interest level" (High/Medium/Low). Map the form field
+      // straight through.
+      temperature: values.interest,
       // next_followup_date is intentionally NOT sent — that column is
       // derived from bms_lead_activities.followup_due_date via the
       // logFollowup action. The Edit Lead dialog no longer surfaces a
@@ -545,6 +562,44 @@ export function LeadFormDialog({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* Interest level — sales rep's post-contact read on how
+                likely this lead is to convert. Stored as `temperature`
+                on the DB (hot/warm/cold). */}
+            <div className="space-y-2">
+              <Label className="text-base">Interest level</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {INTEREST_OPTIONS.map((opt) => {
+                  const active = values.interest === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => set("interest", opt.value)}
+                      aria-pressed={active}
+                      className={cn(
+                        "rounded-lg border-2 px-3 py-2 text-left transition",
+                        active
+                          ? "border-primary bg-primary/[0.06]"
+                          : "border-sidebar-border hover:border-primary/40",
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base leading-none">
+                          {opt.emoji}
+                        </span>
+                        <span className="text-sm font-semibold">
+                          {opt.label}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        {opt.hint}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
             {/*
