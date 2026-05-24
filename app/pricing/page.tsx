@@ -114,6 +114,7 @@ function monthlyForFlats(flats: number): number {
   return flats * 50;
 }
 
+
 /**
  * Compact per-card calculator. Used only on Growth + Pro (Starter is a
  * flat fee so there's nothing to calculate). Controlled — state lives
@@ -135,6 +136,11 @@ function TierCalculator({
   const baseMonthly = flats * perFlat;
   const monthly = annual ? Math.round(baseMonthly * (1 - ANNUAL_DISCOUNT)) : baseMonthly;
   const annualBilled = Math.round(baseMonthly * (1 - ANNUAL_DISCOUNT)) * 12;
+  // Money saved per year if visitor picks annual prepay vs monthly:
+  // (full-rate monthly × 12) − (discounted monthly × 12). Computed
+  // from baseMonthly (always the undiscounted figure) so the saving
+  // number stays stable regardless of which toggle the visitor is on.
+  const annualSavings = baseMonthly * 12 - annualBilled;
 
   return (
     <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/[0.08] to-primary/[0.02] p-3 space-y-2 shadow-[0_0_20px_-10px] shadow-primary/20">
@@ -151,24 +157,36 @@ function TierCalculator({
         />
       </div>
       {flats > 0 && (
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-md bg-card border border-primary/20 px-2.5 py-1.5">
-            <div className="text-[9px] text-muted-foreground uppercase tracking-wider">
-              Monthly
+        <>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md bg-card border border-primary/20 px-2.5 py-1.5">
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">
+                Monthly
+              </div>
+              <div className="font-bold tabular-nums text-foreground">
+                {monthly.toLocaleString("en-PK")}
+              </div>
             </div>
-            <div className="font-bold tabular-nums text-foreground">
-              {monthly.toLocaleString("en-PK")}
+            <div className="rounded-md bg-primary/10 border border-primary/30 px-2.5 py-1.5">
+              <div className="text-[9px] text-primary uppercase tracking-wider">
+                Annual · save 20%
+              </div>
+              <div className="font-bold tabular-nums text-primary">
+                {annualBilled.toLocaleString("en-PK")}
+              </div>
             </div>
           </div>
-          <div className="rounded-md bg-primary/10 border border-primary/30 px-2.5 py-1.5">
-            <div className="text-[9px] text-primary uppercase tracking-wider">
-              Annual · save 20%
+          {/* Savings banner — only shown on the Annual tab so the row
+              isn't redundant with the per-tile "save 20%" kicker when
+              visitor is reading monthly prices. */}
+          {annual && (
+            <div className="flex items-center justify-center gap-1.5 rounded-md bg-success/10 border border-success/30 px-3 py-1.5">
+              <span className="text-[11px] font-bold tabular-nums text-success">
+                You save PKR {annualSavings.toLocaleString("en-PK")} every year
+              </span>
             </div>
-            <div className="font-bold tabular-nums text-primary">
-              {annualBilled.toLocaleString("en-PK")}
-            </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -181,30 +199,55 @@ function TierCalculator({
  * "no per-flat math" line turns the missing-calculator into a value
  * prop, not visual emptiness.
  */
-function FlatFeeNotice() {
+function FlatFeeNotice({ annual }: { annual: boolean }) {
+  // Starter is a flat Rs 15,000/mo. Show same Monthly / Annual breakdown
+  // as the Growth+Pro TierCalculator so the savings banner lines up at
+  // the same vertical position on all three cards. The "info panel" on
+  // every card now has the identical 3-section rhythm:
+  //   row 1 — top bar (input on G/P, locked-fee badge here)
+  //   row 2 — 2-col Monthly/Annual tiles
+  //   row 3 — savings banner (Annual tab only)
+  const baseMonthly = 15000;
+  const discountedMonthly = Math.round(baseMonthly * (1 - ANNUAL_DISCOUNT));
+  const displayMonthly = annual ? discountedMonthly : baseMonthly;
+  const annualBilled = discountedMonthly * 12;
+  const annualSavings = baseMonthly * 12 - annualBilled;
   return (
-    <div className="rounded-xl border-2 border-sidebar-border bg-gradient-to-br from-card to-card/40 p-3 space-y-2 shadow-[0_0_20px_-12px] shadow-foreground/10">
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-          <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+    <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/[0.08] to-primary/[0.02] p-3 space-y-2 shadow-[0_0_20px_-10px] shadow-primary/20">
+      {/* Top bar — same h-10 as the TierCalculator input so the rhythm
+          across cards matches at the pixel level. */}
+      <div className="relative h-10 flex items-center gap-2 px-3 rounded-lg border border-primary/30 bg-card">
+        <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+        <span className="text-[11px] font-bold text-primary uppercase tracking-widest">
+          Flat fee — locked
+        </span>
+      </div>
+      {/* 2-col tile grid — mirrors the Growth/Pro calculator result. */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-md bg-card border border-primary/20 px-2.5 py-1.5">
+          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">
+            Monthly
+          </div>
+          <div className="font-bold tabular-nums text-foreground">
+            {displayMonthly.toLocaleString("en-PK")}
+          </div>
         </div>
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold text-primary uppercase tracking-widest leading-none">
-            Flat fee — locked
-          </p>
-          <p className="text-[11px] text-muted-foreground leading-tight mt-1">
-            No per-flat math. No surprises.
-          </p>
+        <div className="rounded-md bg-primary/10 border border-primary/30 px-2.5 py-1.5">
+          <div className="text-[9px] text-primary uppercase tracking-wider">
+            Annual · save 20%
+          </div>
+          <div className="font-bold tabular-nums text-primary">
+            {annualBilled.toLocaleString("en-PK")}
+          </div>
         </div>
       </div>
-      <div className="rounded-md bg-card/60 border border-sidebar-border px-2.5 py-1.5">
-        <div className="text-[9px] text-muted-foreground uppercase tracking-wider">
-          Same price · 1 — 100 flats
+      {annual && (
+        <div className="flex items-center justify-center gap-1.5 rounded-md bg-success/10 border border-success/30 px-3 py-1.5">
+          <span className="text-[11px] font-bold tabular-nums text-success">
+            You save PKR {annualSavings.toLocaleString("en-PK")} every year
+          </span>
         </div>
-        <div className="font-bold tabular-nums text-foreground text-sm">
-          PKR 15,000 / mo
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -372,7 +415,7 @@ function TierCard({
           setFlatsInput={setFlatsInput}
         />
       ) : (
-        <FlatFeeNotice />
+        <FlatFeeNotice annual={annual} />
       )}
 
       {/* Bottom group — CTA + footer hint. mt-auto pins this to the
