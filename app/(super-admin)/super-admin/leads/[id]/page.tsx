@@ -59,6 +59,7 @@ type Lead = {
   temperature: LeadTemperature;
   next_followup_date: string | null;
   quoted_amount: number | null;
+  maintenance_per_flat: number | null;
   notes: string | null;
   owner_id: string | null;
   created_at: string;
@@ -179,7 +180,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("bms_leads")
     .select(
-      "id, building_name, area, city, flat_count_estimate, contact_name, contact_role, whatsapp_number, email, source, status, temperature, next_followup_date, quoted_amount, notes, owner_id, created_at, updated_at",
+      "id, building_name, area, city, flat_count_estimate, contact_name, contact_role, whatsapp_number, email, source, status, temperature, next_followup_date, quoted_amount, maintenance_per_flat, notes, owner_id, created_at, updated_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -256,6 +257,8 @@ export default async function LeadDetailPage({
     status: l.status,
     temperature: l.temperature,
     quoted_amount: l.quoted_amount == null ? "" : String(l.quoted_amount),
+    maintenance_per_flat:
+      l.maintenance_per_flat == null ? "" : String(l.maintenance_per_flat),
     notes: l.notes ?? "",
   };
 
@@ -427,6 +430,14 @@ function PipelineCard({
           {daysInStatus} {daysInStatus === 1 ? "day" : "days"} in current status
         </span>
       </Row>
+      {lead.maintenance_per_flat != null && (
+        <Row icon={Coins}>
+          <span>
+            Maintenance: {formatCurrency(Number(lead.maintenance_per_flat))}
+            /flat/mo
+          </span>
+        </Row>
+      )}
     </div>
   );
 }

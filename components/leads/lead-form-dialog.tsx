@@ -53,6 +53,7 @@ export type LeadFormValues = {
   source: LeadSource;
   status: LeadStatus;
   quoted_amount: string;
+  maintenance_per_flat: string;
   notes: string;
 };
 
@@ -68,6 +69,7 @@ const DEFAULTS: LeadFormValues = {
   source: "cold_visit",
   status: "new",
   quoted_amount: "",
+  maintenance_per_flat: "",
   notes: "",
 };
 
@@ -188,6 +190,10 @@ export function LeadFormDialog({
       // field anyway so a stale client can't clobber the derived value.
       quoted_amount:
         values.quoted_amount === "" ? null : Number(values.quoted_amount),
+      maintenance_per_flat:
+        values.maintenance_per_flat === ""
+          ? null
+          : Number(values.maintenance_per_flat),
       notes: values.notes || null,
     };
 
@@ -393,21 +399,43 @@ export function LeadFormDialog({
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="flat_count" className="text-base">
-                Flats (estimated)
-              </Label>
-              <Input
-                id="flat_count"
-                type="number"
-                min={0}
-                className="h-12 text-base"
-                placeholder="e.g. 80"
-                value={values.flat_count_estimate}
-                onChange={(e) =>
-                  set("flat_count_estimate", e.target.value)
-                }
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="flat_count" className="text-base">
+                  Flats (estimated)
+                </Label>
+                <Input
+                  id="flat_count"
+                  type="number"
+                  min={0}
+                  className="h-12 text-base"
+                  placeholder="e.g. 80"
+                  value={values.flat_count_estimate}
+                  onChange={(e) =>
+                    set("flat_count_estimate", e.target.value)
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="maintenance_per_flat" className="text-base">
+                  Maintenance / flat{" "}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    (PKR)
+                  </span>
+                </Label>
+                <Input
+                  id="maintenance_per_flat"
+                  type="number"
+                  min={0}
+                  step={100}
+                  className="h-12 text-base"
+                  placeholder="e.g. 5000"
+                  value={values.maintenance_per_flat}
+                  onChange={(e) =>
+                    set("maintenance_per_flat", e.target.value)
+                  }
+                />
+              </div>
             </div>
           </section>
 

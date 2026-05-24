@@ -83,6 +83,12 @@ export type LeadInput = {
   temperature: LeadTemperature;
   next_followup_date?: string | null;
   quoted_amount?: number | null;
+  /**
+   * Per-flat monthly maintenance fee (PKR). Optional — set when the
+   * sales rep knows the number. Used by the lead detail page to
+   * derive total monthly collection + Pulse fee as a % of it.
+   */
+  maintenance_per_flat?: number | null;
   notes?: string | null;
 };
 
@@ -156,6 +162,19 @@ function validateAndNormalize(input: LeadInput) {
     throw new Error("Quoted amount must be zero or a positive number.");
   }
 
+  const maintenance =
+    input.maintenance_per_flat == null
+      ? null
+      : Number(input.maintenance_per_flat);
+  if (
+    maintenance != null &&
+    (!Number.isFinite(maintenance) || maintenance < 0)
+  ) {
+    throw new Error(
+      "Maintenance per flat must be zero or a positive number.",
+    );
+  }
+
   // NOTE: next_followup_date is intentionally NOT returned here. That
   // column is now derived state owned by the activity sync logic in
   // logFollowup — every contact attempt carries its own
@@ -178,6 +197,7 @@ function validateAndNormalize(input: LeadInput) {
     status: input.status ?? "new",
     temperature: input.temperature,
     quoted_amount: quoted,
+    maintenance_per_flat: maintenance,
     notes: trimOrNull(input.notes),
   };
 }
