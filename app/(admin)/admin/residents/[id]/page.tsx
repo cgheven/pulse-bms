@@ -4,10 +4,11 @@ import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatCNIC, formatDate, formatPhone, formatReceiptNo } from "@/lib/utils";
-import { ArrowLeft, Car, Pencil, Star } from "lucide-react";
+import { ArrowLeft, Car, FileText, Pencil, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResidentFormDialog } from "@/components/admin/residents/resident-form-dialog";
 import { KpiRowSkeleton, TableSkeleton } from "@/components/layout/table-skeleton";
+import { DocumentsClient, type DocumentRow } from "@/components/admin/residents/documents-client";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,16 @@ export default async function ResidentDetailPage(props: {
       <Suspense fallback={<TableSkeleton rows={3} />}>
         <VehiclesCard id={id} />
       </Suspense>
+
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold tracking-tight flex items-center gap-2">
+          <FileText className="w-4 h-4" />
+          Documents
+        </h2>
+        <Suspense fallback={<TableSkeleton rows={2} />}>
+          <DocumentsCard id={id} />
+        </Suspense>
+      </section>
     </div>
   );
 }
@@ -294,6 +305,32 @@ async function VehiclesCard({ id }: { id: string }) {
       )}
     </div>
   );
+}
+
+async function DocumentsCard({ id }: { id: string }) {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+  if (!profile.building_id) notFound();
+
+  const supabase = await createClient();
+  const { data: rows } = await supabase
+    .from("bms_resident_documents")
+    .select("id, doc_type, label, file_name, file_size, mime_type, created_at")
+    .eq("resident_id", id)
+    .eq("building_id", profile.building_id)
+    .order("created_at", { ascending: false });
+
+  const docs: DocumentRow[] = (rows ?? []).map((r) => ({
+    id:         r.id,
+    doc_type:   r.doc_type,
+    label:      r.label,
+    file_name:  r.file_name,
+    file_size:  r.file_size,
+    mime_type:  r.mime_type,
+    created_at: r.created_at,
+    href:       `/api/docs/${r.id}`,
+  }));
+
+  return <DocumentsClient residentId={id} docs={docs} />;
 }
 
 function Detail({ label, value }: { label: string; value: React.ReactNode }) {

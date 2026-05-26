@@ -31,6 +31,7 @@ import {
   FileSpreadsheet,
   Plug,
   Target,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -179,6 +180,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/resident/payments",   label: "Payments",   icon: CreditCard },
         { href: "/resident/vehicles",   label: "Vehicles",   icon: Car },
         { href: "/resident/complaints", label: "Complaints", icon: MessageSquareWarning },
+        { href: "/resident/documents",  label: "Documents",  icon: FolderOpen },
       ],
     },
     {

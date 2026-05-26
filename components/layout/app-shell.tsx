@@ -53,7 +53,7 @@ export function AppShell({ role, navbarUser, demoBanner, children }: AppShellPro
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Demo strip — renders null when the session isn't a demo account. */}
         {demoBanner}
-        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 sm:px-6 h-16 bg-sidebar/90 backdrop-blur-md border-b border-sidebar-border">
+        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 sm:px-6 h-16 bg-sidebar border-b border-sidebar-border">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
