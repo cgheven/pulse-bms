@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
 import { OpeningBalanceForm } from "@/components/admin/settings/opening-balance-form";
 import { BuildingInfoForm } from "@/components/admin/settings/building-info-form";
+import { TransparencySettingsForm } from "@/components/admin/settings/transparency-settings-form";
 import { BankAccountsClient } from "./bank-accounts-client";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,19 @@ export default function SettingsPage() {
         </div>
         <Suspense fallback={<TableSkeleton rows={2} />}>
           <OpeningBalanceSection />
+        </Suspense>
+      </section>
+
+      <section id="resident-transparency" className="space-y-3 scroll-mt-24">
+        <div>
+          <h2 className="text-xl font-semibold">Resident Transparency</h2>
+          <p className="text-sm text-muted-foreground">
+            Choose what residents can see on their Transparency page. Both sections are
+            hidden by default — turn them on when you&rsquo;re ready to share.
+          </p>
+        </div>
+        <Suspense fallback={<TableSkeleton rows={2} />}>
+          <TransparencySettingsSection />
         </Suspense>
       </section>
 
@@ -140,6 +154,34 @@ async function OpeningBalanceSection() {
       initialAmount={amount}
       initialDate={date}
       transactionCount={txnCount}
+    />
+  );
+}
+
+// --- Transparency settings section -----------------------------------------
+
+async function TransparencySettingsSection() {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+  if (!profile.building_id) {
+    return (
+      <div className="card-soft">
+        <p className="text-muted-foreground mt-2">No building assigned.</p>
+      </div>
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: building } = await supabase
+    .from("bms_buildings")
+    .select("show_fund_balance, show_building_funds, show_defaulters")
+    .eq("id", profile.building_id)
+    .single();
+
+  return (
+    <TransparencySettingsForm
+      initialShowFundBalance={building?.show_fund_balance ?? false}
+      initialShowBuildingFunds={building?.show_building_funds ?? false}
+      initialShowDefaulters={building?.show_defaulters ?? false}
     />
   );
 }

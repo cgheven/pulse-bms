@@ -174,3 +174,66 @@ export async function updateBuildingInfo(input: BuildingInfoInput) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/bill-accounts");
 }
+
+/* ────────────────────────────────────────────────────────────── */
+/* Resident transparency toggles                                */
+/* ────────────────────────────────────────────────────────────── */
+
+export type TransparencySettingsInput = {
+  show_building_funds: boolean;
+  show_fund_balance: boolean;
+  show_defaulters: boolean;
+};
+
+export async function updateTransparencySettings(
+  input: TransparencySettingsInput,
+) {
+  await requireNotDemo();
+  const { profile, user } = await requireRole(["admin", "super_admin"]);
+
+  if (!profile.building_id) throw new Error("No building assigned");
+
+  const supabase = await createClient();
+
+  const { data: previous, error: readErr } = await supabase
+    .from("bms_buildings")
+    .select("show_building_funds, show_fund_balance, show_defaulters")
+    .eq("id", profile.building_id)
+    .single();
+  if (readErr) throw new Error(readErr.message);
+
+  const { error: updErr } = await supabase.rpc(
+    "bms_update_transparency_settings",
+    {
+      p_show_building_funds: input.show_building_funds,
+      p_show_defaulters: input.show_defaulters,
+      p_show_fund_balance: input.show_fund_balance,
+    },
+  );
+  if (updErr) throw new Error(updErr.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    building_id: profile.building_id,
+    action: "building.transparency.update",
+    entity: "building",
+    entity_id: profile.building_id,
+    meta: {
+      before: {
+        show_building_funds: previous?.show_building_funds ?? false,
+        show_fund_balance: previous?.show_fund_balance ?? false,
+        show_defaulters: previous?.show_defaulters ?? false,
+      },
+      after: {
+        show_building_funds: input.show_building_funds,
+        show_fund_balance: input.show_fund_balance,
+        show_defaulters: input.show_defaulters,
+      },
+    },
+  });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/resident/transparency");
+}

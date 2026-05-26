@@ -47,6 +47,20 @@ export default async function ResidentTransparencyPage() {
     year: "numeric",
   });
 
+  const supabase = await createClient();
+  const { data: building } = await supabase
+    .from("bms_buildings")
+    .select(
+      "name, fund_balance, show_fund_balance, show_building_funds, show_defaulters, expose_defaulter_names, utility_cutoff_after_months",
+    )
+    .eq("id", buildingId)
+    .maybeSingle();
+
+  const showFundBalance = building?.show_fund_balance ?? false;
+  const showFunds = building?.show_building_funds ?? false;
+  const showDefaulters = building?.show_defaulters ?? false;
+  const nothingVisible = !showFundBalance && !showFunds && !showDefaulters;
+
   return (
     <div className="space-y-5 animate-fade-up max-w-5xl">
       <header>
@@ -56,27 +70,53 @@ export default async function ResidentTransparencyPage() {
         </p>
       </header>
 
-      <Suspense fallback={<HeroSkeleton />}>
-        <FundHero buildingId={buildingId} />
-      </Suspense>
+      {nothingVisible && (
+        <div className="card-soft flex items-center gap-3 text-muted-foreground">
+          <EyeOff className="w-5 h-5 shrink-0" />
+          <p className="text-sm">
+            Your building admin hasn&rsquo;t shared any financial information yet. Check back later.
+          </p>
+        </div>
+      )}
 
-      <Suspense fallback={<MonthGridSkeleton />}>
-        <ThisMonth
-          buildingId={buildingId}
-          monthStart={monthStart}
-          nextMonthStart={nextMonthStart}
-        />
-      </Suspense>
+      {showFundBalance && (
+        <Suspense fallback={<HeroSkeleton />}>
+          <FundHero
+            buildingId={buildingId}
+            buildingName={building?.name ?? null}
+            openingBalance={Number(building?.fund_balance ?? 0)}
+          />
+        </Suspense>
+      )}
 
-      <Suspense fallback={<TableSkeleton rows={3} />}>
-        <DefaultersSection buildingId={buildingId} />
-      </Suspense>
+      {showFunds && (
+        <>
+          <Suspense fallback={<MonthGridSkeleton />}>
+            <ThisMonth
+              buildingId={buildingId}
+              monthStart={monthStart}
+              nextMonthStart={nextMonthStart}
+            />
+          </Suspense>
 
-      <LedgerTabs
-        buildingId={buildingId}
-        monthStart={monthStart}
-        nextMonthStart={nextMonthStart}
-      />
+          <LedgerTabs
+            buildingId={buildingId}
+            monthStart={monthStart}
+            nextMonthStart={nextMonthStart}
+            exposeDefaulterNames={building?.expose_defaulter_names ?? false}
+          />
+        </>
+      )}
+
+      {showDefaulters && (
+        <Suspense fallback={<TableSkeleton rows={3} />}>
+          <DefaultersSection
+            buildingId={buildingId}
+            utilityCutoff={Number(building?.utility_cutoff_after_months ?? 3)}
+            exposeNames={building?.expose_defaulter_names ?? false}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
@@ -87,10 +127,12 @@ function LedgerTabs({
   buildingId,
   monthStart,
   nextMonthStart,
+  exposeDefaulterNames,
 }: {
   buildingId: string;
   monthStart: string;
   nextMonthStart: string;
+  exposeDefaulterNames: boolean;
 }) {
   return (
     <section className="space-y-3">
@@ -123,7 +165,11 @@ function LedgerTabs({
 
         <TabsContent value="bills">
           <Suspense fallback={<TableSkeleton rows={5} />}>
-            <BillsPanel buildingId={buildingId} monthStart={monthStart} />
+            <BillsPanel
+              buildingId={buildingId}
+              monthStart={monthStart}
+              exposeDefaulterNames={exposeDefaulterNames}
+            />
           </Suspense>
         </TabsContent>
 
@@ -265,24 +311,15 @@ async function StaffPanel({
 async function BillsPanel({
   buildingId,
   monthStart,
+  exposeDefaulterNames,
 }: {
   buildingId: string;
   monthStart: string;
+  exposeDefaulterNames: boolean;
 }) {
   const supabase = await createClient();
 
-  // Privacy: bills always show by flat number. The Union name-toggle that gates
-  // defaulter names is honored here too so the same policy applies consistently.
-  const [
-    { data: building },
-    { data: invoices },
-    { data: flats },
-  ] = await Promise.all([
-    supabase
-      .from("bms_buildings")
-      .select("expose_defaulter_names")
-      .eq("id", buildingId)
-      .maybeSingle(),
+  const [{ data: invoices }, { data: flats }] = await Promise.all([
     supabase
       .from("bms_invoices")
       .select("id, flat_id, amount, status, due_date")
@@ -314,7 +351,7 @@ async function BillsPanel({
     }
   }
 
-  const exposeNames = Boolean(building?.expose_defaulter_names);
+  const exposeNames = exposeDefaulterNames;
   type InvRow = {
     id: string;
     flat_id: string | null;
@@ -581,42 +618,31 @@ function MiniKpi({
 
 /* ─────────────  1. Fund balance hero  ───────────── */
 
-async function FundHero({ buildingId }: { buildingId: string }) {
+async function FundHero({
+  buildingId,
+  buildingName,
+  openingBalance,
+}: {
+  buildingId: string;
+  buildingName: string | null;
+  openingBalance: number;
+}) {
   const supabase = await createClient();
 
-  // bms_buildings.fund_balance is the OPENING balance. Live balance =
-  // opening + lifetime payments − lifetime expenses − lifetime salaries.
+  // Live balance = opening + lifetime payments − lifetime expenses − lifetime salaries.
   // Matches admin dashboard math (app/(admin)/admin/page.tsx PnLHero).
-  const [
-    { data: building },
-    { data: allPayments },
-    { data: allExpenses },
-    { data: allSalaries },
-  ] = await Promise.all([
-    supabase
-      .from("bms_buildings")
-      .select("name, fund_balance")
-      .eq("id", buildingId)
-      .maybeSingle(),
-    supabase
-      .from("bms_payments")
-      .select("amount")
-      .eq("building_id", buildingId),
-    supabase
-      .from("bms_expenses")
-      .select("amount")
-      .eq("building_id", buildingId),
-    supabase
-      .from("bms_salary_payments")
-      .select("amount")
-      .eq("building_id", buildingId),
-  ]);
+  const [{ data: allPayments }, { data: allExpenses }, { data: allSalaries }] =
+    await Promise.all([
+      supabase.from("bms_payments").select("amount").eq("building_id", buildingId),
+      supabase.from("bms_expenses").select("amount").eq("building_id", buildingId),
+      supabase.from("bms_salary_payments").select("amount").eq("building_id", buildingId),
+    ]);
 
   const sum = (rows: { amount: number | string | null }[] | null) =>
     (rows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
 
   const fundBalance =
-    Number(building?.fund_balance ?? 0) +
+    openingBalance +
     sum(allPayments ?? null) -
     sum(allExpenses ?? null) -
     sum(allSalaries ?? null);
@@ -633,7 +659,7 @@ async function FundHero({ buildingId }: { buildingId: string }) {
             {formatCurrency(fundBalance)}
           </div>
           <div className="text-xs text-muted-foreground mt-1.5">
-            Total cash held by {building?.name ?? "the building"}.
+            Total cash held by {buildingName ?? "the building"}.
           </div>
         </div>
       </div>
@@ -783,29 +809,30 @@ function MonthGridSkeleton() {
 
 /* ─────────────  Defaulters (privacy-aware, unchanged behavior)  ───────────── */
 
-async function DefaultersSection({ buildingId }: { buildingId: string }) {
+async function DefaultersSection({
+  buildingId,
+  utilityCutoff,
+  exposeNames,
+}: {
+  buildingId: string;
+  utilityCutoff: number;
+  exposeNames: boolean;
+}) {
   const supabase = await createClient();
 
-  const [{ data: building }, { data: outstandingInvoices }, { data: flats }] =
-    await Promise.all([
-      supabase
-        .from("bms_buildings")
-        .select("utility_cutoff_after_months, expose_defaulter_names")
-        .eq("id", buildingId)
-        .maybeSingle(),
-      supabase
-        .from("bms_invoices")
-        .select("flat_id, billing_month")
-        .eq("building_id", buildingId)
-        .in("status", ["pending", "partial", "overdue"]),
-      supabase
-        .from("bms_flats")
-        .select("id, flat_number, outstanding_dues")
-        .eq("building_id", buildingId),
-    ]);
+  const [{ data: outstandingInvoices }, { data: flats }] = await Promise.all([
+    supabase
+      .from("bms_invoices")
+      .select("flat_id, billing_month")
+      .eq("building_id", buildingId)
+      .in("status", ["pending", "partial", "overdue"]),
+    supabase
+      .from("bms_flats")
+      .select("id, flat_number, outstanding_dues")
+      .eq("building_id", buildingId),
+  ]);
 
-  const cutoff = Number(building?.utility_cutoff_after_months ?? 3);
-  const exposeNames = Boolean(building?.expose_defaulter_names);
+  const cutoff = utilityCutoff;
 
   const monthsByFlat = new Map<string, Set<string>>();
   for (const inv of outstandingInvoices ?? []) {
