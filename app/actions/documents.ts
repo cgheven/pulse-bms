@@ -55,9 +55,6 @@ function isValidMagicBytes(header: Uint8Array, mimeType: string): boolean {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Allow printable safe characters in filenames — no path separators or angle brackets.
-const SAFE_FILENAME_RE = /^[\w\-. ()[\]]+$/;
-const MAX_FILENAME_LENGTH = 255;
 const MAX_LABEL_LENGTH = 80;
 
 export async function uploadResidentDocument(formData: FormData) {
@@ -89,9 +86,6 @@ export async function uploadResidentDocument(formData: FormData) {
 
   if (docType === "other" && !rawLabel)
     throw new Error("Label is required for Other document type");
-
-  if (!SAFE_FILENAME_RE.test(file.name) || file.name.length > MAX_FILENAME_LENGTH)
-    throw new Error("Filename contains invalid characters or is too long (max 255 chars).");
 
   if (rawLabel) {
     if (rawLabel.length > MAX_LABEL_LENGTH)
@@ -128,9 +122,11 @@ export async function uploadResidentDocument(formData: FormData) {
     .maybeSingle();
   if (!resident) throw new Error("Resident not found in your building");
 
-  // Extension from MIME type — never from the filename
+  // Extension from MIME type — never from the filename.
+  // Stored name is server-generated; original client filename is never persisted.
   const ext         = MIME_TO_EXT.get(file.type) ?? "bin";
   const uuid        = crypto.randomUUID();
+  const storedName  = `${docType}_${uuid.slice(0, 8)}.${ext}`;
   const storagePath = `${profile.building_id}/${residentId}/${docType}/${uuid}.${ext}`;
 
   const adminClient = createAdminClient();
@@ -148,7 +144,7 @@ export async function uploadResidentDocument(formData: FormData) {
       resident_id:  residentId,
       doc_type:     docType,
       label:        rawLabel,
-      file_name:    file.name,
+      file_name:    storedName,
       storage_path: storagePath,
       file_size:    file.size,
       mime_type:    file.type,
@@ -171,7 +167,7 @@ export async function uploadResidentDocument(formData: FormData) {
     action:      "document.upload",
     entity:      "resident_document",
     entity_id:   residentId,
-    meta:        { doc_type: docType, file_name: file.name, file_size: file.size },
+    meta:        { doc_type: docType, file_name: storedName, file_size: file.size },
   });
 
   revalidatePath(`/admin/residents/${residentId}`);
