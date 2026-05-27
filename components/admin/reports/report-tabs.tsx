@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Wallet, Receipt, HandCoins, Coins, Banknote, BookText, Sparkles } from "lucide-react";
+import { Wallet, Receipt, HandCoins, Coins, Banknote, BookText, Sparkles, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,7 +18,8 @@ export type ReportTabId =
   | "maintenance-collection"
   | "overall-collection"
   | "day-book"
-  | "cash-position";
+  | "cash-position"
+  | "inventory";
 
 // Tab order: Income Register lands first (default view) — that's the
 // committee's day-1 question: "what came in this month?". Day Book is
@@ -56,6 +57,12 @@ const TABS: { id: ReportTabId; label: string; icon: typeof Wallet; href: string 
     label: "Cash Book",
     icon: Banknote,
     href: "/admin/reports/cash-position",
+  },
+  {
+    id: "inventory",
+    label: "Inventory",
+    icon: Archive,
+    href: "/admin/reports/inventory",
   },
 ];
 

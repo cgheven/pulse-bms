@@ -33,6 +33,7 @@ import {
   Target,
   FolderOpen,
   CalendarCheck,
+  Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -116,8 +117,9 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "Operations",
       items: [
-        { href: "/admin/facility", label: "Facility", icon: Wrench },
-        { href: "/admin/notices",  label: "Notices",  icon: Megaphone },
+        { href: "/admin/facility",  label: "Facility",  icon: Wrench },
+        { href: "/admin/notices",   label: "Notices",   icon: Megaphone },
+        { href: "/admin/inventory", label: "Inventory", icon: Archive },
       ],
     },
   ],

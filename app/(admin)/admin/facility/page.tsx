@@ -11,24 +11,31 @@ import {
 import { AddTaskButton } from "@/components/admin/facility/add-task-button";
 import { TaskRowActions } from "@/components/admin/facility/task-row-actions";
 import { ComplaintActions } from "@/components/admin/facility/complaint-actions";
-import { Wrench, AlertCircle, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import {
+  Wrench,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  User,
+  Home,
+} from "lucide-react";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
-import type {
-  FacilityTaskInput,
-  ComplaintStatus,
-} from "@/app/actions/facility";
+import type { FacilityTaskInput, ComplaintStatus } from "@/app/actions/facility";
 
 export const dynamic = "force-dynamic";
 
+/* ── constants ─────────────────────────────────────────────────────────── */
+
 const STATUS_PILL: Record<string, string> = {
-  open:         "status-pending",
-  assigned:     "status-info",
-  in_progress:  "status-info",
-  resolved:     "status-paid",
-  pending:      "status-pending",
-  done:         "status-paid",
-  skipped:      "status-overdue",
-  overdue:      "status-overdue",
+  open:        "status-pending",
+  assigned:    "status-info",
+  in_progress: "status-info",
+  resolved:    "status-paid",
+  pending:     "status-pending",
+  done:        "status-paid",
+  skipped:     "status-overdue",
+  overdue:     "status-overdue",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -53,46 +60,36 @@ const PRIORITY_LABEL: Record<string, string> = {
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  pest: "Pest Control",
-  pest_control: "Pest Control",
-  lift_service: "Lift Service",
-  lift: "Lift",
-  generator: "Generator",
-  painting: "Painting",
-  plumbing: "Plumbing",
-  electrical: "Electrical",
-  cleaning: "Cleaning",
-  security: "Security",
-  garden: "Garden / Landscape",
-  water_tank: "Water Tank",
+  pest: "Pest Control", pest_control: "Pest Control",
+  lift_service: "Lift Service", lift: "Lift",
+  generator: "Generator", painting: "Painting",
+  plumbing: "Plumbing", electrical: "Electrical",
+  cleaning: "Cleaning", security: "Security",
+  garden: "Garden / Landscape", water_tank: "Water Tank",
   fire_safety: "Fire Safety",
 };
 
 function prettifyCategory(s: string | null | undefined): string {
   if (!s) return "—";
   if (CATEGORY_LABELS[s]) return CATEGORY_LABELS[s];
-  return s.split(/[_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  return s.split(/[_\s]+/).filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
 }
+
+/* ── page shell ────────────────────────────────────────────────────────── */
 
 export default function FacilityPage() {
   return (
     <div className="space-y-6 animate-fade-up">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1>Facility</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-            Scheduled tasks and complaints for this building.
-          </p>
-        </div>
-      </div>
-
       <Suspense fallback={<TableSkeleton rows={6} />}>
         <FacilityContent />
       </Suspense>
     </div>
   );
 }
+
+/* ── data + content ────────────────────────────────────────────────────── */
 
 async function FacilityContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
@@ -104,11 +101,17 @@ async function FacilityContent() {
       .select("*")
       .eq("building_id", profile.building_id)
       .order("next_due_date", { ascending: true, nullsFirst: false }),
+
     supabase
       .from("bms_complaints")
-      .select("*")
+      .select(`
+        *,
+        bms_residents!resident_id (full_name),
+        bms_flats!flat_id (flat_number)
+      `)
       .eq("building_id", profile.building_id)
       .order("created_at", { ascending: false }),
+
     supabase
       .from("bms_staff")
       .select("id,full_name")
@@ -117,84 +120,116 @@ async function FacilityContent() {
       .order("full_name", { ascending: true }),
   ]);
 
-  const tasks = tasksRes.data ?? [];
+  const tasks      = tasksRes.data ?? [];
   const complaints = complaintsRes.data ?? [];
-  const staff = staffRes.data ?? [];
-  const staffMap = new Map(staff.map((s) => [s.id, s.full_name]));
+  const staff      = staffRes.data ?? [];
+  const staffMap   = new Map(staff.map((s) => [s.id, s.full_name]));
 
-  const today = new Date().toISOString().split("T")[0];
-  const openComplaints = complaints.filter((c) => c.status !== "resolved" && c.status !== "closed").length;
-  const overdueTasks = tasks.filter((t) => t.next_due_date && t.next_due_date < today && t.status !== "done").length;
+  const today        = new Date().toISOString().split("T")[0];
+  const openComplaints = complaints.filter(
+    (c) => c.status !== "resolved" && c.status !== "closed",
+  ).length;
+  const overdueTasks = tasks.filter(
+    (t) => t.next_due_date && t.next_due_date < today && t.status !== "done",
+  ).length;
+
+  // Helper: flatten nested resident / flat objects (PostgREST may return array or object)
+  function residentName(c: (typeof complaints)[number]): string | null {
+    const r = c.bms_residents;
+    if (!r) return null;
+    const obj = Array.isArray(r) ? r[0] : r;
+    return (obj as { full_name?: string })?.full_name ?? null;
+  }
+  function flatNumber(c: (typeof complaints)[number]): string | null {
+    const f = c.bms_flats;
+    if (!f) return null;
+    const obj = Array.isArray(f) ? f[0] : f;
+    return (obj as { flat_number?: string })?.flat_number ?? null;
+  }
 
   return (
     <div className="space-y-6">
-      {/* Stats + CTA */}
+      {/* ── Header + KPI strip ── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <p className="text-muted-foreground mt-1 text-sm sm:text-base flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="inline-flex items-center gap-1.5">
-            <Wrench className="w-3.5 h-3.5" />
-            {tasks.length} scheduled task{tasks.length !== 1 ? "s" : ""}
-          </span>
-          <span className="hidden sm:inline">·</span>
-          <span className="inline-flex items-center gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5" />
-            {openComplaints} open complaint{openComplaints !== 1 ? "s" : ""}
-          </span>
-          {overdueTasks > 0 && (
-            <>
-              <span className="hidden sm:inline">·</span>
-              <span className="inline-flex items-center gap-1.5 text-destructive font-medium">
+        <div className="space-y-3">
+          <div>
+            <h1>Facility</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Maintenance tasks and resident complaints for this building.
+            </p>
+          </div>
+
+          {/* Stat pills */}
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-secondary border border-border text-muted-foreground">
+              <Wrench className="w-3.5 h-3.5" />
+              {tasks.length} scheduled task{tasks.length !== 1 ? "s" : ""}
+            </span>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${
+              openComplaints > 0
+                ? "bg-[hsl(38_92%_55%/0.1)] border-[hsl(38_92%_55%/0.3)] text-[hsl(38_92%_65%)]"
+                : "bg-secondary border-border text-muted-foreground"
+            }`}>
+              <AlertCircle className="w-3.5 h-3.5" />
+              {openComplaints} open complaint{openComplaints !== 1 ? "s" : ""}
+            </span>
+            {overdueTasks > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-destructive/10 border border-destructive/25 text-destructive">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 {overdueTasks} overdue
               </span>
-            </>
-          )}
-        </p>
+            )}
+          </div>
+        </div>
+
         <AddTaskButton staff={staff} />
       </div>
 
-      <Tabs defaultValue="tasks">
+      {/* ── Tabs ── */}
+      <Tabs defaultValue="complaints">
         <TabsList>
           <TabsTrigger value="tasks">
             Scheduled Tasks ({tasks.length})
           </TabsTrigger>
           <TabsTrigger value="complaints">
-            Complaints ({openComplaints} open)
+            Complaints {openComplaints > 0 && `(${openComplaints} open)`}
           </TabsTrigger>
         </TabsList>
 
-        {/* ─── Tasks ─── */}
+        {/* ── Tasks tab ── */}
         <TabsContent value="tasks" className="mt-4">
           <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-secondary border-b border-border">
                   <tr className="text-left">
-                    <th className="px-3 py-3 font-semibold">Task</th>
-                    <th className="px-3 py-3 font-semibold">Category</th>
-                    <th className="px-3 py-3 font-semibold">Next Due</th>
-                    <th className="px-3 py-3 font-semibold">Assigned</th>
-                    <th className="px-3 py-3 font-semibold">Status</th>
-                    <th className="px-3 py-3" />
+                    <th className="px-4 py-3 font-semibold">Task</th>
+                    <th className="px-4 py-3 font-semibold">Category</th>
+                    <th className="px-4 py-3 font-semibold">Next Due</th>
+                    <th className="px-4 py-3 font-semibold">Assigned</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody>
                   {tasks.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-12 text-center text-muted-foreground">
-                        No tasks yet. Click <span className="text-foreground font-medium">New Task</span> to start.
+                      <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                        No tasks yet.{" "}
+                        <span className="text-foreground font-medium">New Task</span>{" "}
+                        to get started.
                       </td>
                     </tr>
                   )}
                   {tasks.map((t) => {
                     const overdue = t.next_due_date && t.next_due_date < today && t.status !== "done";
-                    const status = overdue ? "overdue" : (t.status ?? "pending");
+                    const status  = overdue ? "overdue" : (t.status ?? "pending");
                     return (
-                      <tr key={t.id} className="border-b border-border last:border-0 hover:bg-secondary/50 align-top">
-                        <td className="px-3 py-3 min-w-[200px]">
+                      <tr key={t.id} className="border-b border-border last:border-0 hover:bg-secondary/40 align-top">
+                        <td className="px-4 py-3 min-w-[200px]">
                           <div className="font-semibold text-foreground">{t.title}</div>
                           {t.description && (
-                            <div className="text-xs text-muted-foreground mt-0.5">{t.description}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.description}</div>
                           )}
                           {t.recurrence ? (
                             <span className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary border border-border text-muted-foreground">
@@ -207,10 +242,10 @@ async function FacilityContent() {
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
                           {prettifyCategory(t.category)}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap tabular-nums">
+                        <td className="px-4 py-3 whitespace-nowrap tabular-nums">
                           {t.next_due_date ? (
                             <span className={overdue ? "text-destructive font-semibold" : "text-foreground"}>
                               {formatDate(t.next_due_date)}
@@ -224,19 +259,19 @@ async function FacilityContent() {
                             </div>
                           )}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
                           {t.assigned_to ? (
                             <span className="text-foreground">{staffMap.get(t.assigned_to) ?? "—"}</span>
                           ) : (
-                            <span className="text-muted-foreground italic">Unassigned</span>
+                            <span className="text-muted-foreground italic text-xs">Unassigned</span>
                           )}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_PILL[status] ?? STATUS_PILL.pending}`}>
                             {STATUS_LABEL[status] ?? status}
                           </span>
                         </td>
-                        <td className="px-3 py-3 text-right">
+                        <td className="px-4 py-3 text-right">
                           <TaskRowActions
                             task={t as FacilityTaskInput & { id: string }}
                             staff={staff}
@@ -251,65 +286,99 @@ async function FacilityContent() {
           </div>
         </TabsContent>
 
-        {/* ─── Complaints ─── */}
+        {/* ── Complaints tab ── */}
         <TabsContent value="complaints" className="mt-4">
           <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-secondary border-b border-border">
                   <tr className="text-left">
-                    <th className="px-3 py-3 font-semibold">Complaint</th>
-                    <th className="px-3 py-3 font-semibold">Priority</th>
-                    <th className="px-3 py-3 font-semibold">Raised</th>
-                    <th className="px-3 py-3 font-semibold">Status</th>
-                    <th className="px-3 py-3 font-semibold">Manage</th>
+                    <th className="px-4 py-3 font-semibold">Complaint</th>
+                    <th className="px-4 py-3 font-semibold">Raised By</th>
+                    <th className="px-4 py-3 font-semibold">Priority</th>
+                    <th className="px-4 py-3 font-semibold">Date</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Manage</th>
                   </tr>
                 </thead>
                 <tbody>
                   {complaints.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-3 py-12 text-center text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
                         No complaints filed.
                       </td>
                     </tr>
                   )}
                   {complaints.map((c) => {
                     const priority = c.priority ?? "normal";
+                    const name     = residentName(c);
+                    const flat     = flatNumber(c);
+
                     return (
-                      <tr key={c.id} className="border-b border-border last:border-0 hover:bg-secondary/50 align-top">
-                        <td className="px-3 py-3 min-w-[220px]">
-                          <div className="font-semibold text-foreground">{c.title}</div>
+                      <tr key={c.id} className="border-b border-border last:border-0 hover:bg-secondary/40 align-top">
+
+                        {/* Complaint cell */}
+                        <td className="px-4 py-3 min-w-[220px] max-w-xs">
+                          <div className="font-semibold text-foreground leading-snug">{c.title}</div>
                           {c.description && (
-                            <div className="text-xs text-muted-foreground mt-0.5">{c.description}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.description}</div>
                           )}
                           {c.category && (
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80 mt-1">
+                            <span className="inline-flex mt-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-secondary border border-border text-muted-foreground">
                               {prettifyCategory(c.category)}
-                            </div>
+                            </span>
                           )}
                           {c.resolution && (
                             <div className="mt-2 text-xs flex items-start gap-1.5 p-2 rounded-md bg-[hsl(151_70%_32%/0.1)] border border-[hsl(151_70%_32%/0.25)] text-[hsl(151_70%_55%)]">
                               <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                              <div>
-                                <strong className="font-semibold">Resolved:</strong> {c.resolution}
-                              </div>
+                              <span><strong className="font-semibold">Resolved:</strong> {c.resolution}</span>
                             </div>
                           )}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_PILL[priority] ?? PRIORITY_PILL.normal}`}>
+
+                        {/* Raised by cell */}
+                        <td className="px-4 py-3 min-w-[140px]">
+                          {name || flat ? (
+                            <div className="space-y-0.5">
+                              {name && (
+                                <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                                  <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                  {name}
+                                </div>
+                              )}
+                              {flat && (
+                                <div className="flex items-center gap-1.5 text-xs text-primary font-semibold">
+                                  <Home className="w-3 h-3 text-primary/70 shrink-0" />
+                                  Flat {flat}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Anonymous</span>
+                          )}
+                        </td>
+
+                        {/* Priority */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${PRIORITY_PILL[priority] ?? PRIORITY_PILL.normal}`}>
                             {PRIORITY_LABEL[priority] ?? priority}
                           </span>
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap text-muted-foreground tabular-nums">
+
+                        {/* Date */}
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground tabular-nums">
                           {c.created_at ? formatDate(c.created_at) : "—"}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap">
+
+                        {/* Status */}
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_PILL[c.status ?? "open"]}`}>
                             {STATUS_LABEL[c.status ?? "open"] ?? c.status}
                           </span>
                         </td>
-                        <td className="px-3 py-3">
+
+                        {/* Manage */}
+                        <td className="px-4 py-3">
                           <ComplaintActions
                             complaintId={c.id}
                             currentStatus={(c.status ?? "open") as ComplaintStatus}
