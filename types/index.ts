@@ -1,6 +1,6 @@
 // Pulse BMS — shared types
 
-export type Role = "super_admin" | "admin" | "union" | "resident" | "sales";
+export type Role = "super_admin" | "admin" | "union" | "resident" | "sales" | "guard";
 
 export const ROLE_LABELS: Record<Role, string> = {
   super_admin: "Super Admin",
@@ -8,6 +8,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   union:       "Union",
   resident:    "Resident",
   sales:       "Sales",
+  guard:       "Guard",
 };
 
 // Sales lands directly on the Leads CRM — that is the ONLY surface they
@@ -19,6 +20,7 @@ export const ROLE_HOME: Record<Role, string> = {
   union:       "/union",
   resident:    "/resident",
   sales:       "/super-admin/leads",
+  guard:       "/guard",
 };
 
 export type Building = {
@@ -98,8 +100,9 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   other:          "Other",
 };
 
-export type ProposalStatus = "pending" | "approved" | "rejected" | "executed" | "cancelled";
-export type InvoiceStatus  = "pending" | "paid" | "partial" | "overdue" | "waived";
+export type ProposalStatus    = "pending" | "approved" | "rejected" | "executed" | "cancelled";
+export type InvoiceStatus     = "pending" | "paid" | "partial" | "overdue" | "waived";
+export type VisitorPassStatus = "pending" | "verified" | "expired";
 
 /**
  * Canonical payment mode values. The DB enum is

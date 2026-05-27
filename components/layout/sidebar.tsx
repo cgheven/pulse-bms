@@ -32,6 +32,7 @@ import {
   Plug,
   Target,
   FolderOpen,
+  CalendarCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -179,6 +180,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/resident/dues",       label: "Dues",       icon: Wallet },
         { href: "/resident/payments",   label: "Payments",   icon: CreditCard },
         { href: "/resident/vehicles",   label: "Vehicles",   icon: Car },
+        { href: "/resident/visitors",   label: "Visitors",   icon: CalendarCheck },
         { href: "/resident/complaints", label: "Complaints", icon: MessageSquareWarning },
         { href: "/resident/documents",  label: "Documents",  icon: FolderOpen },
       ],
@@ -192,6 +194,14 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       ],
     },
   ],
+  guard: [
+    {
+      label: "Security",
+      items: [
+        { href: "/guard", label: "Vehicle Lookup", icon: Car },
+      ],
+    },
+  ],
 };
 
 const ROLE_HOME: Record<Role, string> = {
@@ -200,6 +210,7 @@ const ROLE_HOME: Record<Role, string> = {
   union:       "/union",
   resident:    "/resident",
   sales:       "/super-admin/leads",
+  guard:       "/guard",
 };
 
 interface NavLinkProps {

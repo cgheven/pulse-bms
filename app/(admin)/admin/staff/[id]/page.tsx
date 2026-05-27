@@ -145,6 +145,7 @@ export default async function StaffDetailPage({
               exit_date: staff.exit_date,
               is_active: staff.is_active,
               notes: staff.notes,
+              profile_id: staff.profile_id ?? null,
             }}
           />
         </div>

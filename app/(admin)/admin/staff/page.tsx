@@ -80,7 +80,7 @@ async function loadStaffData() {
   const [{ data: staff }, { data: todayAttendance }] = await Promise.all([
     supabase
       .from("bms_staff")
-      .select("*")
+      .select("id, full_name, role, phone, cnic, monthly_salary, join_date, exit_date, is_active, notes, profile_id, building_id")
       .eq("building_id", profile.building_id)
       .order("is_active", { ascending: false })
       .order("full_name", { ascending: true }),

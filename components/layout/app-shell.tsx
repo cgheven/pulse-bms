@@ -24,7 +24,9 @@ interface AppShellProps {
 function deriveTitle(pathname: string, role: Role): string {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length <= 1) {
-    return role === "resident" ? "Home" : "Dashboard";
+    if (role === "resident") return "Home";
+    if (role === "guard") return "Vehicle Lookup";
+    return "Dashboard";
   }
   const last = segments[1];
   return last
