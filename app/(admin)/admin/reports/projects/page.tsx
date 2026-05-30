@@ -36,7 +36,7 @@ export default function ProjectsReportPage({
 }
 
 async function ProjectsData({ searchParams }: { searchParams: SearchParams }) {
-  const { profile } = await requireRole(["admin", "super_admin", "union"]);
+  const { profile } = await requireRole(["admin", "super_admin", "union", "accountant"]);
   if (!profile.building_id) {
     return (
       <div className="card-soft">

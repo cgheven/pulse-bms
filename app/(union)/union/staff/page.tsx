@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate, formatPhone } from "@/lib/utils";
 import { ProposeButton } from "@/components/union/propose-button";
+import { AccountantLoginControls } from "@/components/admin/staff/accountant-login-controls";
 import { STAFF_ROLE_LABELS, type StaffRole } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export default async function UnionStaffPage() {
 
   const { data: staff } = await supabase
     .from("bms_staff")
-    .select("id, full_name, role, phone, monthly_salary, join_date, exit_date, is_active")
+    .select("id, full_name, role, phone, monthly_salary, join_date, exit_date, is_active, profile_id")
     .eq("building_id", profile.building_id)
     .order("is_active", { ascending: false })
     .order("full_name", { ascending: true });
@@ -57,12 +58,13 @@ export default async function UnionStaffPage() {
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Joined</th>
                 <th className="px-4 py-3 text-right">Salary</th>
+                <th className="px-4 py-3 text-right">Login</th>
               </tr>
             </thead>
             <tbody>
               {active.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                     No active staff.
                   </td>
                 </tr>
@@ -77,6 +79,19 @@ export default async function UnionStaffPage() {
                     <td className="px-4 py-3 text-sm">{s.join_date ? formatDate(s.join_date) : "—"}</td>
                     <td className="px-4 py-3 text-right font-semibold">
                       {formatCurrency(Number(s.monthly_salary ?? 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2 flex-wrap">
+                        <AccountantLoginControls
+                          staff={{
+                            id: s.id,
+                            full_name: s.full_name,
+                            phone: s.phone,
+                            role: s.role,
+                            profile_id: s.profile_id ?? null,
+                          }}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))

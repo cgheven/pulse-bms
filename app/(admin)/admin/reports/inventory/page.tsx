@@ -32,7 +32,7 @@ export default function InventoryReportPage({ searchParams }: { searchParams: Se
 }
 
 async function InventoryReportData({ searchParams }: { searchParams: SearchParams }) {
-  const { profile } = await requireRole(["admin", "super_admin"]);
+  const { profile } = await requireRole(["admin", "super_admin", "accountant"]);
   if (!profile.building_id) {
     return <p className="text-sm text-muted-foreground">No building assigned.</p>;
   }

@@ -204,6 +204,15 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       ],
     },
   ],
+  accountant: [
+    {
+      label: "Finance",
+      items: [
+        { href: "/admin/maintenance", label: "Maintenance", icon: Receipt },
+        { href: "/admin/reports",     label: "Reports",     icon: FileSpreadsheet },
+      ],
+    },
+  ],
 };
 
 const ROLE_HOME: Record<Role, string> = {
@@ -213,6 +222,7 @@ const ROLE_HOME: Record<Role, string> = {
   resident:    "/resident",
   sales:       "/super-admin/leads",
   guard:       "/guard",
+  accountant:  "/accountant",
 };
 
 interface NavLinkProps {

@@ -83,7 +83,9 @@ async function MaintenanceHeader({ defaultMonth }: { defaultMonth: string }) {
   const header = await loadHeaderData();
   return (
     <HeaderShell>
-      <GenerateInvoicesButton defaultMonth={defaultMonth} />
+      {header?.role !== "accountant" && (
+        <GenerateInvoicesButton defaultMonth={defaultMonth} />
+      )}
       {header?.flats ? (
         <RecordPaymentButton
           flats={header.flats}
@@ -147,7 +149,7 @@ async function sumPaymentsByInvoice(
  *   - "Credit balances" is the sum of unapplied `bms_flat_credits.amount`.
  */
 async function MaintenanceKpis() {
-  const { profile } = await requireRole(["admin", "super_admin"]);
+  const { profile } = await requireRole(["admin", "super_admin", "accountant"]);
   if (!profile.building_id) return null;
   const supabase = await createClient();
 
@@ -335,7 +337,7 @@ async function DuesTab() {
 }
 
 async function loadDefaultersData() {
-  const { profile } = await requireRole(["admin", "super_admin"]);
+  const { profile } = await requireRole(["admin", "super_admin", "accountant"]);
   if (!profile.building_id) return { noBuilding: true as const };
   const supabase = await createClient();
 
@@ -459,7 +461,7 @@ async function PaymentsTab() {
 }
 
 async function loadPaymentsData() {
-  const { profile } = await requireRole(["admin", "super_admin"]);
+  const { profile } = await requireRole(["admin", "super_admin", "accountant"]);
   if (!profile.building_id) {
     return { noBuilding: true as const };
   }
@@ -556,7 +558,7 @@ async function loadPaymentsData() {
 // --- Tab 3: Invoices --------------------------------------------------------
 
 async function InvoicesTab() {
-  const { profile } = await requireRole(["admin", "super_admin"]);
+  const { profile } = await requireRole(["admin", "super_admin", "accountant"]);
   if (!profile.building_id) {
     return (
       <div className="card-soft">
@@ -640,7 +642,7 @@ async function InvoicesTab() {
  * two separate helpers each doing their own auth check.
  */
 async function loadHeaderData() {
-  const { profile } = await requireRole(["admin", "super_admin"]);
+  const { profile } = await requireRole(["admin", "super_admin", "accountant"]);
   if (!profile.building_id) return null;
   const supabase = await createClient();
   const [{ data: flats }, { data: building }] = await Promise.all([
@@ -663,5 +665,6 @@ async function loadHeaderData() {
     })),
     buildingName: building?.name ?? "Building",
     buildingId: profile.building_id,
+    role: profile.role,
   };
 }
