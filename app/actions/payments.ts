@@ -102,6 +102,7 @@ export async function recordPayment(input: PaymentInput) {
     "admin",
     "super_admin",
     "union",
+    "accountant",
   ]);
   if (!profile.building_id) throw new Error("No building assigned");
   if (!input.amount || input.amount <= 0) throw new Error("Amount must be positive");

@@ -1,6 +1,6 @@
 // Pulse BMS — shared types
 
-export type Role = "super_admin" | "admin" | "union" | "resident" | "sales" | "guard";
+export type Role = "super_admin" | "admin" | "union" | "resident" | "sales" | "guard" | "accountant";
 
 export const ROLE_LABELS: Record<Role, string> = {
   super_admin: "Super Admin",
@@ -9,6 +9,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   resident:    "Resident",
   sales:       "Sales",
   guard:       "Guard",
+  accountant:  "Accountant",
 };
 
 // Sales lands directly on the Leads CRM — that is the ONLY surface they
@@ -21,6 +22,7 @@ export const ROLE_HOME: Record<Role, string> = {
   resident:    "/resident",
   sales:       "/super-admin/leads",
   guard:       "/guard",
+  accountant:  "/accountant",
 };
 
 export type Building = {

@@ -20,6 +20,7 @@ import {
   createGuardAccountForStaff,
   revokeGuardAccountForStaff,
 } from "@/app/actions/guard-accounts";
+import { AccountantLoginControls } from "./accountant-login-controls";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
 import { Eye, Pencil, Trash2, ShieldCheck, ShieldOff, ShieldPlus, EyeOff, RefreshCw, MessageCircle, CheckCircle2 } from "lucide-react";
@@ -357,6 +358,9 @@ export function StaffRowActions({ staff }: { staff: StaffRow }) {
           )}
         </>
       )}
+
+      {/* Accountant login controls — all non-chowkidar staff */}
+      {!isChowkidar && <AccountantLoginControls staff={staff} />}
 
       <Link href={`/admin/staff/${buildSlug(staff.full_name, staff.id)}`}>
         <Button variant="ghost" size="sm">
