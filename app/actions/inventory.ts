@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 
 export type InventoryCategory =
@@ -66,12 +67,14 @@ export type InventoryItemInput = {
 
 export async function getInventoryItems() {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return { data: [], error: "No active building selected." };
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("bms_inventory_items")
     .select("*")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("is_active", true)
     .order("name");
 
@@ -81,12 +84,14 @@ export async function getInventoryItems() {
 
 export async function getInventoryTransactions(itemId?: string) {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return { data: [], error: "No active building selected." };
   const supabase = await createClient();
 
   let query = supabase
     .from("bms_inventory_transactions")
     .select("*, bms_profiles!performed_by(full_name)")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -99,19 +104,21 @@ export async function getInventoryTransactions(itemId?: string) {
 
 export async function getInventoryReport(from: string, to: string) {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return { items: [], transactions: [] };
   const supabase = await createClient();
 
   const [{ data: items }, { data: transactions }] = await Promise.all([
     supabase
       .from("bms_inventory_items")
       .select("*")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("is_active", true)
       .order("name"),
     supabase
       .from("bms_inventory_transactions")
       .select("*, bms_inventory_items!item_id(name, unit), bms_profiles!performed_by(full_name)")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("created_at", from)
       .lte("created_at", to + "T23:59:59+05:00")
       .order("created_at", { ascending: false }),
@@ -129,13 +136,14 @@ export async function getInventoryReport(from: string, to: string) {
 export async function createInventoryItem(input: InventoryItemInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("bms_inventory_items")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       name: input.name.trim(),
       category: input.category,
       unit: input.unit,
@@ -153,7 +161,7 @@ export async function createInventoryItem(input: InventoryItemInput) {
 
   if (input.current_stock > 0) {
     await supabase.from("bms_inventory_transactions").insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       item_id: data.id,
       type: "in",
       quantity: input.current_stock,
@@ -167,7 +175,7 @@ export async function createInventoryItem(input: InventoryItemInput) {
       const totalCost = input.current_stock * input.unit_cost;
       const today = new Date().toISOString().slice(0, 10);
       const { error: expErr } = await supabase.from("bms_expenses").insert({
-        building_id: profile.building_id,
+        building_id: buildingId,
         category: "supplies",
         subcategory: "inventory",
         description: `Inventory: ${input.name} (${input.current_stock} ${input.unit} @ Rs. ${input.unit_cost})`,
@@ -186,7 +194,7 @@ export async function createInventoryItem(input: InventoryItemInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "inventory.create",
     entity: "inventory_item",
     entity_id: data.id,
@@ -210,7 +218,8 @@ export async function updateInventoryItem(
 ) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const patch: Record<string, unknown> = {};
@@ -226,7 +235,7 @@ export async function updateInventoryItem(
     .from("bms_inventory_items")
     .update(patch)
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .select()
     .single();
 
@@ -236,7 +245,7 @@ export async function updateInventoryItem(
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "inventory.update",
     entity: "inventory_item",
     entity_id: id,
@@ -251,14 +260,15 @@ export async function updateInventoryItem(
 export async function deleteInventoryItem(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("bms_inventory_items")
     .update({ is_active: false })
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
 
   if (error) throw new Error(error.message);
 
@@ -266,7 +276,7 @@ export async function deleteInventoryItem(id: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "inventory.delete",
     entity: "inventory_item",
     entity_id: id,
@@ -286,14 +296,15 @@ export async function recordStockMovement(input: {
 }) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data: item, error: fetchErr } = await supabase
     .from("bms_inventory_items")
     .select("current_stock, unit_cost, unit, name")
     .eq("id", input.item_id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
 
   if (fetchErr || !item) throw new Error("Item not found");
@@ -317,7 +328,7 @@ export async function recordStockMovement(input: {
   const { error: txErr } = await supabase
     .from("bms_inventory_transactions")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       item_id: input.item_id,
       type: input.type,
       quantity: txQuantity,
@@ -339,7 +350,7 @@ export async function recordStockMovement(input: {
     .from("bms_inventory_items")
     .update(itemPatch)
     .eq("id", input.item_id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (input.type === "out") updateQ = updateQ.gte("current_stock", input.quantity);
 
   const { data: updateResult, error: updateErr } = await updateQ.select("id").maybeSingle();
@@ -350,7 +361,7 @@ export async function recordStockMovement(input: {
     const totalCost = input.quantity * effectiveUnitCost;
     const today = new Date().toISOString().slice(0, 10);
     const { error: expErr } = await supabase.from("bms_expenses").insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       category: "supplies",
       subcategory: "inventory",
       description: `Inventory: ${item.name} (${input.quantity} ${item.unit ?? "units"} @ Rs. ${effectiveUnitCost})`,
@@ -368,7 +379,7 @@ export async function recordStockMovement(input: {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: `inventory.stock_${input.type}`,
     entity: "inventory_item",
     entity_id: input.item_id,

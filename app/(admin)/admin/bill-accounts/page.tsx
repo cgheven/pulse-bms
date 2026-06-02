@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
 import { BillAccountsClient } from "./bill-accounts-client";
 
@@ -29,7 +30,8 @@ export default function BillAccountsPage() {
 
 async function BillAccountsData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -48,13 +50,13 @@ async function BillAccountsData() {
       .select(
         "id, provider, provider_label, nickname, account_number, location, notes, is_active, created_at",
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("is_active", { ascending: false })
       .order("nickname"),
     supabase
       .from("bms_buildings")
       .select("city")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
   ]);
 
@@ -71,7 +73,7 @@ async function BillAccountsData() {
     ? await supabase
         .from("bms_expenses")
         .select("bill_account_id, expense_date, amount")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .in("bill_account_id", accountIds)
         .gte("expense_date", sixMonthsAgo)
         .order("expense_date", { ascending: false })

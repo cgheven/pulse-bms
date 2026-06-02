@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { loadReceiptData, maybeLogReceiptView } from "@/lib/receipts";
 import { ReceiptPageInner } from "@/components/payments/receipt-page-inner";
 
@@ -19,9 +20,10 @@ export default async function AdminReceiptPage({
 }) {
   const { id } = await params;
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) notFound();
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) notFound();
 
-  const result = await loadReceiptData(id, profile.building_id);
+  const result = await loadReceiptData(id, buildingId);
   if (!result) notFound();
 
   // Debounced audit log — `maybeLogReceiptView` drops a 60s scoped cookie
@@ -32,7 +34,7 @@ export default async function AdminReceiptPage({
     user_id: user.id,
     user_email: user.email,
     role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
   });
 
   return <ReceiptPageInner receipt={result.data} showLegacyReference />;

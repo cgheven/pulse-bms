@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 import { recordPayment, type PaymentInput } from "@/app/actions/payments";
 
@@ -55,7 +56,10 @@ function revalidateAll() {
 export async function createProject(input: ProjectInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = profile.role === "admin"
+    ? await getActiveBuilding()
+    : profile.building_id;
+  if (!buildingId) throw new Error("No active building selected.");
 
   // Validate basics
   const name = input.name?.trim();
@@ -106,7 +110,7 @@ export async function createProject(input: ProjectInput) {
       .from("bms_proposals")
       .select("id")
       .eq("id", input.proposal_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (!prop) throw new Error("Invalid proposal link");
   }
@@ -115,7 +119,7 @@ export async function createProject(input: ProjectInput) {
   const { data: project, error: insErr } = await supabase
     .from("bms_projects")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       name,
       description: input.description?.trim() || null,
       target_amount: input.target_amount ?? null,
@@ -137,7 +141,7 @@ export async function createProject(input: ProjectInput) {
     const { data: flats } = await supabase
       .from("bms_flats")
       .select("id")
-      .eq("building_id", profile.building_id);
+      .eq("building_id", buildingId);
     const rows = (flats ?? []).map((f) => ({
       project_id: project.id,
       flat_id: f.id,
@@ -160,7 +164,7 @@ export async function createProject(input: ProjectInput) {
     const { data: validFlats } = await supabase
       .from("bms_flats")
       .select("id")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .in("id", ids);
     const validIds = new Set((validFlats ?? []).map((f) => f.id));
     const rows = input.per_flat_shares
@@ -183,7 +187,7 @@ export async function createProject(input: ProjectInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "project.create",
     entity: "project",
     entity_id: project.id,
@@ -223,7 +227,10 @@ export async function updateProject(
 ) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = profile.role === "admin"
+    ? await getActiveBuilding()
+    : profile.building_id;
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
 
@@ -231,7 +238,7 @@ export async function updateProject(
     .from("bms_projects")
     .select("id, building_id, contribution_rule")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!existing) throw new Error("Project not found");
 
@@ -259,14 +266,14 @@ export async function updateProject(
     .from("bms_projects")
     .update(patch)
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "project.update",
     entity: "project",
     entity_id: id,
@@ -289,7 +296,10 @@ export async function updateProjectShare(input: {
 }) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = profile.role === "admin"
+    ? await getActiveBuilding()
+    : profile.building_id;
+  if (!buildingId) throw new Error("No active building selected.");
   if (input.expected_amount < 0) {
     throw new Error("Expected amount must be ≥ 0");
   }
@@ -301,7 +311,7 @@ export async function updateProjectShare(input: {
     .from("bms_projects")
     .select("id, building_id, contribution_rule")
     .eq("id", input.project_id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!project) throw new Error("Project not found");
   if (project.contribution_rule === "voluntary") {
@@ -312,7 +322,7 @@ export async function updateProjectShare(input: {
     .from("bms_flats")
     .select("id")
     .eq("id", input.flat_id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!flat) throw new Error("Invalid flat");
 
@@ -345,7 +355,7 @@ export async function updateProjectShare(input: {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "project.share.update",
     entity: "project_share",
     entity_id: input.project_id,
@@ -375,7 +385,10 @@ export async function syncProjectShares(project_id: string) {
     "super_admin",
     "union",
   ]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = profile.role === "admin"
+    ? await getActiveBuilding()
+    : profile.building_id;
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
 
@@ -383,7 +396,7 @@ export async function syncProjectShares(project_id: string) {
     .from("bms_projects")
     .select("id, building_id, contribution_rule, default_per_flat, status")
     .eq("id", project_id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!project) throw new Error("Project not found");
 
@@ -403,7 +416,7 @@ export async function syncProjectShares(project_id: string) {
     supabase
       .from("bms_flats")
       .select("id")
-      .eq("building_id", profile.building_id),
+      .eq("building_id", buildingId),
     supabase
       .from("bms_project_shares")
       .select("flat_id")
@@ -437,7 +450,7 @@ export async function syncProjectShares(project_id: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "project.shares.sync",
     entity: "project",
     entity_id: project_id,
@@ -469,7 +482,10 @@ export async function recordProjectContribution(input: {
 }) {
   await requireNotDemo();
   const { profile } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = profile.role === "admin"
+    ? await getActiveBuilding()
+    : profile.building_id;
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
 
@@ -479,7 +495,7 @@ export async function recordProjectContribution(input: {
     .from("bms_projects")
     .select("id, status, building_id, name")
     .eq("id", input.project_id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!project) throw new Error("Project not found");
   if (project.status !== "active") {
@@ -529,21 +545,24 @@ async function transitionStatus(
 ) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = profile.role === "admin"
+    ? await getActiveBuilding()
+    : profile.building_id;
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("bms_projects")
     .update({ status: next })
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action,
     entity: "project",
     entity_id: id,
@@ -558,14 +577,17 @@ async function transitionStatus(
 export async function linkProposal(project_id: string, proposal_id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = profile.role === "admin"
+    ? await getActiveBuilding()
+    : profile.building_id;
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { data: prop } = await supabase
     .from("bms_proposals")
     .select("id")
     .eq("id", proposal_id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!prop) throw new Error("Invalid proposal link");
 
@@ -573,14 +595,14 @@ export async function linkProposal(project_id: string, proposal_id: string) {
     .from("bms_projects")
     .update({ proposal_id })
     .eq("id", project_id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "project.link_proposal",
     entity: "project",
     entity_id: project_id,
@@ -595,21 +617,24 @@ export async function linkProposal(project_id: string, proposal_id: string) {
 export async function unlinkProposal(project_id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = profile.role === "admin"
+    ? await getActiveBuilding()
+    : profile.building_id;
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("bms_projects")
     .update({ proposal_id: null })
     .eq("id", project_id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "project.unlink_proposal",
     entity: "project",
     entity_id: project_id,

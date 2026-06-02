@@ -4,6 +4,7 @@ import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 import { DOC_TYPE_LABELS } from "@/lib/document-types";
 
@@ -60,7 +61,8 @@ const MAX_LABEL_LENGTH = 80;
 export async function uploadResidentDocument(formData: FormData) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const residentId = formData.get("resident_id") as string;
   const docType   = formData.get("doc_type")    as string;
@@ -118,7 +120,7 @@ export async function uploadResidentDocument(formData: FormData) {
     .from("bms_residents")
     .select("id")
     .eq("id", residentId)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!resident) throw new Error("Resident not found in your building");
 
@@ -127,7 +129,7 @@ export async function uploadResidentDocument(formData: FormData) {
   const ext         = MIME_TO_EXT.get(file.type) ?? "bin";
   const uuid        = crypto.randomUUID();
   const storedName  = `${docType}_${uuid.slice(0, 8)}.${ext}`;
-  const storagePath = `${profile.building_id}/${residentId}/${docType}/${uuid}.${ext}`;
+  const storagePath = `${buildingId}/${residentId}/${docType}/${uuid}.${ext}`;
 
   const adminClient = createAdminClient();
 
@@ -140,7 +142,7 @@ export async function uploadResidentDocument(formData: FormData) {
   const { error: dbErr } = await supabase
     .from("bms_resident_documents")
     .insert({
-      building_id:  profile.building_id,
+      building_id:  buildingId,
       resident_id:  residentId,
       doc_type:     docType,
       label:        rawLabel,
@@ -163,7 +165,7 @@ export async function uploadResidentDocument(formData: FormData) {
     actor_id:   user.id,
     actor_email: user.email,
     actor_role:  profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action:      "document.upload",
     entity:      "resident_document",
     entity_id:   residentId,
@@ -177,14 +179,15 @@ export async function uploadResidentDocument(formData: FormData) {
 export async function deleteResidentDocument(documentId: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { data: doc } = await supabase
     .from("bms_resident_documents")
     .select("id, storage_path, resident_id, doc_type, file_name")
     .eq("id", documentId)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!doc) throw new Error("Document not found");
 
@@ -203,7 +206,7 @@ export async function deleteResidentDocument(documentId: string) {
     actor_id:   user.id,
     actor_email: user.email,
     actor_role:  profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action:      "document.delete",
     entity:      "resident_document",
     entity_id:   doc.resident_id,

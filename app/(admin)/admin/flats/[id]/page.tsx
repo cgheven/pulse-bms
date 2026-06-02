@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate, formatLakh, formatPhone, formatReceiptNo } from "@/lib/utils";
 import { ArrowLeft, Pencil } from "lucide-react";
@@ -13,14 +14,16 @@ export const dynamic = "force-dynamic";
 export default async function FlatDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) notFound();
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) notFound();
   const supabase = await createClient();
 
   const { data: flat } = await supabase
     .from("bms_flats")
     .select("*")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (!flat) notFound();
 
@@ -29,28 +32,28 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
       .from("bms_residents")
       .select("id, full_name, phone, cnic, relationship, is_primary, is_active, move_in_date, entry_fee_paid")
       .eq("flat_id", id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("is_primary", { ascending: false })
       .order("full_name"),
     supabase
       .from("bms_invoices")
       .select("id, invoice_number, billing_month, amount, status, due_date")
       .eq("flat_id", id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("billing_month", { ascending: false })
       .limit(12),
     supabase
       .from("bms_payments")
       .select("id, payment_date, amount, payment_mode, category, receipt_no, invoice_id")
       .eq("flat_id", id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("payment_date", { ascending: false })
       .limit(20),
     supabase
       .from("bms_flat_credits")
       .select("amount")
       .eq("flat_id", id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .is("applied_invoice_id", null),
   ]);
 

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireRole, getCurrentBuildingName } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import {
   loadProjectStandings,
   loadProjectContributions,
@@ -34,7 +35,8 @@ export default function AdminProjectDetailPage({
 async function Inner({ params }: { params: Params }) {
   const { id } = await params;
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground">No building assigned.</p>
@@ -47,7 +49,7 @@ async function Inner({ params }: { params: Params }) {
     .from("bms_projects")
     .select("*")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!project) notFound();
 
@@ -61,23 +63,23 @@ async function Inner({ params }: { params: Params }) {
       supabase
         .from("bms_flats")
         .select("id", { count: "exact", head: true })
-        .eq("building_id", profile.building_id),
+        .eq("building_id", buildingId),
       supabase
         .from("bms_flats")
         .select("id, flat_number, outstanding_dues")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .order("flat_number", { ascending: true }),
       supabase
         .from("bms_payments")
         .select("flat_id, amount")
         .eq("project_id", row.id)
-        .eq("building_id", profile.building_id),
+        .eq("building_id", buildingId),
       row.proposal_id
         ? supabase
             .from("bms_proposals")
             .select("title")
             .eq("id", row.proposal_id)
-            .eq("building_id", profile.building_id)
+            .eq("building_id", buildingId)
             .maybeSingle()
         : Promise.resolve({ data: null }),
       row.created_by
@@ -165,7 +167,7 @@ async function Inner({ params }: { params: Params }) {
       contributions={contributions}
       flats={flatOptions}
       buildingName={buildingName}
-      buildingId={profile.building_id}
+      buildingId={buildingId}
       baseHref="/admin/projects"
       proposalTitle={(proposal as { title: string } | null)?.title ?? null}
       createdByName={

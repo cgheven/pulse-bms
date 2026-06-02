@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
 import { FlatsTable, type FlatRow } from "@/components/admin/flats/flats-table";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
@@ -20,7 +21,9 @@ export default function FlatsPage() {
 // ASYNC inner — does all the fetching
 async function FlatsContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -33,17 +36,17 @@ async function FlatsContent() {
     supabase
       .from("bms_flats")
       .select("id, flat_number, floor, block, size_sqft, monthly_fee, ownership_type, outstanding_dues, notes")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_buildings")
       .select("name, monthly_fee_default")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
     supabase
       .from("bms_residents")
       .select("flat_id, full_name, is_primary, is_active")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("is_active", true),
   ]);
 

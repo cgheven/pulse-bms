@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 
 export type BankAccountInput = {
@@ -17,7 +18,8 @@ export type BankAccountInput = {
 export async function createBankAccount(input: BankAccountInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   // Per-bank opening_balance is locked to 0 — society-wide opening is
@@ -27,7 +29,7 @@ export async function createBankAccount(input: BankAccountInput) {
   const { data, error } = await supabase
     .from("bms_bank_accounts")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       name: input.name.trim(),
       type: input.type,
       account_number_masked: input.account_number_masked?.trim() || null,
@@ -43,7 +45,7 @@ export async function createBankAccount(input: BankAccountInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "bank_account.create",
     entity: "bank_account",
     entity_id: data.id,
@@ -61,7 +63,8 @@ export async function updateBankAccount(
 ) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   // Per-bank opening_balance is locked to 0 — society-wide opening is
@@ -77,7 +80,7 @@ export async function updateBankAccount(
     .from("bms_bank_accounts")
     .update(sanitized)
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -86,7 +89,7 @@ export async function updateBankAccount(
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "bank_account.update",
     entity: "bank_account",
     entity_id: id,

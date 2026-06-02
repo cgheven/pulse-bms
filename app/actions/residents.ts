@@ -4,6 +4,7 @@ import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { normalizePhone, syntheticEmailFromPhone } from "@/lib/phone";
 import { revalidatePath } from "next/cache";
 
@@ -25,7 +26,8 @@ export type ResidentInput = {
 export async function createResident(input: ResidentInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   // If this resident is primary, demote other primaries on same flat
@@ -47,7 +49,7 @@ export async function createResident(input: ResidentInput) {
         {
           data: {
             full_name: input.full_name,
-            building_id: profile.building_id,
+            building_id: buildingId,
             role: "resident",
           },
         },
@@ -61,7 +63,7 @@ export async function createResident(input: ResidentInput) {
           full_name: input.full_name,
           phone: input.phone ?? null,
           role: "resident",
-          building_id: profile.building_id,
+          building_id: buildingId,
           is_active: true,
         });
       }
@@ -71,7 +73,7 @@ export async function createResident(input: ResidentInput) {
   }
 
   const payload = {
-    building_id: profile.building_id,
+    building_id: buildingId,
     flat_id: input.flat_id,
     profile_id,
     full_name: input.full_name.trim(),
@@ -99,14 +101,14 @@ export async function createResident(input: ResidentInput) {
       .from("bms_flats")
       .update({ ownership_type: payload.relationship })
       .eq("id", input.flat_id)
-      .eq("building_id", profile.building_id);
+      .eq("building_id", buildingId);
   }
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "resident.create",
     entity: "resident",
     entity_id: data.id,
@@ -122,7 +124,8 @@ export async function createResident(input: ResidentInput) {
 export async function updateResident(id: string, input: Partial<ResidentInput>) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   // load existing resident to know flat_id
@@ -130,7 +133,7 @@ export async function updateResident(id: string, input: Partial<ResidentInput>) 
     .from("bms_residents")
     .select("flat_id")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
 
   if (input.is_primary && existing?.flat_id) {
@@ -157,7 +160,7 @@ export async function updateResident(id: string, input: Partial<ResidentInput>) 
     .from("bms_residents")
     .update(patch)
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -166,7 +169,7 @@ export async function updateResident(id: string, input: Partial<ResidentInput>) 
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "resident.update",
     entity: "resident",
     entity_id: id,
@@ -182,21 +185,22 @@ export async function updateResident(id: string, input: Partial<ResidentInput>) 
 export async function deleteResident(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("bms_residents")
     .delete()
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "resident.delete",
     entity: "resident",
     entity_id: id,
@@ -253,7 +257,8 @@ export async function createResidentLogin(
 ): Promise<LoginResult> {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const admin = createAdminClient();
 
   // 1. Load the resident — building scoped so admins can't touch other buildings
@@ -261,7 +266,7 @@ export async function createResidentLogin(
     .from("bms_residents")
     .select("id, building_id, full_name, phone, email, profile_id")
     .eq("id", residentId)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (rErr || !resident) throw new Error("Resident not found");
 
@@ -341,7 +346,7 @@ export async function createResidentLogin(
         full_name: resident.full_name,
         phone: phone ?? null,
         role: "resident" as const,
-        building_id: profile.building_id,
+        building_id: buildingId,
         is_active: true,
       },
       { onConflict: "id" },
@@ -364,7 +369,7 @@ export async function createResidentLogin(
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "resident.login.create",
     entity: "resident",
     entity_id: residentId,
@@ -385,14 +390,15 @@ export async function resetResidentPassword(
 ): Promise<LoginResult> {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const admin = createAdminClient();
 
   const { data: resident, error: rErr } = await admin
     .from("bms_residents")
     .select("id, profile_id, bms_profiles:profile_id(email, phone)")
     .eq("id", residentId)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (rErr || !resident) throw new Error("Resident not found");
   if (!resident.profile_id) throw new Error("Resident has no login yet");
@@ -415,7 +421,7 @@ export async function resetResidentPassword(
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "resident.login.reset",
     entity: "resident",
     entity_id: residentId,
@@ -436,14 +442,15 @@ export async function resetResidentPassword(
 export async function revokeResidentLogin(residentId: string): Promise<void> {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const admin = createAdminClient();
 
   const { data: resident, error: rErr } = await admin
     .from("bms_residents")
     .select("id, profile_id")
     .eq("id", residentId)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (rErr || !resident) throw new Error("Resident not found");
   if (!resident.profile_id) return; // Already revoked — idempotent
@@ -481,7 +488,7 @@ export async function revokeResidentLogin(residentId: string): Promise<void> {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "resident.login.revoke",
     entity: "resident",
     entity_id: residentId,

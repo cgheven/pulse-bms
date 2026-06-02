@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 
 /* ────────────────────────────────────────────────────────────── */
@@ -66,7 +67,8 @@ function validate(input: BillAccountInput): {
 export async function createBillAccount(input: BillAccountInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const clean = validate(input);
   const supabase = await createClient();
@@ -74,7 +76,7 @@ export async function createBillAccount(input: BillAccountInput) {
   const { data, error } = await supabase
     .from("bms_bill_accounts")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       provider: clean.provider,
       provider_label: clean.provider_label,
       nickname: clean.nickname,
@@ -92,7 +94,7 @@ export async function createBillAccount(input: BillAccountInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "bill_account.create",
     entity: "bill_account",
     entity_id: data.id,
@@ -114,7 +116,8 @@ export async function updateBillAccount(
 ) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
 
@@ -127,7 +130,7 @@ export async function updateBillAccount(
       "id, provider, provider_label, nickname, account_number, location, notes, is_active",
     )
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!existing) throw new Error("Bill account not found");
 
@@ -154,14 +157,14 @@ export async function updateBillAccount(
       notes: clean.notes,
     })
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "bill_account.update",
     entity: "bill_account",
     entity_id: id,
@@ -198,14 +201,15 @@ export async function updateBillAccount(
 export async function setBillAccountActive(id: string, active: boolean) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { data: existing } = await supabase
     .from("bms_bill_accounts")
     .select("id")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!existing) throw new Error("Bill account not found");
 
@@ -213,14 +217,14 @@ export async function setBillAccountActive(id: string, active: boolean) {
     .from("bms_bill_accounts")
     .update({ is_active: active })
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: active ? "bill_account.reactivate" : "bill_account.deactivate",
     entity: "bill_account",
     entity_id: id,

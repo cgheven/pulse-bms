@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { requireRole, getCurrentBuildingName } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { rangeFromSearchParams } from "@/lib/reports/date-range";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
 import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
@@ -36,7 +37,8 @@ export default function DayBookPage({
 
 async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
   const { profile } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -66,14 +68,14 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
     supabase
       .from("bms_buildings")
       .select("opening_balance_amount, opening_balance_date")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
     supabase
       .from("bms_bank_accounts")
       .select(
         "id, name, type, opening_balance, opening_balance_date, is_active",
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("type", { ascending: false })
       .order("name"),
     supabase
@@ -84,7 +86,7 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
          bms_flats(flat_number),
          bms_residents(full_name)`,
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .lte("payment_date", dateRange.to)
       .order("payment_date", { ascending: true }),
     supabase
@@ -92,7 +94,7 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
       .select(
         "id, expense_date, category, subcategory, description, vendor, amount, bank_account_id",
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .lte("expense_date", dateRange.to)
       .order("expense_date", { ascending: true }),
     supabase
@@ -102,7 +104,7 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
          bank_account_id, staff_id,
          bms_staff(full_name)`,
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .lte("payment_date", dateRange.to)
       .order("payment_date", { ascending: true }),
   ]);

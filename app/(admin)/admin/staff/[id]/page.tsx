@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { STAFF_ROLE_LABELS, type StaffRole } from "@/types";
 import { formatCurrency, formatDate, formatPhone, formatCNIC } from "@/lib/utils";
 import { parseSlugSuffix } from "@/lib/slug";
@@ -37,6 +38,7 @@ export default async function StaffDetailPage({
   searchParams: SearchParams;
 }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
   const { id: slug } = await params;
   const { month: monthParam } = await searchParams;
   const supabase = await createClient();
@@ -55,7 +57,7 @@ export default async function StaffDetailPage({
     const { data: idList } = await supabase
       .from("bms_staff")
       .select("id")
-      .eq("building_id", profile.building_id);
+      .eq("building_id", buildingId);
     const match = (idList ?? []).find((r) =>
       r.id.replace(/-/g, "").toLowerCase().endsWith(suffix),
     );
@@ -66,7 +68,7 @@ export default async function StaffDetailPage({
   const { data: staff } = await supabase
     .from("bms_staff")
     .select("*")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("id", resolvedId)
     .maybeSingle();
   if (!staff) notFound();
@@ -74,7 +76,7 @@ export default async function StaffDetailPage({
   const { data: building } = await supabase
     .from("bms_buildings")
     .select("name")
-    .eq("id", profile.building_id!)
+    .eq("id", buildingId!)
     .single();
 
   const now = new Date();
@@ -88,7 +90,7 @@ export default async function StaffDetailPage({
       .from("bms_attendance")
       .select("date,status")
       .eq("staff_id", staff.id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("date", monthStart)
       .lte("date", monthEnd)
       .order("date", { ascending: true }),
@@ -96,7 +98,7 @@ export default async function StaffDetailPage({
       .from("bms_salary_payments")
       .select("*")
       .eq("staff_id", staff.id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("pay_month", { ascending: false }),
   ]);
 

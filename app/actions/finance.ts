@@ -2,6 +2,7 @@
 
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 
 export type FinanceMonthly = {
   month: string; // YYYY-MM
@@ -26,7 +27,8 @@ function ymKey(d: string | Date) {
 
 export async function getFinanceSummary(): Promise<FinanceSummary> {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const today = new Date();
@@ -56,50 +58,50 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
     supabase
       .from("bms_buildings")
       .select("fund_balance")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
     supabase
       .from("bms_payments")
       .select("amount, payment_date")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("payment_date", start12Iso),
     supabase
       .from("bms_expenses")
       .select("amount, expense_date, category")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("expense_date", start12Iso),
     supabase
       .from("bms_salary_payments")
       .select("amount, payment_date")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("payment_date", start12Iso),
     supabase
       .from("bms_payments")
       .select("amount")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("payment_date", ytdStart),
     supabase
       .from("bms_expenses")
       .select("amount")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("expense_date", ytdStart),
     supabase
       .from("bms_salary_payments")
       .select("amount")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("payment_date", ytdStart),
     supabase
       .from("bms_payments")
       .select("amount")
-      .eq("building_id", profile.building_id),
+      .eq("building_id", buildingId),
     supabase
       .from("bms_expenses")
       .select("amount")
-      .eq("building_id", profile.building_id),
+      .eq("building_id", buildingId),
     supabase
       .from("bms_salary_payments")
       .select("amount")
-      .eq("building_id", profile.building_id),
+      .eq("building_id", buildingId),
   ]);
   const initialFund = Number(building?.fund_balance ?? 0);
 

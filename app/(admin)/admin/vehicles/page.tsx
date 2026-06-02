@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { searchVehicles } from "@/app/actions/vehicles";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -36,7 +37,9 @@ async function VehiclesContent({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -50,16 +53,16 @@ async function VehiclesContent({
   const supabase = await createClient();
 
   const [{ rows: vehicles, truncated }, { data: flats }, { data: residents }] = await Promise.all([
-    searchVehicles({ buildingId: profile.building_id, query: queryStr }),
+    searchVehicles({ buildingId, query: queryStr }),
     supabase
       .from("bms_flats")
       .select("id, flat_number")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_residents")
       .select("id, flat_id, full_name")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("is_active", true)
       .order("full_name"),
   ]);

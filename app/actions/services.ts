@@ -4,6 +4,7 @@ import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { SERVICE_CATEGORIES, type ServiceCategory } from "@/lib/service-categories";
 import { revalidatePath } from "next/cache";
 
@@ -61,7 +62,18 @@ function sanitizeText(input: string, maxLen: number): string {
 export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> {
   await requireNotDemo();
   const { profile, user } = await requireRole(["resident", "admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+
+  // Resident uses profile.building_id; admin uses active building context.
+  let buildingId: string;
+  if (profile.role === "resident") {
+    if (!profile.building_id) throw new Error("No building assigned");
+    buildingId = profile.building_id;
+  } else {
+    const activeBuildingId = await getActiveBuilding();
+    if (!activeBuildingId) throw new Error("No active building selected.");
+    buildingId = activeBuildingId;
+  }
+
   const supabase = await createClient();
 
   // Sanitize free-text — see helper comment.
@@ -81,7 +93,7 @@ export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> 
     .from("bms_residents")
     .select("id, flat_id")
     .eq("profile_id", user.id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("is_active", true)
     .order("is_primary", { ascending: false })
     .limit(1)
@@ -105,7 +117,7 @@ export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> 
       })
       .eq("id", input.id)
       .eq("profile_id", user.id)
-      .eq("building_id", profile.building_id) // cross-building guard
+      .eq("building_id", buildingId) // cross-building guard
       .select("*")
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -115,7 +127,7 @@ export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> 
       actor_id: user.id,
       actor_email: user.email,
       actor_role: profile.role,
-      building_id: profile.building_id,
+      building_id: buildingId,
       action: "service.update",
       entity: "service",
       entity_id: data.id,
@@ -127,7 +139,7 @@ export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> 
   }
 
   const payload = {
-    building_id: profile.building_id,
+    building_id: buildingId,
     profile_id: user.id,
     resident_id: residency?.id ?? null,
     flat_id: residency?.flat_id ?? null,
@@ -148,7 +160,7 @@ export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> 
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "service.create",
     entity: "service",
     entity_id: data.id,
@@ -162,7 +174,18 @@ export async function upsertMyService(input: ServiceInput): Promise<ServiceRow> 
 export async function deactivateService(serviceId: string): Promise<void> {
   await requireNotDemo();
   const { profile, user } = await requireRole(["resident", "admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+
+  // Resident uses profile.building_id; admin uses active building context.
+  let buildingId: string;
+  if (profile.role === "resident") {
+    if (!profile.building_id) throw new Error("No building assigned");
+    buildingId = profile.building_id;
+  } else {
+    const activeBuildingId = await getActiveBuilding();
+    if (!activeBuildingId) throw new Error("No active building selected.");
+    buildingId = activeBuildingId;
+  }
+
   const supabase = await createClient();
 
   // Defense in depth — even though RLS UPDATE gates this, scope the WHERE
@@ -172,7 +195,7 @@ export async function deactivateService(serviceId: string): Promise<void> {
     .from("bms_services")
     .update({ is_active: false })
     .eq("id", serviceId)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
 
   const { error } =
     profile.role === "admin" || profile.role === "super_admin"
@@ -184,7 +207,7 @@ export async function deactivateService(serviceId: string): Promise<void> {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "service.remove",
     entity: "service",
     entity_id: serviceId,
@@ -205,7 +228,17 @@ export async function getBuildingServices(): Promise<{
   services: ServiceCard[];
 }> {
   const { profile, user } = await requireRole(["resident", "admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+
+  // Resident uses profile.building_id; admin uses active building context.
+  let buildingId: string;
+  if (profile.role === "resident") {
+    if (!profile.building_id) throw new Error("No building assigned");
+    buildingId = profile.building_id;
+  } else {
+    const activeBuildingId = await getActiveBuilding();
+    if (!activeBuildingId) throw new Error("No active building selected.");
+    buildingId = activeBuildingId;
+  }
 
   // Admin client because we need to denormalize profile (name + phone) and
   // flat (flat_number) — RLS on those tables is restrictive for residents.
@@ -214,7 +247,7 @@ export async function getBuildingServices(): Promise<{
   const { data: rows } = await admin
     .from("bms_services")
     .select("*")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
   const services = (rows ?? []) as ServiceRow[];
@@ -239,7 +272,7 @@ export async function getBuildingServices(): Promise<{
       ? admin
           .from("bms_flats")
           .select("id, flat_number")
-          .eq("building_id", profile.building_id)
+          .eq("building_id", buildingId)
           .in("id", flatIds)
       : Promise.resolve({
           data: [] as { id: string; flat_number: string }[],

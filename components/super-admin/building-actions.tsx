@@ -143,14 +143,18 @@ export function BuildingRowActions({
   );
 }
 
-export function CreateBuildingButton() {
+export function CreateBuildingButton({
+  admins = [],
+}: {
+  admins?: { id: string; label: string }[];
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button className="btn-big" onClick={() => setOpen(true)}>
         + Add Building
       </Button>
-      <BuildingFormDialog mode="create" open={open} onOpenChange={setOpen} />
+      <BuildingFormDialog mode="create" open={open} onOpenChange={setOpen} admins={admins} />
     </>
   );
 }

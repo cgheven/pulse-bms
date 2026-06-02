@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 
 export type TaskRecurrence = "weekly" | "monthly" | "quarterly" | "yearly" | null;
@@ -32,13 +33,14 @@ function advanceDate(iso: string, recurrence: Exclude<TaskRecurrence, null>): st
 export async function createFacilityTask(input: FacilityTaskInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("bms_facility_tasks")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       title: input.title,
       description: input.description ?? null,
       task_type: input.task_type ?? "scheduled",
@@ -56,7 +58,7 @@ export async function createFacilityTask(input: FacilityTaskInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "facility_task.create",
     entity: "facility_task",
     entity_id: data.id,
@@ -70,14 +72,15 @@ export async function createFacilityTask(input: FacilityTaskInput) {
 export async function updateFacilityTask(id: string, input: Partial<FacilityTaskInput>) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("bms_facility_tasks")
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -86,7 +89,7 @@ export async function updateFacilityTask(id: string, input: Partial<FacilityTask
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "facility_task.update",
     entity: "facility_task",
     entity_id: id,
@@ -100,14 +103,15 @@ export async function updateFacilityTask(id: string, input: Partial<FacilityTask
 export async function markTaskDone(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data: task } = await supabase
     .from("bms_facility_tasks")
     .select("*")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (!task) throw new Error("Task not found");
 
@@ -131,7 +135,7 @@ export async function markTaskDone(id: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "facility_task.done",
     entity: "facility_task",
     entity_id: id,
@@ -144,20 +148,21 @@ export async function markTaskDone(id: string) {
 export async function deleteFacilityTask(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
   const { error } = await supabase
     .from("bms_facility_tasks")
     .delete()
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "facility_task.delete",
     entity: "facility_task",
     entity_id: id,
@@ -172,7 +177,8 @@ export async function assignComplaint(input: {
 }) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { error } = await supabase
@@ -183,14 +189,14 @@ export async function assignComplaint(input: {
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "complaint.assign",
     entity: "complaint",
     entity_id: input.id,
@@ -207,7 +213,8 @@ export async function updateComplaintStatus(input: {
 }) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const update: Record<string, unknown> = {
@@ -223,14 +230,14 @@ export async function updateComplaintStatus(input: {
     .from("bms_complaints")
     .update(update)
     .eq("id", input.id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "complaint.status_change",
     entity: "complaint",
     entity_id: input.id,

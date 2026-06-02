@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { formatCurrency, formatDate, getMonthRange } from "@/lib/utils";
 import { AddExpenseButton } from "@/components/admin/expenses/add-expense-button";
 import { ExpenseRowActions } from "@/components/admin/expenses/expense-row-actions";
@@ -106,6 +107,7 @@ async function ExpensesContent({
   searchParams: SearchParams;
 }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
   const sp = await searchParams;
   const supabase = await createClient();
 
@@ -114,7 +116,7 @@ async function ExpensesContent({
   let query = supabase
     .from("bms_expenses")
     .select("*")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .order("expense_date", { ascending: false });
 
   if (sp.category) query = query.eq("category", sp.category);
@@ -128,7 +130,7 @@ async function ExpensesContent({
   const { data: thisMonth } = await supabase
     .from("bms_expenses")
     .select("category,amount")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .gte("expense_date", month.start)
     .lte("expense_date", month.end);
 
@@ -144,7 +146,7 @@ async function ExpensesContent({
     <>
     <div className="flex items-center justify-between gap-3 mb-2">
       <h1>Expenses</h1>
-      <AddExpenseButton buildingId={profile.building_id} />
+      <AddExpenseButton buildingId={buildingId} />
     </div>
     <Tabs defaultValue="list">
       <TabsList>
@@ -225,7 +227,7 @@ async function ExpensesContent({
                     </td>
                     <td className="px-3 py-3 text-right">
                       <ExpenseRowActions
-                        buildingId={profile.building_id}
+                        buildingId={buildingId}
                         expense={{
                           id: e.id,
                           category: e.category,

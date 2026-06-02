@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MembersTab } from "@/components/admin/union/members-tab";
@@ -21,7 +22,9 @@ export default function AdminUnionPage() {
 
 async function UnionContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned to your account.</p>
@@ -35,18 +38,18 @@ async function UnionContent() {
     supabase
       .from("bms_union_members")
       .select("id, full_name, position, term_start, term_end, is_active, profile_id")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("is_active", { ascending: false })
       .order("term_start", { ascending: false }),
     supabase
       .from("bms_elections")
       .select("id, cycle_label, scheduled_date, status, results")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("scheduled_date", { ascending: false }),
     supabase
       .from("bms_profiles")
       .select("id, full_name, email")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("role", "resident")
       .eq("is_active", true)
       .order("full_name", { ascending: true }),

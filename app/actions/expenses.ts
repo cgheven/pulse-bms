@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 
 export type ExpenseCategory = "utilities" | "repairs" | "salaries" | "supplies" | "other";
@@ -54,7 +55,8 @@ export type ExpenseInput = {
 export async function createExpense(input: ExpenseInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   // Defensive coercion — a malformed client could submit an empty string
@@ -91,7 +93,7 @@ export async function createExpense(input: ExpenseInput) {
       .from("bms_bank_accounts")
       .select("id")
       .eq("id", input.bank_account_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (!bankCheck) throw new Error("Invalid bank account");
   }
@@ -106,7 +108,7 @@ export async function createExpense(input: ExpenseInput) {
       .from("bms_bill_accounts")
       .select("id")
       .eq("id", input.bill_account_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("is_active", true)
       .maybeSingle();
     if (!billCheck) throw new Error("Invalid bill account");
@@ -115,7 +117,7 @@ export async function createExpense(input: ExpenseInput) {
   const { data, error } = await supabase
     .from("bms_expenses")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       category: input.category,
       subcategory: input.subcategory ?? null,
       description: input.description,
@@ -140,7 +142,7 @@ export async function createExpense(input: ExpenseInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "expense.create",
     entity: "expense",
     entity_id: data.id,
@@ -155,7 +157,8 @@ export async function createExpense(input: ExpenseInput) {
 export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   // Defensive coercion — empty strings from a malformed client would
@@ -193,7 +196,7 @@ export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
       .from("bms_bank_accounts")
       .select("id")
       .eq("id", input.bank_account_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (!bankCheck) throw new Error("Invalid bank account");
   }
@@ -206,7 +209,7 @@ export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
       .from("bms_bill_accounts")
       .select("id")
       .eq("id", input.bill_account_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("is_active", true)
       .maybeSingle();
     if (!billCheck) throw new Error("Invalid bill account");
@@ -224,7 +227,7 @@ export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
       "id, category, subcategory, description, amount, expense_date, is_recurring, recurrence, vendor, receipt_url, is_bill, bank_account_id, bill_account_id, units_consumed, due_date",
     )
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!existing) throw new Error("Expense not found");
 
@@ -232,7 +235,7 @@ export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
     .from("bms_expenses")
     .update(input)
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -241,7 +244,7 @@ export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "expense.update",
     entity: "expense",
     entity_id: id,
@@ -290,21 +293,22 @@ export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
 export async function deleteExpense(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("bms_expenses")
     .delete()
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "expense.delete",
     entity: "expense",
     entity_id: id,

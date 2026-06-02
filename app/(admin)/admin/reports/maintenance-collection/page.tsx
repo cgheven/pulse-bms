@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { requireRole, getCurrentBuildingName } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { rangeFromSearchParams } from "@/lib/reports/date-range";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
 import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
@@ -40,7 +41,8 @@ async function MaintenanceCollectionData({
   searchParams: SearchParams;
 }) {
   const { profile } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -67,7 +69,7 @@ async function MaintenanceCollectionData({
            bms_residents(full_name),
            bms_invoices(billing_month)`,
         )
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .eq("category", "maintenance")
         .gte("payment_date", dateRange.from)
         .lte("payment_date", dateRange.to)
@@ -75,12 +77,12 @@ async function MaintenanceCollectionData({
       supabase
         .from("bms_flats")
         .select("id, flat_number")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .order("flat_number"),
       supabase
         .from("bms_bank_accounts")
         .select("id, name, type")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .order("type", { ascending: false })
         .order("name"),
     ]);

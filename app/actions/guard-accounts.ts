@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 import { normalizePhone, syntheticEmailFromPhone } from "@/lib/phone";
 
@@ -25,7 +26,8 @@ export async function createGuardAccount(input: {
 }) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned to your account.");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   // Validate inputs
   const name = input.name.trim();
@@ -57,7 +59,7 @@ export async function createGuardAccount(input: {
     email,
     full_name: name,
     role: "guard",
-    building_id: profile.building_id,
+    building_id: buildingId,
   });
 
   if (profileError) {
@@ -70,7 +72,7 @@ export async function createGuardAccount(input: {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "guard.create",
     entity: "profile",
     entity_id: newUserId,
@@ -86,7 +88,8 @@ export async function createGuardAccount(input: {
 export async function deleteGuardAccount(guardId: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned to your account.");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const admin = createAdminClient();
 
@@ -100,7 +103,7 @@ export async function deleteGuardAccount(guardId: string) {
   if (fetchError || !guardProfile) {
     throw new Error("Guard not found.");
   }
-  if (guardProfile.building_id !== profile.building_id) {
+  if (guardProfile.building_id !== buildingId) {
     throw new Error("You can only delete guards in your own building.");
   }
   if (guardProfile.role !== "guard") {
@@ -115,7 +118,7 @@ export async function deleteGuardAccount(guardId: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "guard.delete",
     entity: "profile",
     entity_id: guardId,
@@ -130,7 +133,8 @@ export async function deleteGuardAccount(guardId: string) {
 export async function resetGuardPassword(guardId: string, newPassword: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned to your account.");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   if (newPassword.length < 8) throw new Error("Password must be at least 8 characters.");
 
@@ -146,7 +150,7 @@ export async function resetGuardPassword(guardId: string, newPassword: string) {
   if (fetchError || !guardProfile) {
     throw new Error("Guard not found.");
   }
-  if (guardProfile.building_id !== profile.building_id) {
+  if (guardProfile.building_id !== buildingId) {
     throw new Error("You can only reset passwords for guards in your own building.");
   }
   if (guardProfile.role !== "guard") {
@@ -162,7 +166,7 @@ export async function resetGuardPassword(guardId: string, newPassword: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "guard.password_reset",
     entity: "profile",
     entity_id: guardId,
@@ -178,7 +182,8 @@ export async function createGuardAccountForStaff(
 ) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned to your account.");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   if (!isValidUUID(staffId)) throw new Error("Invalid staff ID.");
 
@@ -199,7 +204,7 @@ export async function createGuardAccountForStaff(
     .single();
 
   if (staffFetchError || !staffRow) throw new Error("Staff member not found.");
-  if (staffRow.building_id !== profile.building_id) {
+  if (staffRow.building_id !== buildingId) {
     throw new Error("You can only manage staff in your own building.");
   }
   if (staffRow.role !== "chowkidar") {
@@ -231,7 +236,7 @@ export async function createGuardAccountForStaff(
     .update({
       full_name: staffRow.full_name,
       role: "guard",
-      building_id: profile.building_id,
+      building_id: buildingId,
       phone: canonicalPhone,
     })
     .eq("id", newUserId);
@@ -257,7 +262,7 @@ export async function createGuardAccountForStaff(
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "guard.create",
     entity: "profile",
     entity_id: newUserId,
@@ -273,7 +278,8 @@ export async function createGuardAccountForStaff(
 export async function revokeGuardAccountForStaff(staffId: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned to your account.");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   if (!isValidUUID(staffId)) throw new Error("Invalid staff ID.");
 
@@ -287,7 +293,7 @@ export async function revokeGuardAccountForStaff(staffId: string) {
     .single();
 
   if (staffFetchError || !staffRow) throw new Error("Staff member not found.");
-  if (staffRow.building_id !== profile.building_id) {
+  if (staffRow.building_id !== buildingId) {
     throw new Error("You can only manage staff in your own building.");
   }
   if (staffRow.role !== "chowkidar") {
@@ -318,7 +324,7 @@ export async function revokeGuardAccountForStaff(staffId: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "guard.revoke",
     entity: "profile",
     entity_id: revokedProfileId,

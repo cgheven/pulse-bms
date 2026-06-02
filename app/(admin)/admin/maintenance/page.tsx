@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { GenerateInvoicesButton } from "@/components/admin/billing/generate-invoices-button";
 import { InvoicesList, type InvoiceRow } from "@/components/admin/billing/invoices-list";
 import { PaymentsList, type PaymentRow } from "@/components/admin/payments/payments-list";
@@ -148,7 +149,8 @@ async function sumPaymentsByInvoice(
  */
 async function MaintenanceKpis() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) return null;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return null;
   const supabase = await createClient();
 
   const today = new Date();
@@ -164,7 +166,7 @@ async function MaintenanceKpis() {
     supabase
       .from("bms_invoices")
       .select("id, amount, status")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .neq("status", "waived")
       .gte("billing_month", `${ym}-01`)
       .lt("billing_month", nextMonthFirstDay(ym)),
@@ -172,21 +174,21 @@ async function MaintenanceKpis() {
     supabase
       .from("bms_payments")
       .select("amount")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("payment_date", `${ym}-01`)
       .lt("payment_date", nextMonthFirstDay(ym)),
     // Open invoices (any month) — used to count defaulters.
     supabase
       .from("bms_invoices")
       .select("id, amount")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .neq("status", "paid")
       .neq("status", "waived"),
     // Unapplied advance credit (society holds this money on behalf of flats).
     supabase
       .from("bms_flat_credits")
       .select("amount")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .is("applied_invoice_id", null),
   ]);
 
@@ -207,7 +209,7 @@ async function MaintenanceKpis() {
   if (openIds.length) {
     const paidByInv = await sumPaymentsByInvoice(
       supabase,
-      profile.building_id,
+      buildingId,
       openIds,
     );
     defaulterCount = (openInvoices ?? []).filter((inv) => {
@@ -336,13 +338,14 @@ async function DuesTab() {
 
 async function loadDefaultersData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) return { noBuilding: true as const };
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return { noBuilding: true as const };
   const supabase = await createClient();
 
   const { data: invoices } = await supabase
     .from("bms_invoices")
     .select("id, invoice_number, flat_id, billing_month, amount, due_date, status")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .neq("status", "paid")
     .neq("status", "waived")
     .order("billing_month", { ascending: true });
@@ -359,23 +362,23 @@ async function loadDefaultersData() {
   // parallelized as before.
   const [paidByInvoice, { data: flats }, { data: primaries }, { data: building }] =
     await Promise.all([
-      sumPaymentsByInvoice(supabase, profile.building_id, invIds),
+      sumPaymentsByInvoice(supabase, buildingId, invIds),
       supabase
         .from("bms_flats")
         .select("id, flat_number")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .in("id", flatIds),
       supabase
         .from("bms_residents")
         .select("flat_id, full_name, phone")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .eq("is_active", true)
         .eq("is_primary", true)
         .in("flat_id", flatIds),
       supabase
         .from("bms_buildings")
         .select("name")
-        .eq("id", profile.building_id)
+        .eq("id", buildingId)
         .single(),
     ]);
 
@@ -460,7 +463,8 @@ async function PaymentsTab() {
 
 async function loadPaymentsData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return { noBuilding: true as const };
   }
   const supabase = await createClient();
@@ -474,7 +478,7 @@ async function loadPaymentsData() {
       .select(
         "id, payment_date, flat_id, resident_id, amount, payment_mode, category, receipt_no, legacy_receipt_no, recorded_by, invoice_id, reference_no, received_by_name, received_by_position",
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("category", "maintenance")
       .order("payment_date", { ascending: false })
       .order("created_at", { ascending: false })
@@ -482,12 +486,12 @@ async function loadPaymentsData() {
     supabase
       .from("bms_flats")
       .select("id, flat_number, outstanding_dues")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_buildings")
       .select("name")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
   ]);
 
@@ -549,7 +553,7 @@ async function loadPaymentsData() {
     noBuilding: false as const,
     rows,
     buildingName: building?.name ?? "Building",
-    buildingId: profile.building_id,
+    buildingId,
   };
 }
 
@@ -557,7 +561,8 @@ async function loadPaymentsData() {
 
 async function InvoicesTab() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -570,19 +575,19 @@ async function InvoicesTab() {
     supabase
       .from("bms_invoices")
       .select("id, invoice_number, flat_id, billing_month, amount, status, due_date")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("billing_month", { ascending: false })
       .order("invoice_number", { ascending: false })
       .limit(500),
     supabase
       .from("bms_flats")
       .select("id, flat_number, outstanding_dues")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_buildings")
       .select("name")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
   ]);
 
@@ -591,7 +596,7 @@ async function InvoicesTab() {
   // defaulters and Dues panel).
   const paidMap = await sumPaymentsByInvoice(
     supabase,
-    profile.building_id,
+    buildingId,
     invIds,
   );
 
@@ -600,7 +605,7 @@ async function InvoicesTab() {
   const { data: primaries } = await supabase
     .from("bms_residents")
     .select("flat_id, full_name")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("is_active", true)
     .eq("is_primary", true);
   const primaryByFlat = new Map((primaries ?? []).map((r) => [r.flat_id, r.full_name]));
@@ -622,7 +627,7 @@ async function InvoicesTab() {
     <InvoicesList
       invoices={rows}
       buildingName={building?.name ?? "Building"}
-      buildingId={profile.building_id}
+      buildingId={buildingId}
       flatPickerOptions={(flats ?? []).map((f) => ({
         id: f.id,
         flat_number: f.flat_number,
@@ -641,18 +646,19 @@ async function InvoicesTab() {
  */
 async function loadHeaderData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) return null;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return null;
   const supabase = await createClient();
   const [{ data: flats }, { data: building }] = await Promise.all([
     supabase
       .from("bms_flats")
       .select("id, flat_number, outstanding_dues")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_buildings")
       .select("name")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
   ]);
   return {
@@ -662,6 +668,6 @@ async function loadHeaderData() {
       outstanding_dues: Number(f.outstanding_dues ?? 0),
     })),
     buildingName: building?.name ?? "Building",
-    buildingId: profile.building_id,
+    buildingId,
   };
 }

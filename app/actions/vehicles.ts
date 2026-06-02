@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import type { VehicleType } from "@/types";
 
 const VEHICLE_TYPES: VehicleType[] = ["car", "bike", "ev", "other"];
@@ -104,19 +105,25 @@ async function resolveResidentContext(buildingId: string, profileId: string) {
 export async function createVehicle(input: VehicleInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "resident"]);
-  if (!profile.building_id) throw new Error("No building assigned");
 
   const supabase = await createClient();
   const core = validateCore(input);
 
   let flat_id: string;
   let resident_id: string | null;
+  let buildingId: string;
 
   if (profile.role === "resident") {
-    const ctx = await resolveResidentContext(profile.building_id, profile.id);
+    if (!profile.building_id) throw new Error("No building assigned");
+    buildingId = profile.building_id;
+    const ctx = await resolveResidentContext(buildingId, profile.id);
     flat_id = ctx.flatId;
     resident_id = ctx.residentId;
   } else {
+    const activeBuildingId = await getActiveBuilding();
+    if (!activeBuildingId) throw new Error("No active building selected.");
+    buildingId = activeBuildingId;
+
     if (!input.flat_id) throw new Error("Flat is required");
     flat_id = input.flat_id;
     resident_id = input.resident_id ?? null;
@@ -127,7 +134,7 @@ export async function createVehicle(input: VehicleInput) {
         .from("bms_flats")
         .select("id, building_id")
         .eq("id", flat_id)
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .maybeSingle();
       if (!flat) throw new Error("Flat not found in your building");
     }
@@ -138,7 +145,7 @@ export async function createVehicle(input: VehicleInput) {
         .eq("id", resident_id)
         .maybeSingle();
       if (!res) throw new Error("Resident not found");
-      if (profile.role !== "super_admin" && res.building_id !== profile.building_id) {
+      if (profile.role !== "super_admin" && res.building_id !== buildingId) {
         throw new Error("Resident does not belong to your building");
       }
       if (res.flat_id !== flat_id) {
@@ -156,7 +163,7 @@ export async function createVehicle(input: VehicleInput) {
   }
 
   const payload = {
-    building_id: profile.building_id,
+    building_id: buildingId,
     flat_id,
     resident_id,
     plate_number: core.plate_number,
@@ -180,7 +187,7 @@ export async function createVehicle(input: VehicleInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "vehicle.create",
     entity: "vehicle",
     entity_id: data.id,
@@ -200,9 +207,19 @@ export async function createVehicle(input: VehicleInput) {
 export async function updateVehicle(id: string, input: Partial<VehicleInput>) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "resident"]);
-  if (!profile.building_id) throw new Error("No building assigned");
 
   const supabase = await createClient();
+
+  // Determine effective building id based on role
+  let buildingId: string;
+  if (profile.role === "resident") {
+    if (!profile.building_id) throw new Error("No building assigned");
+    buildingId = profile.building_id;
+  } else {
+    const activeBuildingId = await getActiveBuilding();
+    if (!activeBuildingId) throw new Error("No active building selected.");
+    buildingId = activeBuildingId;
+  }
 
   // Load existing for ownership + flat_id (for primary demotion scope)
   const { data: existing, error: loadErr } = await supabase
@@ -214,13 +231,13 @@ export async function updateVehicle(id: string, input: Partial<VehicleInput>) {
   if (!existing) throw new Error("Vehicle not found");
 
   // Tenant guard
-  if (profile.role !== "super_admin" && existing.building_id !== profile.building_id) {
+  if (profile.role !== "super_admin" && existing.building_id !== buildingId) {
     throw new Error("Vehicle not found in your building");
   }
 
   // Resident ownership guard
   if (profile.role === "resident") {
-    const ctx = await resolveResidentContext(profile.building_id, profile.id);
+    const ctx = await resolveResidentContext(buildingId, profile.id);
     if (existing.resident_id !== ctx.residentId) {
       throw new Error("You can only edit your own vehicles.");
     }
@@ -255,7 +272,7 @@ export async function updateVehicle(id: string, input: Partial<VehicleInput>) {
         .eq("id", input.flat_id)
         .maybeSingle();
       if (!flat) throw new Error("Flat not found");
-      if (profile.role !== "super_admin" && flat.building_id !== profile.building_id) {
+      if (profile.role !== "super_admin" && flat.building_id !== buildingId) {
         throw new Error("Flat not in your building");
       }
       patch.flat_id = input.flat_id;
@@ -268,7 +285,7 @@ export async function updateVehicle(id: string, input: Partial<VehicleInput>) {
           .eq("id", input.resident_id)
           .maybeSingle();
         if (!res) throw new Error("Resident not found");
-        if (profile.role !== "super_admin" && res.building_id !== profile.building_id) {
+        if (profile.role !== "super_admin" && res.building_id !== buildingId) {
           throw new Error("Resident not in your building");
         }
         // Resident must be on the flat the vehicle will live on after the update.
@@ -303,7 +320,7 @@ export async function updateVehicle(id: string, input: Partial<VehicleInput>) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "vehicle.update",
     entity: "vehicle",
     entity_id: id,
@@ -322,7 +339,18 @@ export async function updateVehicle(id: string, input: Partial<VehicleInput>) {
 export async function deleteVehicle(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin", "resident"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+
+  // Determine effective building id based on role
+  let buildingId: string;
+  if (profile.role === "resident") {
+    if (!profile.building_id) throw new Error("No building assigned");
+    buildingId = profile.building_id;
+  } else {
+    const activeBuildingId = await getActiveBuilding();
+    if (!activeBuildingId) throw new Error("No active building selected.");
+    buildingId = activeBuildingId;
+  }
+
   const supabase = await createClient();
 
   const { data: existing } = await supabase
@@ -332,11 +360,11 @@ export async function deleteVehicle(id: string) {
     .maybeSingle();
   if (!existing) throw new Error("Vehicle not found");
 
-  if (profile.role !== "super_admin" && existing.building_id !== profile.building_id) {
+  if (profile.role !== "super_admin" && existing.building_id !== buildingId) {
     throw new Error("Vehicle not found in your building");
   }
   if (profile.role === "resident") {
-    const ctx = await resolveResidentContext(profile.building_id, profile.id);
+    const ctx = await resolveResidentContext(buildingId, profile.id);
     if (existing.resident_id !== ctx.residentId) {
       throw new Error("You can only delete your own vehicles.");
     }
@@ -349,7 +377,7 @@ export async function deleteVehicle(id: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "vehicle.delete",
     entity: "vehicle",
     entity_id: id,
@@ -385,15 +413,17 @@ export async function searchVehicles({
   query?: string;
 }): Promise<VehicleSearchResult> {
   const { profile } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id && profile.role !== "super_admin") {
-    throw new Error("No building assigned");
-  }
 
   // Never trust caller-supplied buildingId for non-super_admin
-  const effectiveBuilding =
-    profile.role === "super_admin"
-      ? buildingId ?? profile.building_id
-      : profile.building_id;
+  let effectiveBuilding: string | null | undefined;
+  if (profile.role === "super_admin") {
+    effectiveBuilding = buildingId ?? profile.building_id;
+  } else if (profile.role === "admin") {
+    effectiveBuilding = await getActiveBuilding();
+  } else {
+    // union
+    effectiveBuilding = profile.building_id;
+  }
   if (!effectiveBuilding) throw new Error("Building is required");
 
   const supabase = await createClient();

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Plus, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,16 +14,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { createAdmin } from "@/app/actions/super-admin";
+import { createAdminWithBuildings } from "@/app/actions/super-admin";
 
 type BuildingOption = { id: string; name: string };
 
@@ -43,11 +36,7 @@ export function AdminInviteButton({ buildings }: { buildings: BuildingOption[] }
       <Button className="btn-big" onClick={() => setOpen(true)}>
         + Create Admin
       </Button>
-      <AdminInviteDialog
-        buildings={buildings}
-        open={open}
-        onOpenChange={setOpen}
-      />
+      <AdminInviteDialog buildings={buildings} open={open} onOpenChange={setOpen} />
     </>
   );
 }
@@ -68,43 +57,61 @@ export function AdminInviteDialog({
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [buildingId, setBuildingId] = useState<string>(buildings[0]?.id ?? "");
+  type BuildingRow = { name: string; total_flats: string };
+  const [newBuildings, setNewBuildings] = useState<BuildingRow[]>([{ name: "", total_flats: "" }]);
+  const lastInputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
+
+  function addRow() {
+    setNewBuildings((prev) => [...prev, { name: "", total_flats: "" }]);
+    setTimeout(() => lastInputRef.current?.focus(), 50);
+  }
+
+  function updateRow(i: number, field: keyof BuildingRow, val: string) {
+    setNewBuildings((prev) => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+  }
+
+  function removeRow(i: number) {
+    setNewBuildings((prev) =>
+      prev.length === 1 ? [{ name: "", total_flats: "" }] : prev.filter((_, idx) => idx !== i)
+    );
+  }
+
+  function reset() {
+    setEmail(""); setFullName(""); setPhone("");
+    setPassword(""); setNewBuildings([{ name: "", total_flats: "" }]);
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    const validBuildings = newBuildings.filter((b) => b.name.trim());
     if (!email.trim()) {
-      toast({ title: "Email is required", variant: "destructive" });
-      return;
+      toast({ title: "Email is required", variant: "destructive" }); return;
     }
     if (password.length < 8) {
-      toast({ title: "Password must be at least 8 characters", variant: "destructive" });
-      return;
+      toast({ title: "Password must be at least 8 characters", variant: "destructive" }); return;
     }
-    if (!buildingId) {
-      toast({ title: "Please select a building", variant: "destructive" });
-      return;
+    if (validBuildings.length === 0) {
+      toast({ title: "Add at least one building name", variant: "destructive" }); return;
     }
 
     startTransition(async () => {
       try {
-        const res = await createAdmin({
+        const res = await createAdminWithBuildings({
           email,
           password,
           full_name: fullName,
           phone,
-          building_id: buildingId,
+          building_names: validBuildings.map((b) => ({
+            name: b.name.trim(),
+            total_flats: Number(b.total_flats) || 0,
+          })),
         });
         toast({
-          title: res.created
-            ? "Admin account created"
-            : "Existing user updated and assigned as admin",
-          description: `${email} can sign in now with the password you set.`,
+          title: res.createdNew ? "Admin account created" : "Admin updated",
+          description: `${validBuildings.length} building${validBuildings.length > 1 ? "s" : ""} created and assigned. ${email} can sign in now.`,
         });
-        setEmail("");
-        setFullName("");
-        setPhone("");
-        setPassword("");
+        reset();
         onOpenChange(false);
         router.refresh();
       } catch (err) {
@@ -119,15 +126,16 @@ export function AdminInviteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Admin Account</DialogTitle>
           <DialogDescription>
-            Set an email and password for the new building admin. They can sign in immediately — no email confirmation needed. Share the password with them privately.
+            Set up the admin and add all their buildings in one go. Buildings are created and assigned immediately.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="space-y-4">
+          {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="email" className="text-base">
               Email Address <span className="text-destructive">*</span>
@@ -143,6 +151,7 @@ export function AdminInviteDialog({
             />
           </div>
 
+          {/* Password */}
           <div className="space-y-2">
             <Label htmlFor="password" className="text-base">
               Password <span className="text-destructive">*</span>
@@ -165,7 +174,6 @@ export function AdminInviteDialog({
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-2"
                   tabIndex={-1}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -184,6 +192,7 @@ export function AdminInviteDialog({
             </p>
           </div>
 
+          {/* Name + Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="full_name" className="text-base">Full Name</Label>
@@ -206,27 +215,55 @@ export function AdminInviteDialog({
             </div>
           </div>
 
+          {/* Buildings — type names inline */}
           <div className="space-y-2">
             <Label className="text-base">
-              Assign to Building <span className="text-destructive">*</span>
+              Buildings <span className="text-destructive">*</span>
             </Label>
-            <Select value={buildingId} onValueChange={setBuildingId}>
-              <SelectTrigger className="h-12 text-base">
-                <SelectValue placeholder="Choose a building" />
-              </SelectTrigger>
-              <SelectContent>
-                {buildings.length === 0 && (
-                  <div className="p-3 text-sm text-muted-foreground">
-                    No buildings yet — add one first.
-                  </div>
-                )}
-                {buildings.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Column headers */}
+            <div className="flex gap-2 px-0.5">
+              <span className="flex-1 text-xs text-muted-foreground">Building Name</span>
+              <span className="w-24 text-xs text-muted-foreground">Total Flats</span>
+              <span className="w-8" />
+            </div>
+            <div className="space-y-2">
+              {newBuildings.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    ref={i === newBuildings.length - 1 ? lastInputRef : undefined}
+                    className="h-12 text-base flex-1"
+                    placeholder={i === 0 ? "e.g. Sunrise Apartments" : "e.g. Al-Madina Heights"}
+                    value={row.name}
+                    onChange={(e) => updateRow(i, "name", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRow(); } }}
+                  />
+                  <Input
+                    className="h-12 text-base w-24"
+                    type="number"
+                    min={0}
+                    placeholder="0"
+                    value={row.total_flats}
+                    onChange={(e) => updateRow(i, "total_flats", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeRow(i)}
+                    className="p-2 text-muted-foreground hover:text-destructive transition-colors shrink-0 w-8"
+                    aria-label="Remove"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addRow}
+              className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors pt-1"
+            >
+              <Plus className="w-4 h-4" />
+              Add another building
+            </button>
           </div>
 
           <DialogFooter className="pt-2">

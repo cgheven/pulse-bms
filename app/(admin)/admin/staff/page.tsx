@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { STAFF_ROLE_LABELS, type StaffRole } from "@/types";
 import { formatCurrency, formatPhone } from "@/lib/utils";
 import { buildSlug } from "@/lib/slug";
@@ -73,6 +74,7 @@ export default function StaffPage() {
 
 async function loadStaffData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
   const supabase = await createClient();
 
   const today = new Date().toISOString().slice(0, 10);
@@ -81,13 +83,13 @@ async function loadStaffData() {
     supabase
       .from("bms_staff")
       .select("id, full_name, role, phone, cnic, monthly_salary, join_date, exit_date, is_active, notes, profile_id, building_id")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("is_active", { ascending: false })
       .order("full_name", { ascending: true }),
     supabase
       .from("bms_attendance")
       .select("staff_id, status")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("date", today),
   ]);
 

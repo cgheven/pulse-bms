@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { PaymentsList, type PaymentRow } from "@/components/admin/payments/payments-list";
 import { RecordPaymentButton } from "@/components/admin/payments/record-payment-button";
 import { formatCurrency } from "@/lib/utils";
@@ -76,18 +77,19 @@ async function OtherIncomeHeader() {
 
 async function loadHeaderData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) return null;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return null;
   const supabase = await createClient();
   const [{ data: flats }, { data: building }] = await Promise.all([
     supabase
       .from("bms_flats")
       .select("id, flat_number, outstanding_dues")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_buildings")
       .select("name")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
   ]);
   return {
@@ -97,7 +99,7 @@ async function loadHeaderData() {
       outstanding_dues: Number(f.outstanding_dues ?? 0),
     })),
     buildingName: building?.name ?? "Building",
-    buildingId: profile.building_id,
+    buildingId,
   };
 }
 
@@ -110,7 +112,8 @@ async function loadHeaderData() {
  */
 async function OtherIncomeKpis() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) return null;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return null;
   const supabase = await createClient();
 
   const today = new Date();
@@ -119,7 +122,7 @@ async function OtherIncomeKpis() {
   const { data: monthPayments } = await supabase
     .from("bms_payments")
     .select("amount, category")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .in("category", ["entry_fee", "fine", "other"])
     .gte("payment_date", `${ym}-01`)
     .lt("payment_date", nextMonthFirstDay(ym));
@@ -238,7 +241,8 @@ function CrossLinkFooter() {
 
 async function loadOtherIncomeData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return { noBuilding: true as const };
   }
   const supabase = await createClient();
@@ -252,7 +256,7 @@ async function loadOtherIncomeData() {
       .select(
         "id, payment_date, flat_id, resident_id, amount, payment_mode, category, receipt_no, legacy_receipt_no, recorded_by, invoice_id, reference_no, received_by_name, received_by_position",
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .in("category", ["entry_fee", "fine", "other"])
       .order("payment_date", { ascending: false })
       .order("created_at", { ascending: false })
@@ -260,12 +264,12 @@ async function loadOtherIncomeData() {
     supabase
       .from("bms_flats")
       .select("id, flat_number, outstanding_dues")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_buildings")
       .select("name")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
   ]);
 
@@ -327,6 +331,6 @@ async function loadOtherIncomeData() {
     noBuilding: false as const,
     rows,
     buildingName: building?.name ?? "Building",
-    buildingId: profile.building_id,
+    buildingId,
   };
 }

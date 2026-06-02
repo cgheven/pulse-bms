@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
 import {
   ResidentsTable,
@@ -27,7 +28,9 @@ export default function ResidentsPage() {
 // ASYNC inner — does all the fetching
 async function ResidentsContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -40,18 +43,18 @@ async function ResidentsContent() {
     supabase
       .from("bms_residents")
       .select("id, flat_id, full_name, phone, email, cnic, relationship, is_primary, is_active, move_in_date, profile_id")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("is_primary", { ascending: false })
       .order("full_name"),
     supabase
       .from("bms_flats")
       .select("id, flat_number")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_buildings")
       .select("name, entry_fee_owner, entry_fee_tenant")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
   ]);
 

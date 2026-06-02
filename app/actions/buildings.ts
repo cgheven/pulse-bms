@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 
 /* ────────────────────────────────────────────────────────────── */
@@ -39,8 +40,8 @@ function todayIso(): string {
 export async function updateOpeningBalance(input: OpeningBalanceInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   // Validate amount — negative opening would imply pre-existing debt
   // which we don't model at this layer; bank accounts can carry it
@@ -67,7 +68,7 @@ export async function updateOpeningBalance(input: OpeningBalanceInput) {
   const { data: previous, error: readErr } = await supabase
     .from("bms_buildings")
     .select("opening_balance_amount, opening_balance_date, fund_balance")
-    .eq("id", profile.building_id)
+    .eq("id", buildingId)
     .single();
   if (readErr) throw new Error(readErr.message);
 
@@ -87,10 +88,10 @@ export async function updateOpeningBalance(input: OpeningBalanceInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "building.opening_balance.update",
     entity: "building",
-    entity_id: profile.building_id,
+    entity_id: buildingId,
     meta: {
       before: {
         opening_balance_amount: Number(previous?.opening_balance_amount ?? 0),
@@ -114,7 +115,7 @@ export async function updateOpeningBalance(input: OpeningBalanceInput) {
   revalidatePath("/admin");
   revalidatePath("/super-admin");
   revalidatePath("/super-admin/buildings");
-  revalidatePath(`/super-admin/buildings/${profile.building_id}`);
+  revalidatePath(`/super-admin/buildings/${buildingId}`);
   revalidatePath("/resident/transparency");
 }
 
@@ -134,8 +135,8 @@ export type BuildingInfoInput = { city: string };
 export async function updateBuildingInfo(input: BuildingInfoInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const city = input.city?.trim();
   if (!city) throw new Error("City is required");
@@ -146,7 +147,7 @@ export async function updateBuildingInfo(input: BuildingInfoInput) {
   const { data: previous, error: readErr } = await supabase
     .from("bms_buildings")
     .select("city")
-    .eq("id", profile.building_id)
+    .eq("id", buildingId)
     .single();
   if (readErr) throw new Error(readErr.message);
 
@@ -159,10 +160,10 @@ export async function updateBuildingInfo(input: BuildingInfoInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "building.info.update",
     entity: "building",
-    entity_id: profile.building_id,
+    entity_id: buildingId,
     meta: {
       before: { city: previous?.city ?? null },
       after: { city },
@@ -190,15 +191,15 @@ export async function updateTransparencySettings(
 ) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
 
   const { data: previous, error: readErr } = await supabase
     .from("bms_buildings")
     .select("show_building_funds, show_fund_balance, show_defaulters")
-    .eq("id", profile.building_id)
+    .eq("id", buildingId)
     .single();
   if (readErr) throw new Error(readErr.message);
 
@@ -216,10 +217,10 @@ export async function updateTransparencySettings(
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "building.transparency.update",
     entity: "building",
-    entity_id: profile.building_id,
+    entity_id: buildingId,
     meta: {
       before: {
         show_building_funds: previous?.show_building_funds ?? false,

@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 import type { StaffRole } from "@/types";
 
@@ -21,11 +22,12 @@ export type StaffInput = {
 export async function createStaff(input: StaffInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("bms_staff")
-    .insert({ ...input, building_id: profile.building_id })
+    .insert({ ...input, building_id: buildingId })
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -34,7 +36,7 @@ export async function createStaff(input: StaffInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "staff.create",
     entity: "staff",
     entity_id: data.id,
@@ -48,13 +50,14 @@ export async function createStaff(input: StaffInput) {
 export async function updateStaff(id: string, input: Partial<StaffInput>) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("bms_staff")
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -63,7 +66,7 @@ export async function updateStaff(id: string, input: Partial<StaffInput>) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "staff.update",
     entity: "staff",
     entity_id: id,
@@ -78,20 +81,21 @@ export async function updateStaff(id: string, input: Partial<StaffInput>) {
 export async function deleteStaff(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
   const { error } = await supabase
     .from("bms_staff")
     .delete()
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "staff.delete",
     entity: "staff",
     entity_id: id,
@@ -110,7 +114,8 @@ export async function setAttendance(input: {
 }) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   // upsert by (staff_id, date)
@@ -119,7 +124,7 @@ export async function setAttendance(input: {
     .select("id")
     .eq("staff_id", input.staff_id)
     .eq("date", input.date)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
 
   let resultId = existing?.id;
@@ -137,7 +142,7 @@ export async function setAttendance(input: {
     const { data, error } = await supabase
       .from("bms_attendance")
       .insert({
-        building_id: profile.building_id,
+        building_id: buildingId,
         staff_id: input.staff_id,
         date: input.date,
         status: input.status,
@@ -154,7 +159,7 @@ export async function setAttendance(input: {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "attendance.set",
     entity: "attendance",
     entity_id: resultId,
@@ -168,14 +173,15 @@ export async function setAttendance(input: {
 export async function markAllPresentToday() {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
 
   const { data: staff } = await supabase
     .from("bms_staff")
     .select("id")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("is_active", true);
 
   if (!staff?.length) return { count: 0 };
@@ -184,13 +190,13 @@ export async function markAllPresentToday() {
   const { data: existing } = await supabase
     .from("bms_attendance")
     .select("staff_id")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("date", today);
   const existingIds = new Set((existing ?? []).map((r) => r.staff_id));
   const toInsert = staff
     .filter((s) => !existingIds.has(s.id))
     .map((s) => ({
-      building_id: profile.building_id!,
+      building_id: buildingId,
       staff_id: s.id,
       date: today,
       status: "present" as const,
@@ -206,7 +212,7 @@ export async function markAllPresentToday() {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "attendance.mark_all_present",
     entity: "attendance",
     meta: { date: today, count: toInsert.length },
@@ -226,13 +232,14 @@ export async function paySalary(input: {
 }) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("bms_salary_payments")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       staff_id: input.staff_id,
       pay_month: input.pay_month,
       amount: input.amount,
@@ -250,7 +257,7 @@ export async function paySalary(input: {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "salary.pay",
     entity: "salary_payment",
     entity_id: data.id,

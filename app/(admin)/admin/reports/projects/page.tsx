@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { requireRole, getCurrentBuildingName } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { rangeFromSearchParams } from "@/lib/reports/date-range";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
 import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
@@ -37,7 +38,8 @@ export default function ProjectsReportPage({
 
 async function ProjectsData({ searchParams }: { searchParams: SearchParams }) {
   const { profile } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -60,7 +62,7 @@ async function ProjectsData({ searchParams }: { searchParams: SearchParams }) {
       supabase
         .from("bms_projects")
         .select("id, name, status")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .order("status", { ascending: true })
         .order("created_at", { ascending: false }),
       // Server-side date filter keeps the wire payload small.
@@ -70,7 +72,7 @@ async function ProjectsData({ searchParams }: { searchParams: SearchParams }) {
           .select(
             "id, payment_date, amount, payment_mode, receipt_no, flat_id, resident_id, received_by_name, received_by_position, bank_account_id, project_id",
           )
-          .eq("building_id", profile.building_id)
+          .eq("building_id", buildingId)
           .eq("category", "project")
           .gte("payment_date", dateRange.from)
           .lte("payment_date", dateRange.to)
@@ -82,7 +84,7 @@ async function ProjectsData({ searchParams }: { searchParams: SearchParams }) {
       supabase
         .from("bms_bank_accounts")
         .select("id, name, type")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .order("type", { ascending: false })
         .order("name"),
     ]);

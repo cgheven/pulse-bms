@@ -44,12 +44,14 @@ export function BuildingFormDialog({
   trigger,
   open: openProp,
   onOpenChange,
+  admins = [],
 }: {
   mode: Mode;
   initial?: Partial<BuildingFormValues>;
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (o: boolean) => void;
+  admins?: { id: string; label: string }[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -64,6 +66,7 @@ export function BuildingFormDialog({
     ...DEFAULTS,
     ...initial,
   });
+  const [adminId, setAdminId] = useState<string>("");
   const [isPending, startTransition] = useTransition();
 
   const set = <K extends keyof BuildingFormValues>(k: K, v: BuildingFormValues[K]) =>
@@ -92,9 +95,10 @@ export function BuildingFormDialog({
     startTransition(async () => {
       try {
         if (mode === "create") {
-          await createBuilding(payload);
+          await createBuilding({ ...payload, admin_id: adminId || null });
           toast({ title: "Building created" });
           setValues({ ...DEFAULTS });
+          setAdminId("");
         } else if (initial?.id) {
           await updateBuilding(initial.id, payload);
           toast({ title: "Building updated" });
@@ -173,6 +177,28 @@ export function BuildingFormDialog({
               onChange={(e) => set("address", e.target.value)}
             />
           </div>
+
+          {mode === "create" && admins.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="admin_id" className="text-base">
+                Assign Admin <span className="text-muted-foreground text-sm font-normal">(optional)</span>
+              </Label>
+              <select
+                id="admin_id"
+                value={adminId}
+                onChange={(e) => setAdminId(e.target.value)}
+                className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">— No admin yet —</option>
+                {admins.map((a) => (
+                  <option key={a.id} value={a.id}>{a.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                You can also assign or change the admin later from the Admins page.
+              </p>
+            </div>
+          )}
 
           {mode === "create" && (
             <p className="text-xs text-muted-foreground">

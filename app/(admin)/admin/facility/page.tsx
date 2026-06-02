@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { formatDate } from "@/lib/utils";
 import {
   Tabs,
@@ -93,13 +94,14 @@ export default function FacilityPage() {
 
 async function FacilityContent() {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
   const supabase = await createClient();
 
   const [tasksRes, complaintsRes, staffRes] = await Promise.all([
     supabase
       .from("bms_facility_tasks")
       .select("*")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("next_due_date", { ascending: true, nullsFirst: false }),
 
     supabase
@@ -109,13 +111,13 @@ async function FacilityContent() {
         bms_residents!resident_id (full_name),
         bms_flats!flat_id (flat_number)
       `)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("created_at", { ascending: false }),
 
     supabase
       .from("bms_staff")
       .select("id,full_name")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("is_active", true)
       .order("full_name", { ascending: true }),
   ]);

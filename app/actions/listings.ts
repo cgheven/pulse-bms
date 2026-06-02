@@ -5,6 +5,7 @@ import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createPublicClient } from "@/lib/supabase/public";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 
 // RFC4122 UUID — used to guard public buildingId path params.
@@ -115,7 +116,18 @@ export async function upsertListing(input: ListingInput): Promise<ListingRow> {
 export async function deactivateListing(listingId: string): Promise<void> {
   await requireNotDemo();
   const { profile, user } = await requireRole(["resident", "admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+
+  // Resident uses profile.building_id; admin uses active building context.
+  let buildingId: string;
+  if (profile.role === "resident") {
+    if (!profile.building_id) throw new Error("No building assigned");
+    buildingId = profile.building_id;
+  } else {
+    const activeBuildingId = await getActiveBuilding();
+    if (!activeBuildingId) throw new Error("No active building selected.");
+    buildingId = activeBuildingId;
+  }
+
   const supabase = await createClient();
 
   const { data: row, error: rErr } = await supabase
@@ -124,7 +136,7 @@ export async function deactivateListing(listingId: string): Promise<void> {
     .eq("id", listingId)
     .single();
   if (rErr || !row) throw new Error("Listing not found");
-  if (row.building_id !== profile.building_id)
+  if (row.building_id !== buildingId)
     throw new Error("Listing belongs to a different building");
   // Idempotent: re-removing an already-inactive row is a silent no-op so the
   // UI doesn't get confused after a stale render.
@@ -152,7 +164,7 @@ export async function deactivateListing(listingId: string): Promise<void> {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "listing.remove",
     entity: "listing",
     entity_id: listingId,
@@ -162,7 +174,7 @@ export async function deactivateListing(listingId: string): Promise<void> {
   revalidatePath("/resident");
   revalidatePath("/admin/flats");
   revalidatePath("/find");
-  revalidatePath(`/find/${profile.building_id}`);
+  revalidatePath(`/find/${buildingId}`);
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

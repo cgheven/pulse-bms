@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile, Role } from "@/types";
 import { ROLE_HOME } from "@/types";
+import { getActiveBuilding } from "@/lib/building-context";
 
 /**
  * Session resolver.
@@ -37,16 +38,19 @@ export const getSession = cache(async () => {
     { revalidate: 300, tags: [`bms-profile-${user.id}`] },
   )(user.id);
 
+  if (profile && !profile.is_active) return null;
   return profile ? { user, profile } : null;
 });
 
 /**
  * Per-user cached lookup for the current user's building name.
+ * Uses getActiveBuilding() so multi-building admins get the correct name
+ * for whichever building they are currently scoped to.
  * Building names change rarely — 5 min TTL is safe.
  */
 export const getCurrentBuildingName = cache(async (): Promise<string | null> => {
-  const s = await getSession();
-  if (!s?.profile.building_id) return null;
+  const activeBuildingId = await getActiveBuilding();
+  if (!activeBuildingId) return null;
   return unstable_cache(
     async (id: string) => {
       const admin = createAdminClient();
@@ -57,9 +61,9 @@ export const getCurrentBuildingName = cache(async (): Promise<string | null> => 
         .single();
       return data?.name ?? null;
     },
-    ["bms-building-name", s.profile.building_id],
-    { revalidate: 300, tags: [`bms-building-${s.profile.building_id}`] },
-  )(s.profile.building_id);
+    ["bms-building-name", activeBuildingId],
+    { revalidate: 300, tags: [`bms-building-${activeBuildingId}`] },
+  )(activeBuildingId);
 });
 
 export async function requireSession() {
@@ -79,7 +83,8 @@ export async function requireRole(allowed: Role | Role[]) {
 
 export async function requireBuilding() {
   const s = await requireSession();
-  if (!s.profile.building_id && s.profile.role !== "super_admin") {
+  const activeBuildingId = await getActiveBuilding();
+  if (!activeBuildingId && s.profile.role !== "super_admin") {
     redirect("/no-building");
   }
   return s;

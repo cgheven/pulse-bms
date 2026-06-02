@@ -29,6 +29,19 @@ type BuildingRow = {
 export default async function BuildingsListPage() {
   await requireRole("super_admin");
 
+  const supabase = await createClient();
+  const { data: adminProfiles } = await supabase
+    .from("bms_profiles")
+    .select("id, full_name, email")
+    .eq("role", "admin")
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
+
+  const admins = (adminProfiles ?? []).map((a) => ({
+    id: a.id,
+    label: a.full_name || a.email || a.id,
+  }));
+
   return (
     <div className="space-y-6 animate-fade-up">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -38,7 +51,7 @@ export default async function BuildingsListPage() {
             Manage all buildings under Pulse BMS.
           </p>
         </div>
-        <CreateBuildingButton />
+        <CreateBuildingButton admins={admins} />
       </div>
 
       <Suspense fallback={<TableSkeleton rows={6} />}>

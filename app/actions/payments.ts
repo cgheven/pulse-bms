@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAYMENT_MODE } from "@/types";
@@ -103,7 +104,8 @@ export async function recordPayment(input: PaymentInput) {
     "super_admin",
     "union",
   ]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   if (!input.amount || input.amount <= 0) throw new Error("Amount must be positive");
 
   const supabase = await createClient();
@@ -118,7 +120,7 @@ export async function recordPayment(input: PaymentInput) {
       .from("bms_bank_accounts")
       .select("id")
       .eq("id", input.bank_account_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (!bankCheck) throw new Error("Invalid bank account");
   }
@@ -135,7 +137,7 @@ export async function recordPayment(input: PaymentInput) {
       .from("bms_projects")
       .select("id")
       .eq("id", input.project_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (!projCheck) throw new Error("Invalid project");
   }
@@ -162,7 +164,7 @@ export async function recordPayment(input: PaymentInput) {
       .from("bms_union_members")
       .select("position")
       .eq("profile_id", profile.id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("is_active", true);
     const positions = (memberRows ?? [])
       .map((r) => (r as { position: string | null }).position)
@@ -204,7 +206,7 @@ export async function recordPayment(input: PaymentInput) {
       "bms_record_payment_with_lock",
       {
         p_invoice_id: input.invoice_id,
-        p_building_id: profile.building_id,
+        p_building_id: buildingId,
         p_flat_id: input.flat_id,
       },
     );
@@ -221,7 +223,7 @@ export async function recordPayment(input: PaymentInput) {
   })();
 
   const insertPayload = {
-    building_id: profile.building_id,
+    building_id: buildingId,
     invoice_id: input.invoice_id ?? null,
     flat_id: input.flat_id,
     resident_id: input.resident_id ?? null,
@@ -263,14 +265,14 @@ export async function recordPayment(input: PaymentInput) {
       .from("bms_invoices")
       .select("amount")
       .eq("id", input.invoice_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .single();
     if (inv) {
       const invoiceAmount = Number(inv.amount);
       const paidTotal = await sumPaymentsForInvoice(
         supabase,
         input.invoice_id,
-        profile.building_id,
+        buildingId,
       );
       if (paidTotal > invoiceAmount) {
         overflow = paidTotal - invoiceAmount;
@@ -282,11 +284,11 @@ export async function recordPayment(input: PaymentInput) {
           .from("bms_payments")
           .update({ amount: cappedAmount })
           .eq("id", payment.id)
-          .eq("building_id", profile.building_id);
+          .eq("building_id", buildingId);
       }
     }
     // Status update (always re-derive from chunk sums — single source of truth)
-    await refreshInvoiceStatus(supabase, input.invoice_id, profile.building_id);
+    await refreshInvoiceStatus(supabase, input.invoice_id, buildingId);
   }
 
   // ── Route the surplus ─────────────────────────────────────────────
@@ -299,7 +301,7 @@ export async function recordPayment(input: PaymentInput) {
       .from("bms_invoices")
       .select("billing_month")
       .eq("id", input.invoice_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .single();
 
     let remainingOverflow = overflow;
@@ -313,7 +315,7 @@ export async function recordPayment(input: PaymentInput) {
       const { data: futureInvoices } = await supabase
         .from("bms_invoices")
         .select("id, amount, billing_month, invoice_number")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .eq("flat_id", input.flat_id)
         .gt("billing_month", thisInv.billing_month)
         .in("status", ["pending", "partial", "overdue"])
@@ -324,7 +326,7 @@ export async function recordPayment(input: PaymentInput) {
         const fiPaid = await sumPaymentsForInvoice(
           supabase,
           fi.id,
-          profile.building_id,
+          buildingId,
         );
         const capacity = Math.max(0, Number(fi.amount) - fiPaid);
         if (capacity <= 0) continue;
@@ -342,7 +344,7 @@ export async function recordPayment(input: PaymentInput) {
         // so we don't write "Carry-forward from receipt " with a dangling space.
         const parentReceiptStr = formatReceiptNo(payment.receipt_no);
         const spillRow = {
-          building_id: profile.building_id,
+          building_id: buildingId,
           invoice_id: fi.id,
           flat_id: input.flat_id,
           resident_id: input.resident_id ?? null,
@@ -377,7 +379,7 @@ export async function recordPayment(input: PaymentInput) {
         spilloverPaymentIds.push(spill.id);
         remainingOverflow -= apply;
 
-        await refreshInvoiceStatus(supabase, fi.id, profile.building_id);
+        await refreshInvoiceStatus(supabase, fi.id, buildingId);
       }
     }
 
@@ -388,7 +390,7 @@ export async function recordPayment(input: PaymentInput) {
       const { data: credit, error: creditErr } = await supabase
         .from("bms_flat_credits")
         .insert({
-          building_id: profile.building_id,
+          building_id: buildingId,
           flat_id: input.flat_id,
           amount: remainingOverflow,
           source_payment_id: payment.id,
@@ -422,7 +424,7 @@ export async function recordPayment(input: PaymentInput) {
       .from("bms_flats")
       .select("outstanding_dues")
       .eq("id", input.flat_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .single();
     // No more Math.max clamp — overpayments must show as negative dues
     // (which UI now interprets as "Cleared + credit"). Negative outstanding
@@ -432,7 +434,7 @@ export async function recordPayment(input: PaymentInput) {
       .from("bms_flats")
       .update({ outstanding_dues: newDues })
       .eq("id", input.flat_id)
-      .eq("building_id", profile.building_id);
+      .eq("building_id", buildingId);
   }
 
   // entry_fee accounting unchanged
@@ -455,7 +457,7 @@ export async function recordPayment(input: PaymentInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "payment.create",
     entity: "payment",
     entity_id: payment.id,
@@ -490,14 +492,15 @@ export async function recordPayment(input: PaymentInput) {
 export async function deletePayment(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data: pay } = await supabase
     .from("bms_payments")
     .select("invoice_id, flat_id, amount, category, resident_id")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (!pay) throw new Error("Payment not found");
 
@@ -505,11 +508,11 @@ export async function deletePayment(id: string) {
     .from("bms_payments")
     .delete()
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   if (pay.invoice_id) {
-    await refreshInvoiceStatus(supabase, pay.invoice_id, profile.building_id);
+    await refreshInvoiceStatus(supabase, pay.invoice_id, buildingId);
   }
 
   if (
@@ -522,13 +525,13 @@ export async function deletePayment(id: string) {
       .from("bms_flats")
       .select("outstanding_dues")
       .eq("id", pay.flat_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .single();
     await supabase
       .from("bms_flats")
       .update({ outstanding_dues: Number(flatRow?.outstanding_dues ?? 0) + Number(pay.amount) })
       .eq("id", pay.flat_id)
-      .eq("building_id", profile.building_id);
+      .eq("building_id", buildingId);
   }
 
   if (pay.category === "entry_fee" && pay.resident_id) {
@@ -549,7 +552,7 @@ export async function deletePayment(id: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "payment.delete",
     entity: "payment",
     entity_id: id,

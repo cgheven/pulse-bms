@@ -4,6 +4,7 @@ import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { normalizePhone, syntheticEmailFromPhone } from "@/lib/phone";
 import { revalidatePath } from "next/cache";
 
@@ -20,11 +21,12 @@ export type FlatInput = {
 export async function createFlat(input: FlatInput) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const payload = {
-    building_id: profile.building_id,
+    building_id: buildingId,
     flat_number: input.flat_number.trim(),
     floor: input.floor ?? null,
     block: input.block?.trim() || null,
@@ -45,7 +47,7 @@ export async function createFlat(input: FlatInput) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "flat.create",
     entity: "flat",
     entity_id: data.id,
@@ -60,7 +62,8 @@ export async function createFlat(input: FlatInput) {
 export async function updateFlat(id: string, input: Partial<FlatInput>) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const patch: Record<string, unknown> = {};
@@ -76,7 +79,7 @@ export async function updateFlat(id: string, input: Partial<FlatInput>) {
     .from("bms_flats")
     .update(patch)
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -85,7 +88,7 @@ export async function updateFlat(id: string, input: Partial<FlatInput>) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "flat.update",
     entity: "flat",
     entity_id: id,
@@ -101,21 +104,22 @@ export async function updateFlat(id: string, input: Partial<FlatInput>) {
 export async function deleteFlat(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("bms_flats")
     .delete()
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "flat.delete",
     entity: "flat",
     entity_id: id,
@@ -303,13 +307,14 @@ export async function createFlatWithPeople(
 ): Promise<CreateFlatWithPeopleResult> {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
   const admin = createAdminClient();
 
   // 1. Create the flat
   const flatPayload = {
-    building_id: profile.building_id,
+    building_id: buildingId,
     flat_number: input.flat.flat_number.trim(),
     floor: input.flat.floor ?? null,
     block: input.flat.block?.trim() || null,
@@ -334,11 +339,11 @@ export async function createFlatWithPeople(
 
   // 2. Owner — always processed when any owner info supplied.
   if (input.owner && hasAnyValue(input.owner)) {
-    const profileResult = await ensureProfile(input.owner, profile.building_id);
+    const profileResult = await ensureProfile(input.owner, buildingId);
     const { data: residentRow, error: resErr } = await admin
       .from("bms_residents")
       .insert({
-        building_id: profile.building_id,
+        building_id: buildingId,
         flat_id: flat.id,
         profile_id: profileResult?.profile_id ?? null,
         full_name: input.owner.full_name?.trim() || "Owner",
@@ -372,11 +377,11 @@ export async function createFlatWithPeople(
     input.tenant &&
     hasAnyValue(input.tenant)
   ) {
-    const profileResult = await ensureProfile(input.tenant, profile.building_id);
+    const profileResult = await ensureProfile(input.tenant, buildingId);
     const { data: residentRow, error: resErr } = await admin
       .from("bms_residents")
       .insert({
-        building_id: profile.building_id,
+        building_id: buildingId,
         flat_id: flat.id,
         profile_id: profileResult?.profile_id ?? null,
         full_name: input.tenant.full_name?.trim() || "Tenant",
@@ -408,7 +413,7 @@ export async function createFlatWithPeople(
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "flat.create",
     entity: "flat",
     entity_id: flat.id,

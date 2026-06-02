@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
 import { OpeningBalanceForm } from "@/components/admin/settings/opening-balance-form";
@@ -85,7 +86,9 @@ export default function SettingsPage() {
 
 async function BuildingInfoSection() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -97,7 +100,7 @@ async function BuildingInfoSection() {
   const { data: building } = await supabase
     .from("bms_buildings")
     .select("city")
-    .eq("id", profile.building_id)
+    .eq("id", buildingId)
     .single();
 
   return <BuildingInfoForm initialCity={building?.city ?? null} />;
@@ -107,7 +110,9 @@ async function BuildingInfoSection() {
 
 async function OpeningBalanceSection() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -119,7 +124,7 @@ async function OpeningBalanceSection() {
   const { data: building } = await supabase
     .from("bms_buildings")
     .select("id, opening_balance_amount, opening_balance_date")
-    .eq("id", profile.building_id)
+    .eq("id", buildingId)
     .single();
 
   const amount = Number(building?.opening_balance_amount ?? 0);
@@ -132,17 +137,17 @@ async function OpeningBalanceSection() {
     supabase
       .from("bms_payments")
       .select("id", { count: "exact", head: true })
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("payment_date", date),
     supabase
       .from("bms_expenses")
       .select("id", { count: "exact", head: true })
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("expense_date", date),
     supabase
       .from("bms_salary_payments")
       .select("id", { count: "exact", head: true })
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .gte("payment_date", date),
   ]);
 
@@ -162,7 +167,9 @@ async function OpeningBalanceSection() {
 
 async function TransparencySettingsSection() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -174,7 +181,7 @@ async function TransparencySettingsSection() {
   const { data: building } = await supabase
     .from("bms_buildings")
     .select("show_fund_balance, show_building_funds, show_defaulters")
-    .eq("id", profile.building_id)
+    .eq("id", buildingId)
     .single();
 
   return (
@@ -190,7 +197,9 @@ async function TransparencySettingsSection() {
 
 async function BankAccountsSection() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -204,7 +213,7 @@ async function BankAccountsSection() {
     .select(
       "id, name, type, account_number_masked, opening_balance, opening_balance_date, is_active, created_at",
     )
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .order("type", { ascending: false })
     .order("name");
 

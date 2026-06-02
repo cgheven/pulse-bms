@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 
 export type ProposalType = "expense" | "hiring" | "repair" | "policy" | "other";
@@ -249,7 +250,8 @@ export async function addProposalComment(proposal_id: string, body: string) {
 export async function executeProposal(id: string) {
   await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
 
@@ -257,7 +259,7 @@ export async function executeProposal(id: string) {
     .from("bms_proposals")
     .select("*")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (fetchErr) throw new Error(fetchErr.message);
   if (prop.status !== "approved") {
@@ -287,7 +289,7 @@ export async function executeProposal(id: string) {
     const { data: exp, error: expErr } = await supabase
       .from("bms_expenses")
       .insert({
-        building_id: profile.building_id,
+        building_id: buildingId,
         category,
         subcategory: prop.proposal_type,
         description: prop.title,
@@ -318,7 +320,7 @@ export async function executeProposal(id: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "proposal.execute",
     entity: "proposal",
     entity_id: id,

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { AddNoticeButton } from "@/components/admin/notices/add-notice-button";
 import { NoticeRowActions } from "@/components/admin/notices/notice-row-actions";
@@ -66,12 +67,13 @@ export default function NoticesPage() {
 
 async function loadNoticesData() {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
   const supabase = await createClient();
 
   const { data: notices } = await supabase
     .from("bms_notices")
     .select("*")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .order("pinned", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -82,7 +84,7 @@ async function loadNoticesData() {
   const { data: currentInvoices } = await supabase
     .from("bms_invoices")
     .select("id, flat_id, amount, status, bms_flats(flat_number)")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("billing_month", monthStart)
     .neq("status", "waived");
 
@@ -97,7 +99,7 @@ async function loadNoticesData() {
     const { data: pays } = await supabase
       .from("bms_payments")
       .select("invoice_id, amount")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .in("invoice_id", invRows.map((i) => i.id));
     for (const p of pays ?? []) {
       if (!p.invoice_id) continue;

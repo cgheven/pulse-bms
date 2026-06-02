@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatCNIC, formatDate, formatPhone, formatReceiptNo } from "@/lib/utils";
 import { ArrowLeft, Car, FileText, Pencil, Star } from "lucide-react";
@@ -64,7 +65,9 @@ export default async function ResidentDetailPage(props: {
 /* Streams the title + edit button — fetches just the resident row + flats list */
 async function ResidentName({ id }: { id: string }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) notFound();
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) notFound();
   const supabase = await createClient();
 
   const [{ data: r }, { data: flats }, { data: building }] = await Promise.all([
@@ -72,17 +75,17 @@ async function ResidentName({ id }: { id: string }) {
       .from("bms_residents")
       .select("*")
       .eq("id", id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .single(),
     supabase
       .from("bms_flats")
       .select("id, flat_number")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("flat_number"),
     supabase
       .from("bms_buildings")
       .select("entry_fee_owner, entry_fee_tenant")
-      .eq("id", profile.building_id)
+      .eq("id", buildingId)
       .single(),
   ]);
   if (!r) notFound();
@@ -128,7 +131,9 @@ async function ResidentName({ id }: { id: string }) {
 
 async function DetailsCard({ id }: { id: string }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) notFound();
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) notFound();
   const supabase = await createClient();
 
   const { data: r } = await supabase
@@ -137,7 +142,7 @@ async function DetailsCard({ id }: { id: string }) {
       "id, flat_id, full_name, phone, email, cnic, relationship, move_in_date, move_out_date, entry_fee_paid, profile_id",
     )
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (!r) notFound();
 
@@ -192,7 +197,9 @@ async function DetailsCard({ id }: { id: string }) {
 
 async function PaymentsCard({ id }: { id: string }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) notFound();
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) notFound();
   const supabase = await createClient();
 
   const { data: payments } = await supabase
@@ -241,14 +248,16 @@ async function PaymentsCard({ id }: { id: string }) {
 
 async function VehiclesCard({ id }: { id: string }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) notFound();
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) notFound();
   const supabase = await createClient();
 
   const { data: vehicles } = await supabase
     .from("bms_vehicles")
     .select("id, plate_number, vehicle_type, make, model, color, is_primary, notes")
     .eq("resident_id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -309,14 +318,16 @@ async function VehiclesCard({ id }: { id: string }) {
 
 async function DocumentsCard({ id }: { id: string }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) notFound();
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) notFound();
 
   const supabase = await createClient();
   const { data: rows } = await supabase
     .from("bms_resident_documents")
     .select("id, doc_type, label, file_name, file_size, mime_type, created_at")
     .eq("resident_id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .order("created_at", { ascending: false });
 
   const docs: DocumentRow[] = (rows ?? []).map((r) => ({

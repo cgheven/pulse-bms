@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
 import {
   cn,
@@ -37,7 +38,9 @@ const ACTIVITY_DAYS = 7;
 
 export default async function AdminDashboardPage() {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <h1>Admin Dashboard</h1>
@@ -45,8 +48,6 @@ export default async function AdminDashboardPage() {
       </div>
     );
   }
-
-  const buildingId = profile.building_id;
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
   const ym = todayIso.slice(0, 7);

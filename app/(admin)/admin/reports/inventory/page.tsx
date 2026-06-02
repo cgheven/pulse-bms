@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { requireRole, getCurrentBuildingName } from "@/lib/auth";
+import { getActiveBuilding } from "@/lib/building-context";
 import { rangeFromSearchParams } from "@/lib/reports/date-range";
 import { getInventoryReport } from "@/app/actions/inventory";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
@@ -33,7 +34,8 @@ export default function InventoryReportPage({ searchParams }: { searchParams: Se
 
 async function InventoryReportData({ searchParams }: { searchParams: SearchParams }) {
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return <p className="text-sm text-muted-foreground">No building assigned.</p>;
   }
 

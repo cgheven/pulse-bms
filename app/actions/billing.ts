@@ -3,6 +3,7 @@
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
 import { PAYMENT_MODE } from "@/types";
 
@@ -28,7 +29,8 @@ export async function generateMonthlyInvoices(params: { month: string }) {
   // month: "YYYY-MM"
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const billing_month = firstOfMonth(params.month);
@@ -37,7 +39,7 @@ export async function generateMonthlyInvoices(params: { month: string }) {
   const { data: building } = await supabase
     .from("bms_buildings")
     .select("name, monthly_fee_default")
-    .eq("id", profile.building_id)
+    .eq("id", buildingId)
     .single();
   const buildingPrefix = (building?.name ?? "B").slice(0, 3).replace(/[^A-Z0-9]/gi, "").toUpperCase() || "BLD";
   const defaultFee = Number(building?.monthly_fee_default ?? 3000);
@@ -46,14 +48,14 @@ export async function generateMonthlyInvoices(params: { month: string }) {
   const { data: flats, error: flatsErr } = await supabase
     .from("bms_flats")
     .select("id, flat_number, monthly_fee, ownership_type")
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (flatsErr) throw new Error(flatsErr.message);
 
   // Existing invoices for this month
   const { data: existing } = await supabase
     .from("bms_invoices")
     .select("flat_id")
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .eq("billing_month", billing_month);
   const existingSet = new Set((existing ?? []).map((r) => r.flat_id));
 
@@ -72,7 +74,7 @@ export async function generateMonthlyInvoices(params: { month: string }) {
     if (existingSet.has(f.id)) continue;
     const amount = Number(f.monthly_fee ?? defaultFee);
     toInsert.push({
-      building_id: profile.building_id,
+      building_id: buildingId,
       flat_id: f.id,
       invoice_number: buildInvoiceNumber(buildingPrefix, f.flat_number, params.month),
       billing_month,
@@ -104,14 +106,14 @@ export async function generateMonthlyInvoices(params: { month: string }) {
         .from("bms_flats")
         .select("outstanding_dues")
         .eq("id", row.flat_id)
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .single();
       const newDues = Number(flatRow?.outstanding_dues ?? 0) + Number(row.amount);
       await supabase
         .from("bms_flats")
         .update({ outstanding_dues: newDues })
         .eq("id", row.flat_id)
-        .eq("building_id", profile.building_id);
+        .eq("building_id", buildingId);
 
       // Pull open credits for this flat, oldest first (FIFO). created_at
       // is selected so we can preserve it on a split-remainder row — that
@@ -119,7 +121,7 @@ export async function generateMonthlyInvoices(params: { month: string }) {
       const { data: openCredits } = await supabase
         .from("bms_flat_credits")
         .select("id, amount, source_payment_id, created_at")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .eq("flat_id", row.flat_id)
         .is("applied_invoice_id", null)
         .order("created_at", { ascending: true });
@@ -136,7 +138,7 @@ export async function generateMonthlyInvoices(params: { month: string }) {
         // payment history and on receipts. receipt_no is auto-allocated by
         // the bms_payments_receipt_no_trg trigger.
         const { error: payErr } = await supabase.from("bms_payments").insert({
-          building_id: profile.building_id,
+          building_id: buildingId,
           invoice_id: row.id,
           flat_id: row.flat_id,
           amount: apply,
@@ -159,9 +161,9 @@ export async function generateMonthlyInvoices(params: { month: string }) {
             .from("bms_flat_credits")
             .update({ applied_invoice_id: row.id, amount: apply })
             .eq("id", c.id)
-            .eq("building_id", profile.building_id);
+            .eq("building_id", buildingId);
           await supabase.from("bms_flat_credits").insert({
-            building_id: profile.building_id,
+            building_id: buildingId,
             flat_id: row.flat_id,
             amount: creditAmt - apply,
             source_payment_id: c.source_payment_id,
@@ -174,7 +176,7 @@ export async function generateMonthlyInvoices(params: { month: string }) {
             .from("bms_flat_credits")
             .update({ applied_invoice_id: row.id })
             .eq("id", c.id)
-            .eq("building_id", profile.building_id);
+            .eq("building_id", buildingId);
         }
 
         remaining -= apply;
@@ -198,7 +200,7 @@ export async function generateMonthlyInvoices(params: { month: string }) {
       const { data: paidRows } = await supabase
         .from("bms_payments")
         .select("amount")
-        .eq("building_id", profile.building_id)
+        .eq("building_id", buildingId)
         .eq("invoice_id", row.id);
       const paidTotal = (paidRows ?? []).reduce(
         (s, r) => s + Number(r.amount ?? 0),
@@ -211,7 +213,7 @@ export async function generateMonthlyInvoices(params: { month: string }) {
         .from("bms_invoices")
         .update({ status: newStatus })
         .eq("id", row.id)
-        .eq("building_id", profile.building_id);
+        .eq("building_id", buildingId);
     }
   }
 
@@ -219,7 +221,7 @@ export async function generateMonthlyInvoices(params: { month: string }) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "billing.generate_month",
     entity: "invoice",
     meta: {
@@ -249,14 +251,15 @@ export async function generateMonthlyInvoices(params: { month: string }) {
 export async function waiveInvoice(id: string, reason?: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data: inv } = await supabase
     .from("bms_invoices")
     .select("flat_id, amount, status")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (!inv) throw new Error("Invoice not found");
 
@@ -264,7 +267,7 @@ export async function waiveInvoice(id: string, reason?: string) {
     .from("bms_invoices")
     .update({ status: "waived", notes: reason ?? null })
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   // reduce outstanding dues for flat (scope by building_id — defence-in-depth)
@@ -273,21 +276,21 @@ export async function waiveInvoice(id: string, reason?: string) {
       .from("bms_flats")
       .select("outstanding_dues")
       .eq("id", inv.flat_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .single();
     const newDues = Math.max(0, Number(flatRow?.outstanding_dues ?? 0) - Number(inv.amount));
     await supabase
       .from("bms_flats")
       .update({ outstanding_dues: newDues })
       .eq("id", inv.flat_id)
-      .eq("building_id", profile.building_id);
+      .eq("building_id", buildingId);
   }
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "invoice.waive",
     entity: "invoice",
     entity_id: id,
@@ -302,14 +305,15 @@ export async function waiveInvoice(id: string, reason?: string) {
 export async function deleteInvoice(id: string) {
   await requireNotDemo();
   const { profile, user } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
   const { data: inv } = await supabase
     .from("bms_invoices")
     .select("flat_id, amount, status")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (!inv) throw new Error("Invoice not found");
 
@@ -320,14 +324,14 @@ export async function deleteInvoice(id: string) {
     .from("bms_payments")
     .select("*", { count: "exact", head: true })
     .eq("invoice_id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if ((count ?? 0) > 0) throw new Error("Cannot delete invoice with payments");
 
   const { error } = await supabase
     .from("bms_invoices")
     .delete()
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   if (inv.status !== "paid" && inv.status !== "waived") {
@@ -335,21 +339,21 @@ export async function deleteInvoice(id: string) {
       .from("bms_flats")
       .select("outstanding_dues")
       .eq("id", inv.flat_id)
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .single();
     const newDues = Math.max(0, Number(flatRow?.outstanding_dues ?? 0) - Number(inv.amount));
     await supabase
       .from("bms_flats")
       .update({ outstanding_dues: newDues })
       .eq("id", inv.flat_id)
-      .eq("building_id", profile.building_id);
+      .eq("building_id", buildingId);
   }
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "invoice.delete",
     entity: "invoice",
     entity_id: id,

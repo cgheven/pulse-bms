@@ -4,6 +4,7 @@ import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { getActiveBuilding } from "@/lib/building-context";
 import { normalizePhone } from "@/lib/phone";
 import { revalidatePath } from "next/cache";
 
@@ -27,7 +28,8 @@ export async function addUnionMember(input: {
 }) {
   await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const admin = createAdminClient();
@@ -35,14 +37,14 @@ export async function addUnionMember(input: {
   // Promote profile to 'union' role (admin client bypasses RLS).
   const { error: roleErr } = await admin
     .from("bms_profiles")
-    .update({ role: "union", building_id: profile.building_id })
+    .update({ role: "union", building_id: buildingId })
     .eq("id", input.profile_id);
   if (roleErr) throw new Error(`Failed to promote profile: ${roleErr.message}`);
 
   const { data, error } = await supabase
     .from("bms_union_members")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       profile_id: input.profile_id,
       full_name: input.full_name,
       position: input.position,
@@ -58,7 +60,7 @@ export async function addUnionMember(input: {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "union.member.add",
     entity: "union_member",
     entity_id: data.id,
@@ -75,7 +77,8 @@ export async function updateUnionMember(
 ) {
   await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -87,7 +90,7 @@ export async function updateUnionMember(
       is_active: input.is_active,
     })
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -96,7 +99,7 @@ export async function updateUnionMember(
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "union.member.update",
     entity: "union_member",
     entity_id: id,
@@ -110,7 +113,8 @@ export async function updateUnionMember(
 export async function removeUnionMember(id: string) {
   await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const admin = createAdminClient();
@@ -120,7 +124,7 @@ export async function removeUnionMember(id: string) {
     .from("bms_union_members")
     .select("id, profile_id")
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .single();
   if (fetchErr) throw new Error(fetchErr.message);
 
@@ -141,7 +145,7 @@ export async function removeUnionMember(id: string) {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "union.member.remove",
     entity: "union_member",
     entity_id: id,
@@ -160,13 +164,14 @@ export async function createElection(input: {
 }) {
   await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("bms_elections")
     .insert({
-      building_id: profile.building_id,
+      building_id: buildingId,
       cycle_label: input.cycle_label,
       scheduled_date: input.scheduled_date,
       status: "scheduled",
@@ -179,7 +184,7 @@ export async function createElection(input: {
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "election.create",
     entity: "election",
     entity_id: data.id,
@@ -193,21 +198,22 @@ export async function createElection(input: {
 export async function openElection(id: string) {
   await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("bms_elections")
     .update({ status: "open" })
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "election.open",
     entity: "election",
     entity_id: id,
@@ -221,21 +227,22 @@ export async function closeElection(
 ) {
   await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("bms_elections")
     .update({ status: "closed", results })
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "election.close",
     entity: "election",
     entity_id: id,
@@ -247,21 +254,22 @@ export async function closeElection(
 export async function deleteElection(id: string) {
   await requireNotDemo();
   const { user, profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) throw new Error("No building assigned");
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("bms_elections")
     .delete()
     .eq("id", id)
-    .eq("building_id", profile.building_id);
+    .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
     actor_role: profile.role,
-    building_id: profile.building_id,
+    building_id: buildingId,
     action: "election.delete",
     entity: "election",
     entity_id: id,

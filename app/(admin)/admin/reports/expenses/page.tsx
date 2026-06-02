@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { requireRole, getCurrentBuildingName } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { rangeFromSearchParams } from "@/lib/reports/date-range";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
 import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
@@ -37,7 +38,8 @@ export default function ExpensesReportPage({
 
 async function ExpensesData({ searchParams }: { searchParams: SearchParams }) {
   const { profile } = await requireRole(["admin", "super_admin", "union"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -60,7 +62,7 @@ async function ExpensesData({ searchParams }: { searchParams: SearchParams }) {
       .select(
         "id, expense_date, category, subcategory, description, vendor, amount, bank_account_id, is_bill",
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("is_bill", false)
       .gte("expense_date", dateRange.from)
       .lte("expense_date", dateRange.to)
@@ -68,7 +70,7 @@ async function ExpensesData({ searchParams }: { searchParams: SearchParams }) {
     supabase
       .from("bms_bank_accounts")
       .select("id, name, type")
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .order("type", { ascending: false })
       .order("name"),
   ]);

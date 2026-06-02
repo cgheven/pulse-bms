@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveBuilding } from "@/lib/building-context";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
 import { BillAccountDetailClient } from "./bill-account-detail-client";
 
@@ -27,7 +28,8 @@ async function Inner({ params }: { params: Params }) {
   // Treasury concern — union members browse the parent list but can't
   // see the per-account history. Mirrors the bill-accounts page.
   const { profile } = await requireRole(["admin", "super_admin"]);
-  if (!profile.building_id) {
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
     return (
       <div className="card-soft">
         <p className="text-muted-foreground mt-2">No building assigned.</p>
@@ -46,7 +48,7 @@ async function Inner({ params }: { params: Params }) {
       "id, provider, provider_label, nickname, account_number, location, notes, is_active, created_at",
     )
     .eq("id", id)
-    .eq("building_id", profile.building_id)
+    .eq("building_id", buildingId)
     .maybeSingle();
   if (!account) notFound();
 
@@ -63,14 +65,14 @@ async function Inner({ params }: { params: Params }) {
       .select(
         "id, expense_date, amount, units_consumed, vendor, description, subcategory, bank_account_id, recurrence, due_date",
       )
-      .eq("building_id", profile.building_id)
+      .eq("building_id", buildingId)
       .eq("bill_account_id", id)
       .gte("expense_date", sinceIso)
       .order("expense_date", { ascending: false }),
     supabase
       .from("bms_bank_accounts")
       .select("id, name, type")
-      .eq("building_id", profile.building_id),
+      .eq("building_id", buildingId),
   ]);
 
   return (
