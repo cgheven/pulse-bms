@@ -42,6 +42,7 @@ export type UtilityAccountRow = {
   is_verified: boolean;
   is_active: boolean;
   created_at: string;
+  payment_status: "paid" | "unpaid" | "unknown";
 };
 
 // ─── 1. getUtilityTypes ───────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ export async function getUtilityAccounts(
       is_verified,
       is_active,
       created_at,
+      payment_status,
       bms_flats!inner ( flat_number, floor ),
       bms_utility_types!inner ( name, code )
       `,
@@ -148,6 +150,7 @@ export async function getUtilityAccounts(
       is_verified: row.is_verified as boolean,
       is_active: row.is_active as boolean,
       created_at: row.created_at as string,
+      payment_status: (row.payment_status ?? "unknown") as "paid" | "unpaid" | "unknown",
     };
   });
 }
@@ -435,107 +438,40 @@ export async function verifyUtilityAccount(
   revalidatePath("/admin/utilities");
 }
 
-// ─── 7. addCustomUtilityType ──────────────────────────────────────────────────
+// ─── 7. updatePaymentStatus ───────────────────────────────────────────────────
 
 /**
- * Admin adds a custom utility type scoped to their building.
- * System types (is_system=true) cannot be created this way.
+ * Admin updates the payment_status of a utility account (paid / unpaid / unknown).
+ * Validates the status against a server-side whitelist before writing to the DB.
  */
-export async function addCustomUtilityType(
-  name: string,
-  code?: string,
+export async function updatePaymentStatus(
+  id: string,
+  status: "paid" | "unpaid" | "unknown",
 ): Promise<void> {
-  const { profile, user } = await requireRole(["admin", "super_admin"]);
-  await requireNotDemo();
-  const buildingId = await getActiveBuilding();
-  if (!buildingId) throw new Error("No active building selected.");
-
-  const trimmedName = (name ?? "").trim();
-  if (trimmedName.length === 0 || trimmedName.length > 50) {
-    throw new Error("Utility type name must be between 1 and 50 characters.");
-  }
-
-  const supabase = await createClient();
-
-  const { data: inserted, error } = await supabase
-    .from("bms_utility_types")
-    .insert({
-      building_id: buildingId,
-      name: trimmedName,
-      code: code?.trim() || null,
-      is_system: false,
-    })
-    .select("id")
-    .single();
-  if (error) {
-    // Surface unique-constraint violations in plain English
-    if (error.code === "23505") {
-      throw new Error(
-        `A utility type named "${trimmedName}" already exists for this building.`,
-      );
-    }
-    throw new Error("An unexpected error occurred. Please try again.");
-  }
-
-  await writeAuditLog({
-    actor_id: user.id,
-    actor_email: user.email,
-    actor_role: profile.role,
-    building_id: buildingId,
-    action: "utility_type.create",
-    entity: "utility_type",
-    entity_id: inserted.id as string,
-    meta: { name: trimmedName, code: code?.trim() ?? null },
-  });
-
-  revalidatePath("/admin/utilities");
-}
-
-// ─── 8. deleteCustomUtilityType ───────────────────────────────────────────────
-
-/**
- * Deletes a custom (non-system) utility type from the admin's building.
- * Refuses if any active utility accounts reference this type.
- */
-export async function deleteCustomUtilityType(id: string): Promise<void> {
   assertUuid(id, "id");
   const { profile, user } = await requireRole(["admin", "super_admin"]);
   await requireNotDemo();
   const buildingId = await getActiveBuilding();
   if (!buildingId) throw new Error("No active building selected.");
 
+  // Server-side whitelist — do NOT trust the client value directly
+  const VALID = ["paid", "unpaid", "unknown"] as const;
+  if (!VALID.includes(status)) throw new Error("Invalid payment status.");
+
   const supabase = await createClient();
 
-  // Fetch the type row and verify it belongs to this building and is not a system type
-  const { data: typeRow } = await supabase
-    .from("bms_utility_types")
-    .select("id, name, is_system, building_id")
+  // Verify the row belongs to this building before updating
+  const { data: existing } = await supabase
+    .from("bms_utility_accounts")
+    .select("id")
     .eq("id", id)
     .eq("building_id", buildingId)
     .maybeSingle();
-
-  if (!typeRow) throw new Error("Utility type not found in your building.");
-  if (typeRow.is_system) {
-    throw new Error("System utility types cannot be deleted.");
-  }
-
-  // Guard: refuse if active accounts reference this type
-  const { count, error: countError } = await supabase
-    .from("bms_utility_accounts")
-    .select("id", { count: "exact", head: true })
-    .eq("utility_type_id", id)
-    .eq("is_active", true);
-
-  if (countError) throw new Error("An unexpected error occurred. Please try again.");
-  if ((count ?? 0) > 0) {
-    throw new Error(
-      "Cannot delete this utility type — active flat accounts reference it. Remove those accounts first.",
-    );
-  }
+  if (!existing) throw new Error("Utility account not found.");
 
   const { error } = await supabase
-    .from("bms_utility_types")
-    .delete()
+    .from("bms_utility_accounts")
+    .update({ payment_status: status, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("building_id", buildingId);
   if (error) throw new Error("An unexpected error occurred. Please try again.");
@@ -545,10 +481,10 @@ export async function deleteCustomUtilityType(id: string): Promise<void> {
     actor_email: user.email,
     actor_role: profile.role,
     building_id: buildingId,
-    action: "utility_type.delete",
-    entity: "utility_type",
+    action: "utility_account.payment_status_update",
+    entity: "utility_account",
     entity_id: id,
-    meta: { name: typeRow.name as string },
+    meta: { status },
   });
 
   revalidatePath("/admin/utilities");

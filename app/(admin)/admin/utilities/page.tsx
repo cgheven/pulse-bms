@@ -29,7 +29,7 @@ async function UtilitiesContent() {
 
   const supabase = await createClient();
 
-  const [types, accounts, { data: flatsData }] = await Promise.all([
+  const [types, accounts, { data: flatsData }, { data: buildingData }] = await Promise.all([
     getUtilityTypes(buildingId),
     getUtilityAccounts(buildingId),
     supabase
@@ -38,6 +38,11 @@ async function UtilitiesContent() {
       .eq("building_id", buildingId)
       .eq("is_active", true)
       .order("flat_number"),
+    supabase
+      .from("bms_buildings")
+      .select("name")
+      .eq("id", buildingId)
+      .single(),
   ]);
 
   const flats = (flatsData ?? []).map((f) => ({
@@ -46,6 +51,8 @@ async function UtilitiesContent() {
     floor: f.floor as number | null,
   }));
 
+  const buildingName = (buildingData?.name as string | null) ?? "";
+
   return (
     <>
       <h1>Utility Bill Numbers</h1>
@@ -53,6 +60,7 @@ async function UtilitiesContent() {
         types={types}
         accounts={accounts}
         flats={flats}
+        buildingName={buildingName}
       />
     </>
   );
