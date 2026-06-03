@@ -34,6 +34,7 @@ import {
   FolderOpen,
   CalendarCheck,
   Archive,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -117,9 +118,10 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "Operations",
       items: [
-        { href: "/admin/facility",  label: "Facility",  icon: Wrench },
-        { href: "/admin/notices",   label: "Notices",   icon: Megaphone },
-        { href: "/admin/inventory", label: "Inventory", icon: Archive },
+        { href: "/admin/facility",   label: "Facility",   icon: Wrench },
+        { href: "/admin/notices",    label: "Notices",    icon: Megaphone },
+        { href: "/admin/inventory",  label: "Inventory",  icon: Archive },
+        { href: "/admin/utilities",  label: "Utilities",  icon: Zap },
       ],
     },
   ],
@@ -183,8 +185,9 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/resident/payments",   label: "Payments",   icon: CreditCard },
         { href: "/resident/vehicles",   label: "Vehicles",   icon: Car },
         { href: "/resident/visitors",   label: "Visitors",   icon: CalendarCheck },
-        { href: "/resident/complaints", label: "Complaints", icon: MessageSquareWarning },
-        { href: "/resident/documents",  label: "Documents",  icon: FolderOpen },
+        { href: "/resident/complaints",   label: "Complaints",  icon: MessageSquareWarning },
+        { href: "/resident/bill-numbers", label: "Bill Numbers", icon: Zap },
+        { href: "/resident/documents",    label: "Documents",    icon: FolderOpen },
       ],
     },
     {
