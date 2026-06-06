@@ -17,6 +17,7 @@ type BuildingRow = {
   address: string | null;
   city: string | null;
   total_flats: number;
+  flat_limit: number;
   fund_balance: number;
   entry_fee_owner: number;
   entry_fee_tenant: number;
@@ -67,7 +68,7 @@ async function BuildingsTable() {
   const { data, error } = await supabase
     .from("bms_buildings")
     .select(
-      "id, name, address, city, total_flats, fund_balance, entry_fee_owner, entry_fee_tenant, monthly_fee_default, voting_rule, utility_cutoff_after_months, is_active"
+      "id, name, address, city, total_flats, flat_limit, fund_balance, entry_fee_owner, entry_fee_tenant, monthly_fee_default, voting_rule, utility_cutoff_after_months, is_active"
     )
     .order("is_active", { ascending: false })
     .order("created_at", { ascending: false });
@@ -89,7 +90,7 @@ async function BuildingsTable() {
               <tr>
                 <th className="px-4 py-3 text-sm font-semibold">Building</th>
                 <th className="px-4 py-3 text-sm font-semibold">City</th>
-                <th className="px-4 py-3 text-sm font-semibold text-right">Flats</th>
+                <th className="px-4 py-3 text-sm font-semibold text-right">Flats / Limit</th>
                 <th className="px-4 py-3 text-sm font-semibold text-right">Fund Balance</th>
                 <th className="px-4 py-3 text-sm font-semibold">Status</th>
                 <th className="px-4 py-3 text-sm font-semibold text-right">Actions</th>
@@ -117,7 +118,10 @@ async function BuildingsTable() {
                     )}
                   </td>
                   <td className="px-4 py-3">{b.city ?? "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{b.total_flats ?? 0}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {b.total_flats ?? 0}
+                    <span className="text-muted-foreground text-xs"> / {b.flat_limit}</span>
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium">
                     {formatLakh(Number(b.fund_balance ?? 0))}
                   </td>

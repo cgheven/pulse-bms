@@ -18,8 +18,17 @@ interface AppShellProps {
    * unconditionally above the header.
    */
   demoBanner?: React.ReactNode;
+  /**
+   * Optional server-rendered trial banner. Streams in via Suspense from AdminLayout.
+   * Renders null for non-trial buildings, so we slot it unconditionally after demoBanner.
+   */
+  trialBanner?: React.ReactNode;
   children: React.ReactNode;
 }
+
+const SEGMENT_LABELS: Record<string, string> = {
+  trials: "Buildings",
+};
 
 function deriveTitle(pathname: string, role: Role): string {
   const segments = pathname.split("/").filter(Boolean);
@@ -29,6 +38,7 @@ function deriveTitle(pathname: string, role: Role): string {
     return "Dashboard";
   }
   const last = segments[1];
+  if (SEGMENT_LABELS[last]) return SEGMENT_LABELS[last];
   return last
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -40,7 +50,7 @@ function deriveTitle(pathname: string, role: Role): string {
  * Profile + building name are streamed into the `navbarUser` slot via Suspense
  * at the layout level.
  */
-export function AppShell({ role, navbarUser, demoBanner, children }: AppShellProps) {
+export function AppShell({ role, navbarUser, demoBanner, trialBanner, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const title = deriveTitle(pathname, role);
@@ -75,6 +85,8 @@ export function AppShell({ role, navbarUser, demoBanner, children }: AppShellPro
           {/* User info streams in here — server slot wrapped in Suspense at layout */}
           <div className="ml-auto flex items-center gap-2">{navbarUser}</div>
         </header>
+        {/* Trial strip — sits below the header so sidebar/header h-16 alignment is preserved. */}
+        {trialBanner}
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-8">{children}</div>
         </main>

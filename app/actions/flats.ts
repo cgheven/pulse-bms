@@ -221,10 +221,15 @@ async function ensureProfile(
   if (phone) {
     const { data: existingByPhone } = await admin
       .from("bms_profiles")
-      .select("id")
+      .select("id, role")
       .eq("phone", phone)
       .maybeSingle();
     if (existingByPhone) {
+      if (existingByPhone.role !== "resident") {
+        throw new Error(
+          "This phone number belongs to a privileged account and cannot be used as a resident login.",
+        );
+      }
       reuseId = existingByPhone.id;
       reuseUsername = phone;
       reuseKind = "phone";
@@ -233,10 +238,15 @@ async function ensureProfile(
   if (!reuseId && realEmail) {
     const { data: existingByEmail } = await admin
       .from("bms_profiles")
-      .select("id")
+      .select("id, role")
       .eq("email", realEmail)
       .maybeSingle();
     if (existingByEmail) {
+      if (existingByEmail.role !== "resident") {
+        throw new Error(
+          "This email belongs to a privileged account and cannot be used as a resident login.",
+        );
+      }
       reuseId = existingByEmail.id;
       reuseUsername = realEmail;
       reuseKind = "email";

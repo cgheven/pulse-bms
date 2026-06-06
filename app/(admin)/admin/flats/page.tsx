@@ -40,7 +40,7 @@ async function FlatsContent() {
       .order("flat_number"),
     supabase
       .from("bms_buildings")
-      .select("name, monthly_fee_default")
+      .select("name, monthly_fee_default, flat_limit")
       .eq("id", buildingId)
       .single(),
     supabase
@@ -81,6 +81,7 @@ async function FlatsContent() {
       flats={rows}
       buildingDefaultFee={Number(building?.monthly_fee_default ?? 0)}
       buildingName={building?.name ?? "Building"}
+      flatLimit={Number(building?.flat_limit ?? 99)}
     />
   );
 }

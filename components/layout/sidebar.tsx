@@ -35,6 +35,7 @@ import {
   CalendarCheck,
   Archive,
   Zap,
+  FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -61,8 +62,9 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/super-admin/buildings", label: "Buildings",    icon: Building2 },
         { href: "/super-admin/admins",    label: "Admins",       icon: Shield },
         { href: "/super-admin/teams",     label: "Team Members", icon: Users },
-        { href: "/super-admin/leads",     label: "Leads",        icon: Target },
-        { href: "/super-admin/audit",     label: "Audit Log",    icon: ScrollText },
+        { href: "/super-admin/leads",     label: "Leads",            icon: Target },
+        { href: "/super-admin/trials",    label: "Client Buildings", icon: Building2 },
+        { href: "/super-admin/audit",     label: "Audit Log",        icon: ScrollText },
       ],
     },
   ],
@@ -72,7 +74,8 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "Sales CRM",
       items: [
-        { href: "/super-admin/leads", label: "Leads", icon: Target },
+        { href: "/super-admin/leads",  label: "Leads",     icon: Target },
+        { href: "/super-admin/trials", label: "Buildings", icon: Building2 },
       ],
     },
   ],

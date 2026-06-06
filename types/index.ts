@@ -38,6 +38,12 @@ export type Building = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  flat_limit: number;
+  pulse_monthly_charge: number | null;
+  is_trial: boolean;
+  trial_ends_at: string | null;
+  trial_duration_days: number | null;
+  trial_created_by: string | null;
 };
 
 export type Profile = {
@@ -185,3 +191,18 @@ export interface Vehicle {
   created_at: string;
   updated_at: string;
 }
+
+// ─── Trial Building ──────────────────────────────────────────────────────────
+
+export const TRIAL_DURATION_DAYS = [7, 15, 30] as const;
+export type TrialDurationDays = typeof TRIAL_DURATION_DAYS[number];
+
+export type TrialCredentials = {
+  id: string;
+  building_id: string;
+  admin_profile_id: string;
+  login_email: string;
+  login_password: string;
+  created_by: string | null;
+  created_at: string;
+};

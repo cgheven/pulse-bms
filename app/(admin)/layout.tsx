@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { AppShell, NavbarUserSkeleton } from "@/components/layout/app-shell";
 import { NavbarUserServer } from "@/components/layout/navbar-user-server";
 import { DemoBanner } from "@/components/layout/demo-banner";
+import { TrialBanner } from "@/components/layout/trial-banner";
 import { getSession } from "@/lib/auth";
 
 /**
@@ -25,6 +26,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       demoBanner={
         <Suspense fallback={null}>
           <DemoBanner />
+        </Suspense>
+      }
+      trialBanner={
+        <Suspense fallback={null}>
+          <TrialBanner />
         </Suspense>
       }
     >

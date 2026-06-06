@@ -188,6 +188,17 @@ export async function recordPayment(input: PaymentInput) {
     }
   }
 
+  // ── Cross-tenant guard: flat_id must belong to caller's building ──
+  // RLS gates reads but not FK references on INSERT. A cross-tenant flat_id
+  // would create a payment row with mismatched building_id / flat_id.
+  const { data: flatCheck } = await supabase
+    .from("bms_flats")
+    .select("id")
+    .eq("id", input.flat_id)
+    .eq("building_id", buildingId)
+    .maybeSingle();
+  if (!flatCheck) throw new Error("Invalid flat");
+
   // ── Concurrency guard ─────────────────────────────────────────────
   // Serialise concurrent recordPayment calls against the SAME FLAT via a
   // Postgres advisory lock. The lock is xact-scoped: PostgREST runs each

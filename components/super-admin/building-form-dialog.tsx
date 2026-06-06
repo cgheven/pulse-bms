@@ -29,6 +29,7 @@ export type BuildingFormValues = {
   address: string | null;
   city: string | null;
   total_flats: number;
+  flat_limit: number;
 };
 
 const DEFAULTS: BuildingFormValues = {
@@ -36,6 +37,7 @@ const DEFAULTS: BuildingFormValues = {
   address: "",
   city: "Karachi",
   total_flats: 0,
+  flat_limit: 99,
 };
 
 export function BuildingFormDialog({
@@ -85,6 +87,7 @@ export function BuildingFormDialog({
       address: values.address,
       city: values.city,
       total_flats: Number(values.total_flats) || 0,
+      flat_limit: Math.max(1, Number(values.flat_limit) || 99),
       // Opening balance is owned by the building's Admin (President),
       // not Super Admin. New buildings start at 0 / today; Admin sets
       // the real number from Settings → Opening Balance after creation.
@@ -165,6 +168,26 @@ export function BuildingFormDialog({
                 onChange={(e) => set("total_flats", Number(e.target.value))}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="flat_limit" className="text-base">
+              Flat Limit <span className="text-destructive">*</span>
+              <span className="text-muted-foreground text-sm font-normal ml-1">(maximum flats allowed for this building)</span>
+            </Label>
+            <Input
+              id="flat_limit"
+              type="number"
+              min={1}
+              max={9999}
+              className="h-12 text-base"
+              value={values.flat_limit}
+              onChange={(e) => set("flat_limit", Number(e.target.value))}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Admins cannot add more flats than this limit. Matches the client&rsquo;s contract.
+            </p>
           </div>
 
           <div className="space-y-2">

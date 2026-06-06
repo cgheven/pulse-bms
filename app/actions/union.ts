@@ -34,6 +34,19 @@ export async function addUnionMember(input: {
   const supabase = await createClient();
   const admin = createAdminClient();
 
+  // Verify the target belongs to this building and is a resident before promotion.
+  // adminDb bypasses RLS, so we must guard cross-tenant promotion explicitly.
+  const { data: targetProfile } = await admin
+    .from("bms_profiles")
+    .select("id, role, building_id")
+    .eq("id", input.profile_id)
+    .eq("building_id", buildingId)
+    .maybeSingle();
+  if (!targetProfile) throw new Error("User not found in this building.");
+  if (targetProfile.role !== "resident") {
+    throw new Error("Only residents can be promoted to the Union committee.");
+  }
+
   // Promote profile to 'union' role (admin client bypasses RLS).
   const { error: roleErr } = await admin
     .from("bms_profiles")

@@ -18,6 +18,7 @@ export type BuildingInput = {
   address?: string | null;
   city?: string | null;
   total_flats?: number | null;
+  flat_limit?: number | null;
   opening_balance_amount?: number | null;
   opening_balance_date?: string | null;
   // Optional: assign an existing admin account to this building on creation.
@@ -54,6 +55,7 @@ async function provisionBuilding(
   input: {
     name: string;
     total_flats?: number | null;
+    flat_limit?: number | null;
     city?: string | null;
     address?: string | null;
     opening_balance_amount?: number;
@@ -69,6 +71,7 @@ async function provisionBuilding(
     address: input.address?.trim() || null,
     city: input.city?.trim() || "Karachi",
     total_flats: Math.max(0, Number(input.total_flats) || 0),
+    flat_limit: Math.max(1, Math.round(Number(input.flat_limit) || 99)),
     entry_fee_owner: 10000,
     entry_fee_tenant: 5000,
     monthly_fee_default: 3000,
@@ -149,6 +152,7 @@ export async function createBuilding(data: BuildingInput) {
     address: data.address,
     city: data.city,
     total_flats: data.total_flats,
+    flat_limit: data.flat_limit,
     opening_balance_amount: openingAmount,
     opening_balance_date: openingDate,
   });
@@ -210,6 +214,7 @@ export async function updateBuilding(id: string, data: BuildingInput) {
     address: data.address?.trim() || null,
     city: data.city?.trim() || "Karachi",
     total_flats: data.total_flats ?? 0,
+    flat_limit: Math.max(1, Math.round(Number(data.flat_limit) || 99)),
   };
 
   const supabase = await createClient();
@@ -291,7 +296,7 @@ export async function createAdminWithBuildings(data: {
   password: string;
   full_name?: string | null;
   phone?: string | null;
-  building_names: { name: string; total_flats: number }[];   // new buildings to create
+  building_names: { name: string; total_flats: number; flat_limit?: number }[];   // new buildings to create
   existing_building_ids?: string[]; // already-created buildings to also assign
 }) {
   await requireNotDemo();
@@ -302,7 +307,7 @@ export async function createAdminWithBuildings(data: {
   const password = data.password?.trim() ?? "";
   const buildings = data.building_names
     .filter((b) => b.name.trim())
-    .map((b) => ({ name: b.name.trim(), total_flats: Math.max(0, Number(b.total_flats) || 0) }));
+    .map((b) => ({ name: b.name.trim(), total_flats: Math.max(0, Number(b.total_flats) || 0), flat_limit: b.flat_limit }));
   const existingIds = data.existing_building_ids ?? [];
 
   if (!email) throw new Error("Email is required");
@@ -352,6 +357,7 @@ export async function createAdminWithBuildings(data: {
       const { id } = await provisionBuilding(supabase, {
         name: b.name,
         total_flats: b.total_flats,
+        flat_limit: b.flat_limit,
       });
       createdBuildingIds.push(id);
     }
@@ -625,7 +631,9 @@ export async function deleteBuilding(id: string) {
   if (bErr) throw new Error(bErr.message);
   if (!building) throw new Error("Building not found");
 
-  // Tables whose rows are scoped to this building.
+  // Tables with user-authored data — block deletion if any rows exist.
+  // bms_profiles is intentionally excluded: the admin account is system-created
+  // and is auto-cleaned in the cascade step below (same as bms_admin_buildings).
   const tables = [
     "bms_flats",
     "bms_residents",
@@ -641,7 +649,6 @@ export async function deleteBuilding(id: string) {
     "bms_meetings",
     "bms_elections",
     "bms_union_members",
-    "bms_profiles",
   ] as const;
 
   const counts: Record<string, number> = {};
@@ -658,7 +665,7 @@ export async function deleteBuilding(id: string) {
     const priority: { key: string; label: (n: number) => string }[] = [
       { key: "bms_flats", label: (n) => `${n} ${n === 1 ? "flat" : "flats"}` },
       { key: "bms_residents", label: (n) => `${n} ${n === 1 ? "resident" : "residents"}` },
-      { key: "bms_profiles", label: (n) => `${n} ${n === 1 ? "admin/union member" : "admins/union members"}` },
+      { key: "bms_profiles", label: (n) => `${n} ${n === 1 ? "admin/union account" : "admin/union accounts"}` },
       { key: "bms_invoices", label: (n) => `${n} ${n === 1 ? "invoice" : "invoices"}` },
       { key: "bms_payments", label: (n) => `${n} ${n === 1 ? "payment" : "payments"}` },
       { key: "bms_expenses", label: (n) => `${n} ${n === 1 ? "expense" : "expenses"}` },
@@ -669,23 +676,71 @@ export async function deleteBuilding(id: string) {
     for (const p of priority) {
       if (counts[p.key]) parts.push(p.label(counts[p.key]));
     }
-    // Catch anything not in the priority list
     for (const [k, v] of Object.entries(counts)) {
       if (!priority.some((p) => p.key === k)) {
         parts.push(`${v} row${v === 1 ? "" : "s"} in ${k}`);
       }
     }
     throw new Error(
-      `Building has data: ${parts.join(" · ")}. Remove or reassign these first, or use Deactivate to hide the building instead.`,
+      `Building has data: ${parts.join(" · ")}. Remove these first, or use Deactivate to hide the building instead.`,
     );
   }
 
-  const { error: delErr } = await admin
-    .from("bms_buildings")
-    .delete()
-    .eq("id", id);
+  // All user-authored data is clear. Now cascade-delete the system/infrastructure
+  // rows that the DB schema doesn't CASCADE automatically. Order matters: delete
+  // leaf tables first, then their parents, then the building itself.
+  //
+  // These rows are all created programmatically (not authored by users):
+  //   trial_credentials, audit_log, admin_buildings junction, bank_accounts,
+  //   bill_accounts, utility_types/accounts, services, inventory, vehicles,
+  //   visitor_passes, flat_listings — all safe to wipe for an empty building.
+
+  // 1. Collect all profile IDs associated with this building so we can clean up
+  //    orphaned auth users after deletion. Includes:
+  //    a) admin_buildings junction (multi-building admins)
+  //    b) profiles with building_id = id (single-building admin/union accounts)
+  const { data: junctionRows } = await admin
+    .from("bms_admin_buildings")
+    .select("profile_id")
+    .eq("building_id", id);
+  const { data: profileRows } = await admin
+    .from("bms_profiles")
+    .select("id")
+    .eq("building_id", id);
+  const adminProfileIds = Array.from(new Set([
+    ...(junctionRows ?? []).map((r: { profile_id: string }) => r.profile_id),
+    ...(profileRows ?? []).map((r: { id: string }) => r.id),
+  ]));
+
+  // 2. Delete system leaf tables (no user data, order-independent)
+  const systemTables = [
+    "bms_trial_credentials",
+    "bms_audit_log",
+    "bms_flat_listings",
+    "bms_inventory_transactions",
+    "bms_inventory_items",
+    "bms_visitor_passes",
+    "bms_vehicles",
+    "bms_services",
+    "bms_utility_accounts",
+    "bms_utility_types",
+    "bms_bill_accounts",
+    "bms_bank_accounts",
+    "bms_admin_buildings",
+    "bms_profiles",
+  ] as const;
+
+  for (const t of systemTables) {
+    const { error: sysDelErr } = await admin.from(t).delete().eq("building_id", id);
+    if (sysDelErr) throw new Error(`Failed to remove ${t}: ${sysDelErr.message}`);
+  }
+
+  // 3. Delete the building itself
+  const { error: delErr } = await admin.from("bms_buildings").delete().eq("id", id);
   if (delErr) throw new Error(delErr.message);
 
+  // 4. Audit log (written BEFORE building delete above means building_id FK was valid
+  //    at write time; now building is gone — we write with building_id: null)
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
@@ -696,6 +751,19 @@ export async function deleteBuilding(id: string) {
     entity_id: id,
     meta: { name: building.name },
   });
+
+  // 5. Delete orphaned admin auth users (profiles whose only building was this one)
+  for (const profileId of adminProfileIds) {
+    const { count: otherBuildings } = await admin
+      .from("bms_admin_buildings")
+      .select("building_id", { count: "exact", head: true })
+      .eq("profile_id", profileId);
+    if ((otherBuildings ?? 0) === 0) {
+      // No other buildings — profile is now orphaned, remove it and the auth user
+      await admin.from("bms_profiles").delete().eq("id", profileId);
+      await admin.auth.admin.deleteUser(profileId);
+    }
+  }
 
   revalidatePath("/super-admin/buildings");
   revalidatePath("/super-admin");

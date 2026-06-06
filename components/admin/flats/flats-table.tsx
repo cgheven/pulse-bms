@@ -44,10 +44,12 @@ export function FlatsTable({
   flats,
   buildingDefaultFee,
   buildingName,
+  flatLimit,
 }: {
   flats: FlatRow[];
   buildingDefaultFee: number;
   buildingName: string;
+  flatLimit: number;
 }) {
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<FlatRow | null>(null);
@@ -67,6 +69,8 @@ export function FlatsTable({
   // Tiny aggregate row so the page header earns its space.
   const occupied = flats.filter((f) => f.ownership_type !== "vacant").length;
   const totalOutstanding = flats.reduce((s, f) => s + f.outstanding_dues, 0);
+  // 0 means unlimited (reserved for ops use via direct SQL)
+  const isAtLimit = flatLimit > 0 && flats.length >= flatLimit;
 
   return (
     <>
@@ -76,6 +80,14 @@ export function FlatsTable({
           <h1>Flats</h1>
           <p className="text-xs text-muted-foreground tabular-nums">
             {occupied} / {flats.length} occupied
+            {flatLimit > 0 && (
+              <>
+                <span className="mx-1 text-muted-foreground/40">·</span>
+                <span className={isAtLimit ? "text-amber-700 font-semibold" : ""}>
+                  {flats.length} of {flatLimit} flats allowed
+                </span>
+              </>
+            )}
             {totalOutstanding > 0 && (
               <>
                 <span className="mx-1 text-muted-foreground/40">·</span>
@@ -86,11 +98,28 @@ export function FlatsTable({
             )}
           </p>
         </div>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
+        <Button
+          size="sm"
+          onClick={() => !isAtLimit && setAddOpen(true)}
+          disabled={isAtLimit}
+          aria-disabled={isAtLimit}
+          title={isAtLimit ? `Flat limit reached (${flatLimit}). Contact support to add more.` : undefined}
+        >
           <Plus className="w-3.5 h-3.5" />
           Add Flat
         </Button>
       </header>
+
+      {isAtLimit && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-base text-amber-800"
+        >
+          You have reached the maximum of {flatLimit} flats allowed for this building.
+          To add more flats, contact support.
+        </div>
+      )}
 
       {/* Search row — inline count to use the right-side whitespace */}
       <div className="flex items-center gap-2 flex-wrap">
