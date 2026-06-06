@@ -75,7 +75,7 @@ function LoginCard({
   const loginUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/login`
-      : "https://bms.musabkhan.me/login";
+      : "https://bms.yourpulse.io/login";
 
   // The user types/stores the canonical phone (no dash) — show credentials
   // verbatim in both the share message and the visual card so what admin

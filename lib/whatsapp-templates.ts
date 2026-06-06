@@ -21,7 +21,7 @@ export const WHATSAPP_TEMPLATES = {
       "Hello {{contact_name}},\n\n" +
       "Thank you for your interest in Pulse BMS. Here are the demo credentials — you can explore three separate dashboards (Admin, Union, and Resident) to see how each role experiences the platform.\n\n" +
       "🌐 Demo link:\n" +
-      "https://bms.musabkhan.me/\n\n" +
+      "https://bms.yourpulse.io/\n\n" +
       "🔑 Admin (Treasurer view):\n" +
       "Email: admin@demo.pulse.app\n" +
       "Password: PulseDemo2026!\n\n" +
@@ -75,7 +75,7 @@ export const WHATSAPP_TEMPLATES = {
       "Hello {{contact_name}},\n\n" +
       "Welcome to the Pulse BMS sales team. Here are your login credentials:\n\n" +
       "🌐 Sign in:\n" +
-      "https://bms.musabkhan.me/login\n\n" +
+      "https://bms.yourpulse.io/login\n\n" +
       "Email: {{login_email}}\n" +
       "Password: {{login_password}}\n\n" +
       "You can change the password after first sign-in. Reach out if anything doesn't work.\n\n" +

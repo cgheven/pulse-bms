@@ -230,7 +230,7 @@ function SuccessStep({
   const loginUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/login`
-      : "https://bms.musabkhan.me/login";
+      : "https://bms.yourpulse.io/login";
 
   const message = `Assalam Alaikum ${resident.full_name},
 
