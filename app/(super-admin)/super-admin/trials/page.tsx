@@ -18,11 +18,6 @@ export default async function TrialsPage() {
     .order("created_at", { ascending: false })
     .limit(200);
 
-  // Sales users see only their own buildings — super_admin sees all
-  if (profile.role === "sales") {
-    query = query.eq("trial_created_by", user.id);
-  }
-
   const { data: trials } = await query;
 
   // Active leads for the "Fill from Lead" dropdown in CreateDialog.

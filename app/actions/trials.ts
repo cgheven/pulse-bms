@@ -370,10 +370,6 @@ export async function extendTrial(building_id: string, additional_days: TrialDur
   if (!building) throw new Error("Building not found.");
   if (!building.is_trial) throw new Error("This building is not a trial.");
 
-  // Ownership check: sales users can only extend their own buildings
-  if (profile.role === "sales" && building.trial_created_by !== user.id) {
-    throw new Error("Access denied.");
-  }
 
   const now = new Date();
   const currentEnd = building.trial_ends_at ? new Date(building.trial_ends_at) : now;
@@ -434,10 +430,6 @@ export async function deactivateTrialBuilding(building_id: string) {
     throw new Error("This building is not a trial. Use the Buildings management page to manage production buildings.");
   }
 
-  // Ownership check: sales users can only deactivate their own buildings
-  if (profile.role === "sales" && building.trial_created_by !== user.id) {
-    throw new Error("Access denied.");
-  }
 
   const { data: updated, error } = await adminDb
     .from("bms_buildings")
@@ -483,10 +475,6 @@ export async function convertToProduction(
   if (!building) throw new Error("Building not found.");
   if (!building.is_trial) throw new Error("This building is already a production building.");
 
-  // Ownership check
-  if (profile.role === "sales" && building.trial_created_by !== user.id) {
-    throw new Error("Access denied.");
-  }
 
   const newFlatLimit =
     opts.flat_limit != null
@@ -577,10 +565,6 @@ export async function updateBuildingCharge(
     .maybeSingle();
   if (loadErr) throw new Error(loadErr.message);
   if (!building) throw new Error("Building not found.");
-
-  if (profile.role === "sales" && building.trial_created_by !== user.id) {
-    throw new Error("Access denied.");
-  }
 
   const { error } = await adminDb
     .from("bms_buildings")
