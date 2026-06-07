@@ -102,7 +102,8 @@ async function FacilityContent() {
       .from("bms_facility_tasks")
       .select("*")
       .eq("building_id", buildingId)
-      .order("next_due_date", { ascending: true, nullsFirst: false }),
+      .order("next_due_date", { ascending: true, nullsFirst: false })
+      .limit(200),
 
     supabase
       .from("bms_complaints")
@@ -112,7 +113,8 @@ async function FacilityContent() {
         bms_flats!flat_id (flat_number)
       `)
       .eq("building_id", buildingId)
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(300),
 
     supabase
       .from("bms_staff")

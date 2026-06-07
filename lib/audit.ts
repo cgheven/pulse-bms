@@ -27,7 +27,8 @@ export async function writeAuditLog(data: {
       ip_address:  data.ip_address  ?? null,
       user_agent:  data.user_agent  ?? null,
     });
-  } catch {
-    // Audit must never block the main action
+  } catch (err) {
+    // Audit must never block the main action, but log failures for observability.
+    console.error("[audit] writeAuditLog failed:", err);
   }
 }

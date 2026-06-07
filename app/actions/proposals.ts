@@ -135,9 +135,9 @@ async function recomputeProposalStatus(proposal_id: string) {
     if (reject > 0) next = "rejected";
     else if (approve >= total) next = "approved";
   } else {
-    // majority (default)
+    // majority (default) — strict majority required; ties stay pending.
     if (approve > total / 2) next = "approved";
-    else if (reject >= total / 2) next = "rejected";
+    else if (reject > total / 2) next = "rejected";
   }
 
   if (next !== "pending") {
@@ -172,6 +172,16 @@ export async function castVote(
     .maybeSingle();
   if (umErr) throw new Error(umErr.message);
   if (!um) throw new Error("Not an active union member");
+
+  // Guard: only accept votes on proposals that are still open (BUG-003).
+  const { data: prop } = await supabase
+    .from("bms_proposals")
+    .select("status")
+    .eq("id", proposal_id)
+    .eq("building_id", profile.building_id)
+    .maybeSingle();
+  if (!prop) throw new Error("Proposal not found.");
+  if (prop.status !== "pending") throw new Error("Voting is closed for this proposal.");
 
   const { data, error } = await supabase
     .from("bms_proposal_votes")

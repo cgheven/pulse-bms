@@ -196,7 +196,8 @@ export default async function LeadDetailPage({
       "id, lead_id, activity_type, note, meta, followup_due_date, actor_id, created_at",
     )
     .eq("lead_id", id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(200);
 
   // Compute days-in-status from the most recent status_change activity,
   // falling back to lead.created_at when the lead has never changed

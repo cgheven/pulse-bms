@@ -30,12 +30,14 @@ export async function createResident(input: ResidentInput) {
   if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
-  // If this resident is primary, demote other primaries on same flat
+  // If this resident is primary, demote other primaries on same flat.
+  // building_id scope prevents the update from crossing tenant boundaries.
   if (input.is_primary) {
     await supabase
       .from("bms_residents")
       .update({ is_primary: false })
-      .eq("flat_id", input.flat_id);
+      .eq("flat_id", input.flat_id)
+      .eq("building_id", buildingId);
   }
 
   let profile_id: string | null = null;
@@ -290,13 +292,16 @@ export async function createResidentLogin(
 
   const password = generatePassword();
 
-  // 3. Reuse existing account when the same mobile is already in the system
+  // 3. Reuse existing account when the same mobile is already in the system.
+  // Scope to buildingId so a cross-building phone match can't hijack accounts
+  // belonging to residents in other tenants (SEC-001).
   let profile_id: string | null = null;
   if (phone) {
     const { data: existingByPhone } = await admin
       .from("bms_profiles")
       .select("id")
       .eq("phone", phone)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (existingByPhone) profile_id = existingByPhone.id;
   }
@@ -305,6 +310,7 @@ export async function createResidentLogin(
       .from("bms_profiles")
       .select("id")
       .eq("email", realEmail)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (existingByEmail) profile_id = existingByEmail.id;
   }

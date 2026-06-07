@@ -523,14 +523,12 @@ export async function convertToProduction(
       password: newPassword,
     });
     if (pwErr) throw new Error(`Failed to reset password: ${pwErr.message}`);
-    // Keep the credential record in sync so sales can always retrieve the current password
-    const { error: credUpdateErr } = await adminDb
+    // Delete the trial credential row — plaintext password must not persist after
+    // production conversion. Admin hands off credentials out-of-band from here.
+    await adminDb
       .from("bms_trial_credentials")
-      .update({ login_password: newPassword })
+      .delete()
       .eq("building_id", building_id);
-    if (credUpdateErr) {
-      console.error("Credential record update failed:", credUpdateErr.message);
-    }
   }
 
   await writeAuditLog({

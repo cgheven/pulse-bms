@@ -75,7 +75,8 @@ async function loadNoticesData() {
     .select("*")
     .eq("building_id", buildingId)
     .order("pinned", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(100);
 
   const today = new Date();
   const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;

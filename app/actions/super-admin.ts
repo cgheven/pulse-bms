@@ -442,7 +442,22 @@ export async function reassignAdmin(profileId: string, buildingId: string) {
   if (!profileId) throw new Error("Admin id required");
   if (!buildingId) throw new Error("Building required");
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(profileId)) throw new Error("Invalid profile ID.");
+  if (!UUID_RE.test(buildingId)) throw new Error("Invalid building ID.");
+
   const admin = createAdminClient();
+
+  // Verify target exists and is an admin — prevents escalation or deactivation
+  // of super_admins via this endpoint (SEC-004).
+  const { data: target } = await admin
+    .from("bms_profiles")
+    .select("id, role")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (!target) throw new Error("User not found.");
+  if (target.role !== "admin") throw new Error("Only admin profiles can be reassigned.");
+
   const { error } = await admin
     .from("bms_profiles")
     .update({ building_id: buildingId, role: "admin", is_active: true })
@@ -576,6 +591,16 @@ export async function setAdminActive(profileId: string, isActive: boolean) {
   if (!profileId) throw new Error("Admin id required");
 
   const admin = createAdminClient();
+
+  // Prevent accidental deactivation of super_admin accounts via this endpoint (SEC-006).
+  const { data: target } = await admin
+    .from("bms_profiles")
+    .select("role")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (!target) throw new Error("User not found.");
+  if (target.role === "super_admin") throw new Error("Super admin accounts cannot be deactivated here.");
+
   const { error } = await admin
     .from("bms_profiles")
     .update({ is_active: isActive })

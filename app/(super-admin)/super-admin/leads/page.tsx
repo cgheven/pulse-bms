@@ -5,6 +5,7 @@ import {
   CalendarClock,
   AlertTriangle,
   Trophy,
+  TrendingUp,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
@@ -16,6 +17,8 @@ import { LeadRowDelete } from "@/components/leads/lead-row-delete";
 import { LeadRowFollowup } from "@/components/leads/lead-row-followup";
 import { LeadRowInterest } from "@/components/leads/lead-row-interest";
 import { SendDemoButton } from "@/components/leads/send-demo-button";
+import { SetTargetsButton } from "@/components/leads/set-targets-dialog";
+import { getSalesTargets } from "@/app/actions/sales-targets";
 import type {
   LeadStatus,
   LeadRole,
@@ -92,6 +95,15 @@ function startOfMonthIso(): string {
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
 }
 
+function startOfWeekIso(): string {
+  const d = new Date();
+  const day = d.getDay(); // 0=Sun
+  const diff = day === 0 ? -6 : 1 - day; // back to Monday
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
 type SP = Promise<{ [key: string]: string | string[] | undefined }>;
 
 export default async function LeadsPage({
@@ -110,6 +122,9 @@ export default async function LeadsPage({
   const dueToday = sp.dueToday === "1";
   const overdue = !dueToday && sp.overdue === "1";
   const q = typeof sp.q === "string" ? sp.q : "";
+  // Date range filter on created_at (YYYY-MM-DD strings).
+  const dateFrom = typeof sp.dateFrom === "string" ? sp.dateFrom : "";
+  const dateTo = typeof sp.dateTo === "string" ? sp.dateTo : "";
 
   return (
     <div className="space-y-5 animate-fade-up min-w-0 w-full">
@@ -128,11 +143,17 @@ export default async function LeadsPage({
         <LeadsKpis />
       </Suspense>
 
+      <Suspense fallback={<KpiRowSkeleton count={3} />}>
+        <LeadsTargetProgress isSuperAdmin={profile.role === "super_admin"} />
+      </Suspense>
+
       <LeadsFilters
         status={status}
         overdue={overdue}
         dueToday={dueToday}
         q={q}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
       />
 
       <Suspense fallback={<TableSkeleton rows={6} />}>
@@ -141,9 +162,108 @@ export default async function LeadsPage({
           overdue={overdue}
           dueToday={dueToday}
           q={q}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
           ownerName={ownerName}
         />
       </Suspense>
+    </div>
+  );
+}
+
+async function LeadsTargetProgress({ isSuperAdmin }: { isSuperAdmin: boolean }) {
+  const supabase = await createClient();
+  const today = todayIso();
+  const weekStart = startOfWeekIso();
+  const monthStart = startOfMonthIso();
+  const targets = await getSalesTargets();
+
+  const [dayRes, weekRes, monthRes] = await Promise.all([
+    supabase
+      .from("bms_leads")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
+      .gte("created_at", `${today}T00:00:00`),
+    supabase
+      .from("bms_leads")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
+      .gte("created_at", weekStart),
+    supabase
+      .from("bms_leads")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
+      .gte("created_at", monthStart),
+  ]);
+
+  const dayCount = dayRes.count ?? 0;
+  const weekCount = weekRes.count ?? 0;
+  const monthCount = monthRes.count ?? 0;
+
+  const periods = [
+    { label: "Today", count: dayCount, target: targets.daily_target },
+    { label: "This Week", count: weekCount, target: targets.weekly_target },
+    { label: "This Month", count: monthCount, target: targets.monthly_target },
+  ];
+
+  const hasAnyTarget = periods.some((p) => p.target != null);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <TrendingUp className="w-4 h-4 text-primary" />
+          Leads Added
+        </div>
+        {isSuperAdmin && <SetTargetsButton current={targets} />}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {periods.map(({ label, count, target }) => {
+          const pct = target ? Math.min(100, Math.round((count / target) * 100)) : null;
+          const met = target != null && count >= target;
+          const behind = target != null && pct != null && pct < 50;
+          const close = target != null && pct != null && pct >= 50 && !met;
+          return (
+            <div key={label} className="rounded-lg border border-border bg-card p-4 space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                {label}
+              </p>
+              <div className="flex items-end gap-1.5">
+                <span className={cn(
+                  "text-3xl font-semibold tabular-nums",
+                  met ? "text-success" : behind ? "text-destructive" : close ? "text-warning" : "text-foreground",
+                )}>
+                  {count}
+                </span>
+                {target != null && (
+                  <span className="text-sm text-muted-foreground mb-0.5">/ {target}</span>
+                )}
+              </div>
+              {target != null && pct != null ? (
+                <div className="space-y-1">
+                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        met ? "bg-success" : behind ? "bg-destructive" : "bg-warning",
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className={cn(
+                    "text-[11px] font-medium",
+                    met ? "text-success" : behind ? "text-destructive" : "text-warning",
+                  )}>
+                    {met ? "Target met ✓" : `${pct}% — ${target - count} to go`}
+                  </p>
+                </div>
+              ) : !hasAnyTarget && isSuperAdmin ? (
+                <p className="text-[11px] text-muted-foreground">No target set</p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -280,12 +400,16 @@ async function LeadsTable({
   overdue,
   dueToday,
   q,
+  dateFrom,
+  dateTo,
   ownerName,
 }: {
   status: string;
   overdue: boolean;
   dueToday: boolean;
   q: string;
+  dateFrom: string;
+  dateTo: string;
   ownerName: string;
 }) {
   const supabase = await createClient();
@@ -323,6 +447,12 @@ async function LeadsTable({
         `building_name.ilike.%${safe}%,contact_name.ilike.%${safe}%,area.ilike.%${safe}%`,
       );
     }
+  }
+  if (dateFrom) {
+    query = query.gte("created_at", `${dateFrom}T00:00:00`);
+  }
+  if (dateTo) {
+    query = query.lte("created_at", `${dateTo}T23:59:59`);
   }
 
   const { data, error } = await query;

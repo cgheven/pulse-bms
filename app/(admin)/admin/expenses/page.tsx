@@ -117,7 +117,8 @@ async function ExpensesContent({
     .from("bms_expenses")
     .select("*")
     .eq("building_id", buildingId)
-    .order("expense_date", { ascending: false });
+    .order("expense_date", { ascending: false })
+    .limit(500);
 
   if (sp.category) query = query.eq("category", sp.category);
   if (sp.from) query = query.gte("expense_date", sp.from);

@@ -31,11 +31,15 @@ export function LeadsFilters({
   overdue,
   dueToday,
   q,
+  dateFrom,
+  dateTo,
 }: {
   status: string;
   overdue: boolean;
   dueToday: boolean;
   q: string;
+  dateFrom: string;
+  dateTo: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -66,6 +70,16 @@ export function LeadsFilters({
     });
   }
 
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-PK", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  const hasDateFilter = dateFrom || dateTo;
+
   return (
     <div className="card-soft space-y-3">
       <div className="flex flex-wrap items-center gap-3">
@@ -95,8 +109,6 @@ export function LeadsFilters({
             type="checkbox"
             checked={dueToday}
             onChange={(e) => {
-              // Turning on dueToday clears overdue (mutually exclusive);
-              // turning it off leaves overdue alone.
               if (e.target.checked) {
                 pushParams({ dueToday: "1", overdue: null });
               } else {
@@ -134,9 +146,39 @@ export function LeadsFilters({
         </div>
       </div>
 
-      {/* Active-filter summary so the user can see (and clear) what's
-          currently constraining the list. */}
-      {(dueToday || overdue) && (
+      {/* Date range — filters by lead created_at */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-muted-foreground whitespace-nowrap">Added between:</span>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => pushParams({ dateFrom: e.target.value || null })}
+            className="h-10 w-[160px] text-sm"
+            aria-label="From date"
+          />
+          <span className="text-sm text-muted-foreground">—</span>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => pushParams({ dateTo: e.target.value || null })}
+            className="h-10 w-[160px] text-sm"
+            aria-label="To date"
+          />
+        </div>
+        {hasDateFilter && (
+          <button
+            type="button"
+            onClick={() => pushParams({ dateFrom: null, dateTo: null })}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Clear dates
+          </button>
+        )}
+      </div>
+
+      {/* Active-filter summary */}
+      {(dueToday || overdue || hasDateFilter) && (
         <div className="flex items-center gap-2 flex-wrap pt-1">
           <span className="text-xs uppercase tracking-wider text-muted-foreground">
             Active filter:
@@ -160,6 +202,21 @@ export function LeadsFilters({
               aria-label="Clear Overdue filter"
             >
               Overdue
+              <span aria-hidden>×</span>
+            </button>
+          )}
+          {hasDateFilter && (
+            <button
+              type="button"
+              onClick={() => pushParams({ dateFrom: null, dateTo: null })}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
+              aria-label="Clear date filter"
+            >
+              {dateFrom && dateTo
+                ? `${fmtDate(dateFrom)} – ${fmtDate(dateTo)}`
+                : dateFrom
+                ? `From ${fmtDate(dateFrom)}`
+                : `Until ${fmtDate(dateTo)}`}
               <span aria-hidden>×</span>
             </button>
           )}

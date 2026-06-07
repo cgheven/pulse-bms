@@ -218,11 +218,14 @@ async function ensureProfile(
   let reuseId: string | null = null;
   let reuseUsername = "";
   let reuseKind: "phone" | "email" = "phone";
+  // Scope lookups to buildingId — prevents a cross-building phone/email match
+  // from letting one admin take over a resident account in another tenant (SEC-002).
   if (phone) {
     const { data: existingByPhone } = await admin
       .from("bms_profiles")
       .select("id, role")
       .eq("phone", phone)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (existingByPhone) {
       if (existingByPhone.role !== "resident") {
@@ -240,6 +243,7 @@ async function ensureProfile(
       .from("bms_profiles")
       .select("id, role")
       .eq("email", realEmail)
+      .eq("building_id", buildingId)
       .maybeSingle();
     if (existingByEmail) {
       if (existingByEmail.role !== "resident") {

@@ -448,12 +448,13 @@ export async function recordPayment(input: PaymentInput) {
       .eq("building_id", buildingId);
   }
 
-  // entry_fee accounting unchanged
+  // entry_fee accounting — building_id scope prevents cross-tenant corruption (SEC-005).
   if (input.category === "entry_fee" && input.resident_id) {
     const { data: r } = await supabase
       .from("bms_residents")
       .select("entry_fee_paid")
       .eq("id", input.resident_id)
+      .eq("building_id", buildingId)
       .single();
     await supabase
       .from("bms_residents")
@@ -461,7 +462,8 @@ export async function recordPayment(input: PaymentInput) {
         entry_fee_paid:
           Number(r?.entry_fee_paid ?? 0) + Number(input.amount),
       })
-      .eq("id", input.resident_id);
+      .eq("id", input.resident_id)
+      .eq("building_id", buildingId);
   }
 
   await writeAuditLog({
@@ -550,13 +552,15 @@ export async function deletePayment(id: string) {
       .from("bms_residents")
       .select("entry_fee_paid")
       .eq("id", pay.resident_id)
+      .eq("building_id", buildingId)
       .single();
     await supabase
       .from("bms_residents")
       .update({
         entry_fee_paid: Math.max(0, Number(r?.entry_fee_paid ?? 0) - Number(pay.amount)),
       })
-      .eq("id", pay.resident_id);
+      .eq("id", pay.resident_id)
+      .eq("building_id", buildingId);
   }
 
   await writeAuditLog({
@@ -572,7 +576,11 @@ export async function deletePayment(id: string) {
   revalidatePath("/admin/maintenance");
   revalidatePath("/admin/other-income");
   revalidatePath("/admin");
+  revalidatePath("/admin/flats");
   revalidatePath("/admin/reports", "layout");
+  revalidatePath("/resident");
+  revalidatePath("/resident/dues");
+  revalidatePath("/resident/payments");
   revalidatePath("/union/collections");
   return { ok: true };
 }
