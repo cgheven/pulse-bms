@@ -41,6 +41,18 @@ import { TRIAL_DURATION_DAYS, type TrialDurationDays } from "@/types";
 
 type TrialCred = { login_email: string; login_password: string } | null;
 
+export type LeadForImport = {
+  id: string;
+  building_name: string;
+  city: string | null;
+  flat_count_estimate: number | null;
+  contact_name: string;
+  whatsapp_number: string;
+  email: string | null;
+  quoted_amount: number | null;
+  status: string;
+};
+
 type BuildingRow = {
   id: string;
   name: string;
@@ -58,6 +70,7 @@ type BuildingRow = {
 type Props = {
   trials: BuildingRow[];
   userRole: string;
+  leads: LeadForImport[];
 };
 
 type NewCredentials = {
@@ -283,10 +296,12 @@ function CreateDialog({
   open,
   onClose,
   onSuccess,
+  leads,
 }: {
   open: boolean;
   onClose: () => void;
   onSuccess: (creds: NewCredentials) => void;
+  leads: LeadForImport[];
 }) {
   const [buildingType, setBuildingType] = useState<BuildingType>("trial");
   const [buildingName, setBuildingName] = useState("");
@@ -296,9 +311,13 @@ function CreateDialog({
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [duration, setDuration] = useState<TrialDurationDays>(30);
+  const [duration, setDuration] = useState<TrialDurationDays>(7);
+  const [selectedLeadId, setSelectedLeadId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Prevents PricingSection's flatLimit-change effect from overwriting a
+  // quoted_amount we just imported from a lead.
+  const suppressChargeRecalc = useRef(false);
 
   function resetForm() {
     setBuildingType("trial");
@@ -309,8 +328,35 @@ function CreateDialog({
     setContactName("");
     setContactEmail("");
     setWhatsappNumber("");
-    setDuration(30);
+    setDuration(7);
+    setSelectedLeadId("");
+    suppressChargeRecalc.current = false;
     setError(null);
+  }
+
+  function handleLeadSelect(leadId: string) {
+    setSelectedLeadId(leadId);
+    if (!leadId) return;
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) return;
+    setBuildingName(lead.building_name);
+    if (lead.city) setCity(lead.city);
+    if (lead.flat_count_estimate && lead.flat_count_estimate >= 1) {
+      setFlatLimit(String(Math.min(9999, Math.round(lead.flat_count_estimate))));
+    }
+    setContactName(lead.contact_name);
+    setWhatsappNumber(lead.whatsapp_number);
+    const derivedEmail = lead.email ?? (() => {
+      const parts = lead.contact_name.trim().split(/\s+/).map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean);
+      if (!parts.length) return null;
+      const local = parts.length >= 2 ? `${parts[0]}.${parts[1]}` : parts[0];
+      return `${local}@yourpulse.io`;
+    })();
+    if (derivedEmail) setContactEmail(derivedEmail);
+    if (lead.quoted_amount && lead.quoted_amount > 0) {
+      suppressChargeRecalc.current = true;
+      setMonthlyCharge(String(Math.round(lead.quoted_amount)));
+    }
   }
 
   function handleClose() {
@@ -385,6 +431,31 @@ function CreateDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+
+          {/* Fill from lead */}
+          {leads.length > 0 && (
+            <div className="space-y-1.5">
+              <Label htmlFor="lead-import" className="text-base">Fill from Lead</Label>
+              <select
+                id="lead-import"
+                value={selectedLeadId}
+                onChange={(e) => handleLeadSelect(e.target.value)}
+                className="w-full h-12 rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">— Select a lead to auto-fill —</option>
+                {leads.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.building_name}
+                    {l.flat_count_estimate ? ` · ${l.flat_count_estimate} flats` : ""}
+                    {l.city ? ` · ${l.city}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Auto-fills building name, contact, WhatsApp, flat count, and quoted amount. You can edit any field after.
+              </p>
+            </div>
+          )}
 
           {/* Building type toggle */}
           <div className="space-y-1.5">
@@ -517,7 +588,13 @@ function CreateDialog({
             <PricingSection
               flatLimit={flatLimit}
               charge={monthlyCharge}
-              onChargeChange={setMonthlyCharge}
+              onChargeChange={(v) => {
+                if (suppressChargeRecalc.current) {
+                  suppressChargeRecalc.current = false;
+                  return;
+                }
+                setMonthlyCharge(v);
+              }}
             />
           )}
 
@@ -1032,7 +1109,7 @@ function EditFeeDialog({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export function TrialsClient({ trials, userRole }: Props) {
+export function TrialsClient({ trials, userRole, leads }: Props) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
   const [newCreds, setNewCreds] = useState<NewCredentials | null>(null);
@@ -1294,6 +1371,7 @@ export function TrialsClient({ trials, userRole }: Props) {
           setCreateOpen(false);
           setNewCreds(creds);
         }}
+        leads={leads}
       />
 
       <CredentialsDialog
