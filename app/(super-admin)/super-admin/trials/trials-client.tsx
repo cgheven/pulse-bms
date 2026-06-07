@@ -16,6 +16,11 @@ import {
   Zap,
   AlertCircle,
   Rocket,
+  MoreHorizontal,
+  CalendarPlus,
+  MessageCircle,
+  PowerOff,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +32,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   createTrialBuilding,
   createProductionBuilding,
@@ -1284,75 +1296,81 @@ export function TrialsClient({ trials, userRole, leads }: Props) {
 
                     {/* Actions */}
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* Share credentials via WhatsApp — trial buildings only */}
-                        {cred && (
+                      <div className="flex items-center gap-2">
+                        {/* Primary CTA */}
+                        {row.is_trial ? (
                           <Button
-                            variant="outline"
                             size="sm"
-                            className="h-8 text-xs text-green-700 border-green-300 hover:bg-green-50"
-                            onClick={() =>
-                              shareOnWhatsApp(
-                                row.name,
-                                cred.login_email,
-                                cred.login_password,
-                                row.trial_ends_at,
-                                row.is_trial,
-                              )
-                            }
+                            className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm"
+                            onClick={() => setConvertTarget({ id: row.id, name: row.name, flat_limit: row.flat_limit, pulse_monthly_charge: row.pulse_monthly_charge })}
                           >
-                            <Share2 className="w-3 h-3 mr-1" />
-                            WhatsApp
+                            <Rocket className="w-3.5 h-3.5" />
+                            Go Live
                           </Button>
-                        )}
-
-                        {/* Trial-only actions */}
-                        {row.is_trial && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 text-xs"
-                              onClick={() => setExtendTarget({ id: row.id, name: row.name })}
-                            >
-                              Extend
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 text-xs text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 gap-1"
-                              onClick={() => setConvertTarget({ id: row.id, name: row.name, flat_limit: row.flat_limit, pulse_monthly_charge: row.pulse_monthly_charge })}
-                            >
-                              <Rocket className="w-3 h-3" />
-                              Go Live
-                            </Button>
-                          </>
-                        )}
-
-                        {/* Production-only actions */}
-                        {!row.is_trial && (
+                        ) : (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 text-xs"
+                            className="h-8 px-3 text-xs gap-1.5"
                             onClick={() => setEditFeeTarget({ id: row.id, name: row.name, flat_limit: row.flat_limit, pulse_monthly_charge: row.pulse_monthly_charge })}
                           >
+                            <Pencil className="w-3 h-3" />
                             Edit Fee
                           </Button>
                         )}
 
-                        {/* Deactivate — trial buildings only (production managed via Buildings page) */}
-                        {row.is_trial && row.is_active && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-xs text-red-600 hover:text-red-700 hover:border-red-300"
-                            disabled={deactivatingId === row.id}
-                            onClick={() => handleDeactivate(row.id)}
-                          >
-                            {deactivatingId === row.id ? "…" : "Deactivate"}
-                          </Button>
-                        )}
+                        {/* Secondary actions — overflow menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                              aria-label="More actions"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {cred && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  shareOnWhatsApp(
+                                    row.name,
+                                    cred.login_email,
+                                    cred.login_password,
+                                    row.trial_ends_at,
+                                    row.is_trial,
+                                  )
+                                }
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                                Send credentials
+                              </DropdownMenuItem>
+                            )}
+                            {row.is_trial && (
+                              <DropdownMenuItem
+                                onClick={() => setExtendTarget({ id: row.id, name: row.name })}
+                              >
+                                <CalendarPlus className="w-3.5 h-3.5" />
+                                Extend trial
+                              </DropdownMenuItem>
+                            )}
+                            {row.is_trial && row.is_active && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  destructive
+                                  disabled={deactivatingId === row.id}
+                                  onClick={() => handleDeactivate(row.id)}
+                                >
+                                  <PowerOff className="w-3.5 h-3.5" />
+                                  {deactivatingId === row.id ? "Deactivating…" : "Deactivate"}
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </td>
                   </tr>
