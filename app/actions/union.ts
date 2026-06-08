@@ -15,6 +15,22 @@ export type UnionPosition =
   | "treasurer"
   | "member";
 
+export type UnionLoginResult = {
+  username: string;
+  username_kind: "phone" | "email";
+  password: string;
+  full_name: string;
+};
+
+function generatePassword(): string {
+  const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const arr = new Uint32Array(10);
+  crypto.getRandomValues(arr);
+  let out = "";
+  for (let i = 0; i < 10; i++) out += chars[arr[i] % chars.length];
+  return out;
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Union members
  * ────────────────────────────────────────────────────────────────────────── */
@@ -121,6 +137,57 @@ export async function updateUnionMember(
 
   revalidatePath("/admin/union");
   return data;
+}
+
+export async function resetUnionMemberLogin(memberId: string): Promise<UnionLoginResult> {
+  await requireNotDemo();
+  const { user, profile } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
+
+  const admin = createAdminClient();
+
+  const { data: member } = await admin
+    .from("bms_union_members")
+    .select("id, full_name, profile_id, bms_profiles:profile_id(email, phone)")
+    .eq("id", memberId)
+    .eq("building_id", buildingId)
+    .maybeSingle();
+  if (!member) throw new Error("Union member not found.");
+  if (!member.profile_id) throw new Error("This member has no login account.");
+
+  type ProfileLite = { email: string | null; phone: string | null };
+  const joined = member.bms_profiles as ProfileLite | ProfileLite[] | null;
+  const profileRow = Array.isArray(joined) ? joined[0] : joined;
+  if (!profileRow) throw new Error("Profile not found.");
+
+  const password = generatePassword();
+  const { error: pwErr } = await admin.auth.admin.updateUserById(member.profile_id, {
+    password,
+    ban_duration: "none",
+    email_confirm: true,
+  });
+  if (pwErr) throw new Error(pwErr.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    building_id: buildingId,
+    action: "union.member.login.reset",
+    entity: "union_member",
+    entity_id: memberId,
+  });
+
+  revalidatePath("/admin/union");
+
+  const username = profileRow.phone ?? profileRow.email ?? "";
+  return {
+    username,
+    username_kind: profileRow.phone ? "phone" : "email",
+    password,
+    full_name: member.full_name,
+  };
 }
 
 export async function removeUnionMember(id: string) {

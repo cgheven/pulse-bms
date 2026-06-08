@@ -37,7 +37,7 @@ async function UnionContent() {
   const [{ data: members }, { data: elections }, { data: candidates }] = await Promise.all([
     supabase
       .from("bms_union_members")
-      .select("id, full_name, position, term_start, term_end, is_active, profile_id")
+      .select("id, full_name, position, term_start, term_end, is_active, profile_id, bms_profiles:profile_id(email, phone)")
       .eq("building_id", buildingId)
       .order("is_active", { ascending: false })
       .order("term_start", { ascending: false }),
