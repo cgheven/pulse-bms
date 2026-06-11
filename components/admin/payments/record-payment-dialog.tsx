@@ -87,6 +87,8 @@ export function RecordPaymentDialog({
     invoice_number: string;
     billing_month: string;
     amount_due: number;
+    resident_id?: string | null;
+    resident_name?: string | null;
   };
   /**
    * Pre-fills the dialog for a project contribution. The "Pay against"
@@ -163,8 +165,14 @@ export function RecordPaymentDialog({
   >("cash");
   const [reference_no, setRef] = useState("");
   const [notes, setNotes] = useState("");
-  const [residentId, setResidentId] = useState<string>("");
-  const [residents, setResidents] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [residentId, setResidentId] = useState<string>(
+    presetInvoice?.resident_id ?? "",
+  );
+  const [residents, setResidents] = useState<Array<{ id: string; full_name: string }>>(
+    presetInvoice?.resident_id && presetInvoice?.resident_name
+      ? [{ id: presetInvoice.resident_id, full_name: presetInvoice.resident_name }]
+      : [],
+  );
   // Bank account this payment is deposited into. Defaults to the
   // per-building "Cash" seed account once accounts load.
   const [bankAccountId, setBankAccountId] = useState<string>("");

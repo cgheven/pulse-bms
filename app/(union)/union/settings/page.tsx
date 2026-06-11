@@ -42,7 +42,7 @@ async function SettingsLoader() {
   const { data: building, error } = await supabase
     .from("bms_buildings")
     .select(
-      "id, name, entry_fee_owner, entry_fee_tenant, monthly_fee_default, utility_cutoff_after_months, voting_rule, expose_defaulter_names, listing_enabled, public_whatsapp",
+      "id, name, entry_fee_owner, entry_fee_tenant, monthly_fee_default, utility_cutoff_after_months, invoice_due_day, voting_rule, expose_defaulter_names, listing_enabled, public_whatsapp",
     )
     .eq("id", profile.building_id)
     .single();
@@ -65,6 +65,7 @@ async function SettingsLoader() {
         utility_cutoff_after_months: Number(
           building.utility_cutoff_after_months ?? 3,
         ),
+        invoice_due_day: Number(building.invoice_due_day ?? 10),
         voting_rule:
           building.voting_rule === "unanimous" ? "unanimous" : "majority",
         expose_defaulter_names: Boolean(building.expose_defaulter_names),

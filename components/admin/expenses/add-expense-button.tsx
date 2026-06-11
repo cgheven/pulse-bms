@@ -7,13 +7,16 @@ import { Plus } from "lucide-react";
 import { ExpenseForm } from "./expense-form";
 import type { ExpenseInput } from "@/app/actions/expenses";
 
-export function AddExpenseButton({ buildingId }: { buildingId?: string | null }) {
+export function AddExpenseButton({
+  buildingId,
+  mode = "expense",
+}: {
+  buildingId?: string | null;
+  mode?: "bill" | "expense";
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
-  // Prefill payload picked up from URL params (deep-link from Bill Accounts
-  // card "Add Bill"). Once consumed we drop the params so a refresh doesn't
-  // keep reopening the dialog.
   const [prefill, setPrefill] = useState<Partial<ExpenseInput> | null>(null);
 
   useEffect(() => {
@@ -25,38 +28,30 @@ export function AddExpenseButton({ buildingId }: { buildingId?: string | null })
       is_bill: isBill === "1" || isBill === "true",
     });
     setOpen(true);
-    // Strip the params after consuming so back/refresh doesn't re-trigger.
     const sp = new URLSearchParams(searchParams.toString());
     sp.delete("bill_account_id");
     sp.delete("is_bill");
     const qs = sp.toString();
-    router.replace(qs ? `/admin/expenses?${qs}` : "/admin/expenses", {
-      scroll: false,
-    });
-    // We intentionally only run this on first mount — deep-link is a one-shot.
+    router.replace(qs ? `/admin/expenses?${qs}` : "/admin/expenses", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <>
       <Button
-        onClick={() => {
-          setPrefill(null);
-          setOpen(true);
-        }}
+        onClick={() => { setPrefill(null); setOpen(true); }}
+        variant={mode === "bill" ? "outline" : "default"}
         className="shrink-0 gap-1.5"
       >
         <Plus className="w-4 h-4" />
-        Add Expense
+        {mode === "bill" ? "Add Bill" : "Add Expense"}
       </Button>
       <ExpenseForm
         open={open}
-        onOpenChange={(o) => {
-          setOpen(o);
-          if (!o) setPrefill(null);
-        }}
+        onOpenChange={(o) => { setOpen(o); if (!o) setPrefill(null); }}
         buildingId={buildingId}
         prefill={prefill}
+        forcedMode={mode}
       />
     </>
   );

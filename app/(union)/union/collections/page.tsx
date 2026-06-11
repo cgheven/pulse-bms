@@ -329,7 +329,7 @@ async function loadDefaultersData() {
         .in("id", flatIds),
       supabase
         .from("bms_residents")
-        .select("flat_id, full_name, phone")
+        .select("id, flat_id, full_name, phone")
         .eq("building_id", profile.building_id)
         .eq("is_active", true)
         .eq("is_primary", true)
@@ -343,7 +343,7 @@ async function loadDefaultersData() {
 
   const flatMap = new Map((flats ?? []).map((f) => [f.id, f.flat_number]));
   const primaryByFlat = new Map(
-    (primaries ?? []).map((r) => [r.flat_id, { name: r.full_name, phone: r.phone }]),
+    (primaries ?? []).map((r) => [r.flat_id, { id: r.id, name: r.full_name, phone: r.phone }]),
   );
 
   const today = new Date();
@@ -367,6 +367,7 @@ async function loadDefaultersData() {
         invoice_number: inv.invoice_number,
         flat_id: inv.flat_id,
         flat_number: flatMap.get(inv.flat_id) ?? "—",
+        resident_id: primary?.id ?? null,
         resident_name: primary?.name ?? null,
         resident_phone: normalizePhone(primary?.phone ?? null),
         billing_month: inv.billing_month,

@@ -46,7 +46,8 @@ export function BuildingSettingsForm({
     values.voting_rule !== initial.voting_rule ||
     values.expose_defaulter_names !== initial.expose_defaulter_names ||
     values.listing_enabled !== initial.listing_enabled ||
-    (values.public_whatsapp ?? "") !== (initial.public_whatsapp ?? "");
+    (values.public_whatsapp ?? "") !== (initial.public_whatsapp ?? "") ||
+    values.invoice_due_day !== initial.invoice_due_day;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,6 +59,7 @@ export function BuildingSettingsForm({
           monthly_fee_default: Number(values.monthly_fee_default) || 0,
           utility_cutoff_after_months:
             Number(values.utility_cutoff_after_months) || 1,
+          invoice_due_day: Number(values.invoice_due_day),
           voting_rule: values.voting_rule,
           expose_defaulter_names: Boolean(values.expose_defaulter_names),
           listing_enabled: Boolean(values.listing_enabled),
@@ -110,6 +112,23 @@ export function BuildingSettingsForm({
               value={values.utility_cutoff_after_months}
               onChange={(e) =>
                 set("utility_cutoff_after_months", Number(e.target.value))
+              }
+            />
+          </Field>
+
+          <Field
+            label="Invoice Due Day"
+            hint="Day of the billing month by which maintenance must be paid (1–28)."
+          >
+            <Input
+              id="invoice_due_day"
+              type="number"
+              min={1}
+              max={28}
+              className="h-11 text-base"
+              value={values.invoice_due_day}
+              onChange={(e) =>
+                set("invoice_due_day", Number(e.target.value))
               }
             />
           </Field>

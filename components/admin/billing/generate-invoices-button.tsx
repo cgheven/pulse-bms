@@ -60,6 +60,7 @@ export function GenerateInvoicesButton({ defaultMonth }: { defaultMonth: string 
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             One invoice per occupied flat. Flats already invoiced for this month will be skipped.
+            The due date is set from your building&apos;s <strong>Invoice Due Day</strong> setting.
           </p>
           <div>
             <Label>Month</Label>

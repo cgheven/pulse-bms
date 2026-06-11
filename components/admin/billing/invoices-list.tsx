@@ -24,6 +24,7 @@ export type InvoiceRow = {
   invoice_number: string;
   flat_id: string;
   flat_number: string;
+  resident_id: string | null;
   resident_name: string | null;
   billing_month: string;
   amount: number;
@@ -246,6 +247,8 @@ export function InvoicesList({
             invoice_number: payInvoice.invoice_number,
             billing_month: payInvoice.billing_month,
             amount_due: Math.max(0, Number(payInvoice.amount) - Number(payInvoice.paid_total)),
+            resident_id: payInvoice.resident_id,
+            resident_name: payInvoice.resident_name,
           }}
         />
       )}

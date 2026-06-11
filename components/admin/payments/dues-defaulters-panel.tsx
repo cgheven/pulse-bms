@@ -1,18 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { MessageCircle, Receipt, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toIntlNoPlus } from "@/lib/phone";
+import {
+  RecordPaymentDialog,
+  type FlatPickerOption,
+} from "@/components/admin/payments/record-payment-dialog";
 
 export type DefaulterRow = {
   invoice_id: string;
   invoice_number: string;
   flat_id: string;
   flat_number: string;
+  resident_id: string | null;
   resident_name: string | null;
   resident_phone: string | null;
   billing_month: string;
@@ -28,12 +32,17 @@ type Filter = "not_paid" | "overdue" | "all";
 export function DuesDefaultersPanel({
   defaulters,
   buildingName,
+  buildingId,
+  flatPickerOptions = [],
 }: {
   defaulters: DefaulterRow[];
   buildingName: string;
+  buildingId?: string;
+  flatPickerOptions?: FlatPickerOption[];
 }) {
   const [filter, setFilter] = useState<Filter>("not_paid");
   const [query, setQuery] = useState("");
+  const [recordRow, setRecordRow] = useState<DefaulterRow | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -144,11 +153,32 @@ export function DuesDefaultersPanel({
                   key={d.invoice_id}
                   row={d}
                   buildingName={buildingName}
+                  onRecord={buildingId ? () => setRecordRow(d) : undefined}
                 />
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {recordRow && buildingId && (
+        <RecordPaymentDialog
+          open={!!recordRow}
+          onOpenChange={(b) => !b && setRecordRow(null)}
+          flats={flatPickerOptions}
+          buildingName={buildingName}
+          buildingId={buildingId}
+          presetInvoice={{
+            invoice_id: recordRow.invoice_id,
+            flat_id: recordRow.flat_id,
+            flat_number: recordRow.flat_number,
+            invoice_number: recordRow.invoice_number,
+            billing_month: recordRow.billing_month,
+            amount_due: recordRow.amount_due,
+            resident_id: recordRow.resident_id,
+            resident_name: recordRow.resident_name,
+          }}
+        />
       )}
     </div>
   );
@@ -181,9 +211,11 @@ function FilterChip({
 function DefaulterRowCard({
   row,
   buildingName,
+  onRecord,
 }: {
   row: DefaulterRow;
   buildingName: string;
+  onRecord?: () => void;
 }) {
   const intl = toIntlNoPlus(row.resident_phone);
   const monthLabel = new Date(row.billing_month).toLocaleDateString("en-PK", {
@@ -272,12 +304,12 @@ function DefaulterRowCard({
               No phone
             </span>
           )}
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/admin/maintenance?tab=invoices&focus=${row.invoice_id}`}>
+          {onRecord && (
+            <Button variant="outline" size="sm" onClick={onRecord}>
               <Receipt className="h-3.5 w-3.5" />
               Record
-            </Link>
-          </Button>
+            </Button>
+          )}
         </div>
       </td>
     </tr>

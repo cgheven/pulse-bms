@@ -332,7 +332,12 @@ async function DuesTab() {
     );
   }
   return (
-    <DuesDefaultersPanel defaulters={data.rows} buildingName={data.buildingName} />
+    <DuesDefaultersPanel
+      defaulters={data.rows}
+      buildingName={data.buildingName}
+      buildingId={data.buildingId}
+      flatPickerOptions={data.flatPickerOptions}
+    />
   );
 }
 
@@ -352,7 +357,13 @@ async function loadDefaultersData() {
 
   const invRows = invoices ?? [];
   if (invRows.length === 0) {
-    return { noBuilding: false as const, rows: [] as DefaulterRow[], buildingName: "" };
+    return {
+      noBuilding: false as const,
+      rows: [] as DefaulterRow[],
+      buildingName: "",
+      buildingId,
+      flatPickerOptions: [] as { id: string; flat_number: string; outstanding_dues: number }[],
+    };
   }
 
   const invIds = invRows.map((i) => i.id);
@@ -365,12 +376,12 @@ async function loadDefaultersData() {
       sumPaymentsByInvoice(supabase, buildingId, invIds),
       supabase
         .from("bms_flats")
-        .select("id, flat_number")
+        .select("id, flat_number, outstanding_dues")
         .eq("building_id", buildingId)
         .in("id", flatIds),
       supabase
         .from("bms_residents")
-        .select("flat_id, full_name, phone")
+        .select("id, flat_id, full_name, phone")
         .eq("building_id", buildingId)
         .eq("is_active", true)
         .eq("is_primary", true)
@@ -384,7 +395,7 @@ async function loadDefaultersData() {
 
   const flatMap = new Map((flats ?? []).map((f) => [f.id, f.flat_number]));
   const primaryByFlat = new Map(
-    (primaries ?? []).map((r) => [r.flat_id, { name: r.full_name, phone: r.phone }]),
+    (primaries ?? []).map((r) => [r.flat_id, { id: r.id, name: r.full_name, phone: r.phone }]),
   );
 
   const today = new Date();
@@ -408,6 +419,7 @@ async function loadDefaultersData() {
         invoice_number: inv.invoice_number,
         flat_id: inv.flat_id,
         flat_number: flatMap.get(inv.flat_id) ?? "—",
+        resident_id: primary?.id ?? null,
         resident_name: primary?.name ?? null,
         resident_phone: normalizePhone(primary?.phone ?? null),
         billing_month: inv.billing_month,
@@ -428,6 +440,12 @@ async function loadDefaultersData() {
     noBuilding: false as const,
     rows,
     buildingName: building?.name ?? "Building",
+    buildingId,
+    flatPickerOptions: (flats ?? []).map((f) => ({
+      id: f.id,
+      flat_number: f.flat_number,
+      outstanding_dues: Number(f.outstanding_dues ?? 0),
+    })),
   };
 }
 
@@ -604,18 +622,21 @@ async function InvoicesTab() {
 
   const { data: primaries } = await supabase
     .from("bms_residents")
-    .select("flat_id, full_name")
+    .select("id, flat_id, full_name")
     .eq("building_id", buildingId)
     .eq("is_active", true)
     .eq("is_primary", true);
-  const primaryByFlat = new Map((primaries ?? []).map((r) => [r.flat_id, r.full_name]));
+  const primaryByFlat = new Map(
+    (primaries ?? []).map((r) => [r.flat_id, { id: r.id, name: r.full_name }]),
+  );
 
   const rows: InvoiceRow[] = (invoices ?? []).map((inv) => ({
     id: inv.id,
     invoice_number: inv.invoice_number,
     flat_id: inv.flat_id,
     flat_number: flatMap.get(inv.flat_id) ?? "—",
-    resident_name: primaryByFlat.get(inv.flat_id) ?? null,
+    resident_id: primaryByFlat.get(inv.flat_id)?.id ?? null,
+    resident_name: primaryByFlat.get(inv.flat_id)?.name ?? null,
     billing_month: inv.billing_month,
     amount: Number(inv.amount),
     status: inv.status ?? "pending",

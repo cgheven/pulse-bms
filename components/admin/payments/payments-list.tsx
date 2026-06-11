@@ -82,8 +82,17 @@ export function PaymentsList({
   receiptRoutePrefix?: string;
 }) {
   const [q, setQ] = useState("");
+  const [monthFilter, setMonthFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
   const [catFilter, setCatFilter] = useState("all");
+
+  const months = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of payments) {
+      if (p.billing_month) s.add(p.billing_month.slice(0, 7));
+    }
+    return Array.from(s).sort().reverse();
+  }, [payments]);
 
   // Per-row receipt rendering is delegated to the dedicated receipt route
   // (`<receiptRoutePrefix>/<id>/receipt`) — the user opens it in a new tab
@@ -93,6 +102,7 @@ export function PaymentsList({
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     return payments.filter((p) => {
+      if (monthFilter !== "all" && (p.billing_month ?? "").slice(0, 7) !== monthFilter) return false;
       if (modeFilter !== "all" && p.payment_mode !== modeFilter) return false;
       if (catFilter !== "all" && p.category !== catFilter) return false;
       if (s) {
@@ -107,7 +117,7 @@ export function PaymentsList({
       }
       return true;
     });
-  }, [payments, q, modeFilter, catFilter]);
+  }, [payments, q, monthFilter, modeFilter, catFilter]);
 
   return (
     <div className="space-y-4">
@@ -118,6 +128,15 @@ export function PaymentsList({
           onChange={(e) => setQ(e.target.value)}
           className="max-w-xs"
         />
+        <Select value={monthFilter} onValueChange={setMonthFilter}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="Month" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All months</SelectItem>
+            {months.map((m) => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={modeFilter} onValueChange={setModeFilter}>
           <SelectTrigger className="w-56"><SelectValue placeholder="Mode" /></SelectTrigger>
           <SelectContent>

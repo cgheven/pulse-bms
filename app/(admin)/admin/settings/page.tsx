@@ -6,6 +6,7 @@ import { TableSkeleton } from "@/components/layout/table-skeleton";
 import { OpeningBalanceForm } from "@/components/admin/settings/opening-balance-form";
 import { BuildingInfoForm } from "@/components/admin/settings/building-info-form";
 import { TransparencySettingsForm } from "@/components/admin/settings/transparency-settings-form";
+import { InvoiceDueDayForm } from "@/components/admin/settings/invoice-due-day-form";
 import { BankAccountsClient } from "./bank-accounts-client";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,18 @@ export default function SettingsPage() {
         </Suspense>
       </section>
 
+      <section id="billing" className="space-y-3 scroll-mt-24">
+        <div>
+          <h2 className="text-xl font-semibold">Billing</h2>
+          <p className="text-sm text-muted-foreground">
+            Controls applied when generating monthly maintenance invoices.
+          </p>
+        </div>
+        <Suspense fallback={<TableSkeleton rows={1} />}>
+          <BillingSettingsSection />
+        </Suspense>
+      </section>
+
       <section id="bank-accounts" className="space-y-3 scroll-mt-24">
         <div>
           <h2 className="text-xl font-semibold">Bank accounts</h2>
@@ -104,6 +117,30 @@ async function BuildingInfoSection() {
     .single();
 
   return <BuildingInfoForm initialCity={building?.city ?? null} />;
+}
+
+// --- Billing settings section -----------------------------------------------
+
+async function BillingSettingsSection() {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+  void profile;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) {
+    return (
+      <div className="card-soft">
+        <p className="text-muted-foreground mt-2">No building assigned.</p>
+      </div>
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: building } = await supabase
+    .from("bms_buildings")
+    .select("invoice_due_day")
+    .eq("id", buildingId)
+    .single();
+
+  return <InvoiceDueDayForm initial={Number(building?.invoice_due_day ?? 10)} />;
 }
 
 // --- Opening balance section ------------------------------------------------

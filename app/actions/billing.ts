@@ -12,12 +12,6 @@ function firstOfMonth(yyyyMm: string): string {
   return `${yyyyMm}-01`;
 }
 
-function dueDateFor(billingMonthIso: string): string {
-  // due date = 10th of the billing month
-  const d = new Date(billingMonthIso);
-  d.setDate(10);
-  return d.toISOString().slice(0, 10);
-}
 
 function buildInvoiceNumber(buildingPrefix: string, flatNumber: string, ym: string) {
   // INV-{building}-{flat}-{YYYYMM}
@@ -34,13 +28,16 @@ export async function generateMonthlyInvoices(params: { month: string }) {
   const supabase = await createClient();
 
   const billing_month = firstOfMonth(params.month);
-  const due_date = dueDateFor(billing_month);
 
   const { data: building } = await supabase
     .from("bms_buildings")
-    .select("name, monthly_fee_default")
+    .select("name, monthly_fee_default, invoice_due_day")
     .eq("id", buildingId)
     .single();
+
+  // Use the building's configured due day (1–28); fall back to 10 if not set.
+  const dueDay = Math.min(28, Math.max(1, Number(building?.invoice_due_day ?? 10)));
+  const due_date = `${params.month}-${String(dueDay).padStart(2, "0")}`;
   const buildingPrefix = (building?.name ?? "B").slice(0, 3).replace(/[^A-Z0-9]/gi, "").toUpperCase() || "BLD";
   const defaultFee = Number(building?.monthly_fee_default ?? 3000);
 
@@ -362,4 +359,32 @@ export async function deleteInvoice(id: string) {
   revalidatePath("/admin/maintenance");
   revalidatePath("/admin");
   return { ok: true };
+}
+
+export async function updateInvoiceDueDay(day: number) {
+  await requireNotDemo();
+  const { profile, user } = await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building selected.");
+
+  if (!Number.isInteger(day) || day < 1 || day > 28)
+    throw new Error("Due day must be a whole number between 1 and 28.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("bms_update_invoice_due_day", { p_due_day: day });
+  if (error) throw new Error(error.message);
+
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    building_id: buildingId,
+    action: "building.invoice_due_day.update",
+    entity: "building",
+    entity_id: buildingId,
+    meta: { invoice_due_day: day },
+  });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/union/settings");
 }

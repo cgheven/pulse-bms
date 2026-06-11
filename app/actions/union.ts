@@ -366,6 +366,7 @@ export type BuildingSettingsInput = {
   entry_fee_tenant: number;
   monthly_fee_default: number;
   utility_cutoff_after_months: number;
+  invoice_due_day: number; // 1–28: day of billing month invoices are due
   voting_rule: "majority" | "unanimous";
   expose_defaulter_names: boolean;
   listing_enabled: boolean;
@@ -384,6 +385,7 @@ export async function updateBuildingSettings(input: BuildingSettingsInput) {
   const entry_fee_tenant = Number(input.entry_fee_tenant);
   const monthly_fee_default = Number(input.monthly_fee_default);
   const utility_cutoff_after_months = Number(input.utility_cutoff_after_months);
+  const invoice_due_day = Number(input.invoice_due_day);
 
   if (!Number.isFinite(entry_fee_owner) || entry_fee_owner < 0)
     throw new Error("Entry fee (owner) must be a non-negative number");
@@ -397,6 +399,8 @@ export async function updateBuildingSettings(input: BuildingSettingsInput) {
     utility_cutoff_after_months > 24
   )
     throw new Error("Utility cut-off must be a whole number between 1 and 24");
+  if (!Number.isInteger(invoice_due_day) || invoice_due_day < 1 || invoice_due_day > 28)
+    throw new Error("Invoice due day must be a whole number between 1 and 28");
   if (input.voting_rule !== "majority" && input.voting_rule !== "unanimous")
     throw new Error("Invalid voting rule");
 
@@ -422,6 +426,13 @@ export async function updateBuildingSettings(input: BuildingSettingsInput) {
   });
   if (error) throw new Error(error.message);
 
+  // invoice_due_day goes through its own SECURITY DEFINER RPC so the column
+  // whitelist is enforced server-side — same pattern as bms_update_opening_balance.
+  const { error: dueDayErr } = await supabase.rpc("bms_update_invoice_due_day", {
+    p_due_day: invoice_due_day,
+  });
+  if (dueDayErr) throw new Error(dueDayErr.message);
+
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
@@ -435,6 +446,7 @@ export async function updateBuildingSettings(input: BuildingSettingsInput) {
       entry_fee_tenant,
       monthly_fee_default,
       utility_cutoff_after_months,
+      invoice_due_day,
       voting_rule: input.voting_rule,
       expose_defaulter_names: Boolean(input.expose_defaulter_names),
       listing_enabled: Boolean(input.listing_enabled),
@@ -443,6 +455,7 @@ export async function updateBuildingSettings(input: BuildingSettingsInput) {
   });
 
   revalidatePath("/union/settings");
+  revalidatePath("/admin/settings");
   revalidatePath("/admin");
   revalidatePath("/find");
   revalidatePath(`/find/${profile.building_id}`);

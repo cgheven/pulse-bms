@@ -106,22 +106,15 @@ export function ExpenseForm({
   expense,
   buildingId,
   prefill,
+  forcedMode,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   expense?: (ExpenseInput & { id: string }) | null;
-  /**
-   * Active building scope — used to filter bank account options the admin
-   * can pick from. Threaded explicitly so this client component never
-   * needs to derive scope from cookies / RLS alone.
-   */
   buildingId?: string | null;
-  /**
-   * Optional URL-driven prefill (deep-link from Bill Accounts "Add Bill").
-   * Applied once when the dialog opens for a fresh create. Ignored when
-   * editing an existing expense (expense prop wins).
-   */
   prefill?: Partial<ExpenseInput> | null;
+  /** When set, locks the form to bill or expense mode and hides the switch link. */
+  forcedMode?: "bill" | "expense";
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -138,7 +131,7 @@ export function ExpenseForm({
     is_recurring: expense?.is_recurring ?? false,
     recurrence: (expense?.recurrence as ExpenseRecurrence) ?? null,
     vendor: expense?.vendor ?? "",
-    is_bill: expense?.is_bill ?? prefill?.is_bill ?? false,
+    is_bill: expense?.is_bill ?? (forcedMode != null ? forcedMode === "bill" : (prefill?.is_bill ?? false)),
     bank_account_id: expense?.bank_account_id ?? null,
     bill_account_id:
       expense?.bill_account_id ?? prefill?.bill_account_id ?? null,
@@ -146,12 +139,28 @@ export function ExpenseForm({
     due_date: expense?.due_date ?? null,
   });
 
-  // Separate string state for the units input so the user can briefly
-  // hold an empty / partial value ("3" while typing "3.5") without us
-  // coercing to 0 mid-keystroke. Coerced to number | null on submit.
+  // Separate string states so the user can briefly hold an empty or
+  // partial value mid-keystroke without us coercing to 0 and locking
+  // the Save button. Both are coerced to their target types on submit.
+  const [amountInput, setAmountInput] = useState<string>(
+    expense?.amount != null && Number(expense.amount) > 0
+      ? String(expense.amount)
+      : "",
+  );
   const [unitsInput, setUnitsInput] = useState<string>(
     expense?.units_consumed != null ? String(expense.units_consumed) : "",
   );
+
+  // Reset transient string inputs when the create dialog closes so stale
+  // values don't bleed into the next open. Edit mode is skipped — the
+  // form unmounts between edit sessions via conditional rendering in
+  // ExpenseRowActions, so its state never persists across edits.
+  useEffect(() => {
+    if (!open && !expense) {
+      setAmountInput("");
+      setUnitsInput("");
+    }
+  }, [open, expense]);
 
   // When the dialog re-opens for a create with a fresh prefill (deep-link
   // from Bill Accounts "Add Bill"), apply the prefill on top of current
@@ -160,10 +169,11 @@ export function ExpenseForm({
     if (!open || expense || !prefill) return;
     setForm((f) => ({
       ...f,
-      is_bill: prefill.is_bill ?? f.is_bill,
+      // forcedMode always wins; only fall back to prefill when mode is unconstrained
+      is_bill: forcedMode != null ? forcedMode === "bill" : (prefill.is_bill ?? f.is_bill),
       bill_account_id: prefill.bill_account_id ?? f.bill_account_id,
     }));
-  }, [open, expense, prefill]);
+  }, [open, expense, prefill, forcedMode]);
 
   // When the prefill carries a bill_account_id and bill accounts have
   // finished loading, auto-fill category + subcategory + vendor +
@@ -412,10 +422,12 @@ export function ExpenseForm({
             <Input
               id="amt"
               type="number"
-              value={form.amount}
-              onChange={(e) =>
-                setForm({ ...form, amount: Number(e.target.value) })
-              }
+              value={amountInput}
+              onChange={(e) => {
+                setAmountInput(e.target.value);
+                const n = parseFloat(e.target.value);
+                setForm({ ...form, amount: isNaN(n) ? 0 : n });
+              }}
             />
           </div>
 
@@ -586,9 +598,9 @@ export function ExpenseForm({
             </Select>
           </div>
 
-          {/* Mode switch — small text link in the corner. Hidden when
-              editing an existing row (mode is fixed once recorded). */}
-          {!expense && (
+          {/* Mode switch — hidden when editing an existing row or when
+              the caller has locked the mode via forcedMode. */}
+          {!expense && !forcedMode && (
             <div className="sm:col-span-2 text-xs text-muted-foreground">
               {billMode ? (
                 <>
@@ -684,7 +696,10 @@ export function ExpenseForm({
           <Button
             onClick={submit}
             disabled={
-              pending || !form.description.trim() || form.amount <= 0
+              pending ||
+              !form.description.trim() ||
+              form.amount <= 0 ||
+              !amountInput.trim()
             }
           >
             {pending

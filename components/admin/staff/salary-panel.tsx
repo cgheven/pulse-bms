@@ -23,7 +23,6 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { paySalary } from "@/app/actions/staff";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { Download } from "lucide-react";
 
 type Payment = {
   id: string;
@@ -55,11 +54,9 @@ function monthLabel(iso: string): string {
 export function SalaryPanel({
   staff,
   payments,
-  buildingName,
 }: {
   staff: Staff;
   payments: Payment[];
-  buildingName: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -103,44 +100,6 @@ export function SalaryPanel({
     });
   };
 
-  const downloadSlip = async (p: Payment) => {
-    const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text("Salary Slip", 105, 20, { align: "center" });
-    doc.setFontSize(12);
-    doc.text(buildingName, 105, 28, { align: "center" });
-    doc.setLineWidth(0.5);
-    doc.line(15, 34, 195, 34);
-
-    let y = 46;
-    const row = (k: string, v: string) => {
-      doc.setFont("helvetica", "bold");
-      doc.text(k, 20, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(v, 80, y);
-      y += 8;
-    };
-
-    row("Slip No:", p.slip_no || p.id.slice(0, 8).toUpperCase());
-    row("Staff Name:", staff.full_name);
-    row("Role:", staff.role);
-    row("Pay Month:", monthLabel(p.pay_month));
-    row("Payment Date:", p.payment_date ? formatDate(p.payment_date) : "—");
-    row("Payment Mode:", p.payment_mode || "cash");
-    row("Amount Paid:", formatCurrency(p.amount));
-    if (p.notes) row("Notes:", p.notes);
-
-    y += 10;
-    doc.line(15, y, 195, y);
-    y += 14;
-    doc.setFontSize(11);
-    doc.text("Received By: ____________________", 20, y);
-    doc.text("Paid By: ____________________", 120, y);
-
-    doc.save(`salary-slip-${staff.full_name.replace(/\s+/g, "_")}-${p.pay_month}.pdf`);
-  };
-
   // Counts for the small KPI strip
   const paidCount = months.filter((m) => paidMap.has(m)).length;
   const pendingCount = months.length - paidCount;
@@ -173,7 +132,7 @@ export function SalaryPanel({
               <th className="px-3 py-3 font-semibold text-right">Amount</th>
               <th className="px-3 py-3 font-semibold">Paid on</th>
               <th className="px-3 py-3 font-semibold">Mode</th>
-              <th className="px-3 py-3 font-semibold text-right">Slip</th>
+              <th className="px-3 py-3 font-semibold">Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -214,19 +173,8 @@ export function SalaryPanel({
                   <td className="px-3 py-3 capitalize text-muted-foreground whitespace-nowrap">
                     {p?.payment_mode ?? "—"}
                   </td>
-                  <td className="px-3 py-3 text-right">
-                    {p ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        aria-label="Download slip"
-                        onClick={() => downloadSlip(p)}
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                  <td className="px-3 py-3 text-muted-foreground text-xs max-w-[160px] truncate">
+                    {p?.notes ?? "—"}
                   </td>
                 </tr>
               );

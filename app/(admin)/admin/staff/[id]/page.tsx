@@ -275,7 +275,6 @@ export default async function StaffDetailPage({
             join_date: staff.join_date,
           }}
           payments={(payments ?? []) as never}
-          buildingName={building?.name ?? "Pulse BMS"}
         />
       </section>
     </div>

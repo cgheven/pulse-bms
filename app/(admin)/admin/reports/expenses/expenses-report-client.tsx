@@ -13,6 +13,7 @@ import { ReportShell } from "@/components/admin/reports/report-shell";
 import { useColumnPicker } from "@/components/admin/reports/column-picker";
 import { useReportDateRange } from "@/lib/reports/use-report-date-range";
 import { formatDate } from "@/lib/utils";
+import { EXPENSE_CATEGORY_LABELS } from "@/lib/expense-constants";
 import type { DateRange, ReportColumn } from "@/lib/reports/types";
 
 type ExpenseRow = {
@@ -36,13 +37,6 @@ function voucherNo(id: string): string {
   return "EXP-" + id.slice(0, 8).toUpperCase();
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  utilities: "Utilities",
-  repairs: "Repairs",
-  supplies: "Supplies",
-  salaries: "Salaries",
-  other: "Other",
-};
 
 export function ExpensesReportClient({
   buildingName,
@@ -104,7 +98,7 @@ export function ExpensesReportClient({
         id: "category",
         label: "Category",
         defaultOn: true,
-        accessor: (r) => CATEGORY_LABELS[r.category] ?? r.category,
+        accessor: (r) => EXPENSE_CATEGORY_LABELS[r.category] ?? r.category,
       },
       {
         id: "subcategory",
@@ -163,7 +157,7 @@ export function ExpensesReportClient({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All categories</SelectItem>
-          {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+          {Object.entries(EXPENSE_CATEGORY_LABELS).map(([k, v]) => (
             <SelectItem key={k} value={k}>
               {v}
             </SelectItem>
@@ -175,7 +169,7 @@ export function ExpensesReportClient({
 
   const filtersLine =
     category !== "all"
-      ? `Category: ${CATEGORY_LABELS[category] ?? category}`
+      ? `Category: ${EXPENSE_CATEGORY_LABELS[category] ?? category}`
       : undefined;
 
   return (

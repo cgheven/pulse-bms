@@ -9,6 +9,7 @@ import { buildSlug } from "@/lib/slug";
 import { StaffListActions } from "@/components/admin/staff/staff-list-actions";
 import { StaffRowActions } from "@/components/admin/staff/staff-row-actions";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
+import { StaffSalarySection } from "@/components/admin/staff/staff-salary-section";
 
 export const dynamic = "force-dynamic";
 
@@ -65,10 +66,63 @@ export default function StaffPage() {
         <StaffContent />
       </Suspense>
 
+      <Suspense fallback={<TableSkeleton rows={4} />}>
+        <SalarySectionServer />
+      </Suspense>
+
       <p className="text-xs text-muted-foreground">
         Legend: <span className="font-medium">P</span> Present · <span className="font-medium">A</span> Absent · <span className="font-medium">½</span> Half-day · <span className="font-medium">L</span> Leave · <span className="font-medium">—</span> Not marked
       </p>
     </div>
+  );
+}
+
+async function loadSalaryData() {
+  await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return { noBuilding: true as const };
+  const supabase = await createClient();
+
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+  const [{ data: staff }, { data: payments }, { data: building }] = await Promise.all([
+    supabase
+      .from("bms_staff")
+      .select("id, full_name, role, monthly_salary")
+      .eq("building_id", buildingId)
+      .eq("is_active", true)
+      .order("full_name"),
+    supabase
+      .from("bms_salary_payments")
+      .select("id, staff_id, pay_month, amount, payment_date, payment_mode, slip_no, notes")
+      .eq("building_id", buildingId)
+      .eq("pay_month", currentMonth),
+    supabase
+      .from("bms_buildings")
+      .select("name")
+      .eq("id", buildingId)
+      .single(),
+  ]);
+
+  return {
+    noBuilding: false as const,
+    staff: staff ?? [],
+    payments: payments ?? [],
+    currentMonth,
+    buildingName: building?.name ?? "Building",
+  };
+}
+
+async function SalarySectionServer() {
+  const data = await loadSalaryData();
+  if (data.noBuilding) return null;
+  return (
+    <StaffSalarySection
+      staff={data.staff}
+      payments={data.payments}
+      currentMonth={data.currentMonth}
+    />
   );
 }
 
