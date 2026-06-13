@@ -71,7 +71,7 @@ export function ContactCard({ contact, isAdmin, onEdit, onDelete }: ContactCardP
   }
 
   return (
-    <div className="flex rounded-xl border border-border bg-card overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
+    <div className="flex h-full rounded-xl border border-border bg-card overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
       {/* Left colored accent bar */}
       <div className={cn("w-1 shrink-0", trade.topBar)} />
 
@@ -131,8 +131,8 @@ export function ContactCard({ contact, isAdmin, onEdit, onDelete }: ContactCardP
           </p>
         )}
 
-        {/* ── Row 4: action buttons ── */}
-        <div className="flex items-center gap-2">
+        {/* ── Row 4: action buttons — mt-auto keeps them pinned to the bottom ── */}
+        <div className="flex items-center gap-2 mt-auto">
           {isAdmin ? (
             <a
               href={callHref}
