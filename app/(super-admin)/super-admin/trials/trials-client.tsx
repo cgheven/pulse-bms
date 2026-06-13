@@ -65,6 +65,17 @@ export type LeadForImport = {
   status: string;
 };
 
+export type InquiryForImport = {
+  id: string;
+  building_name: string;
+  city: string | null;
+  num_flats: number;
+  president_name: string;
+  phone: string;
+  whatsapp: string | null;
+  email: string | null;
+};
+
 type BuildingRow = {
   id: string;
   name: string;
@@ -83,6 +94,7 @@ type Props = {
   trials: BuildingRow[];
   userRole: string;
   leads: LeadForImport[];
+  inquiries: InquiryForImport[];
 };
 
 type NewCredentials = {
@@ -309,11 +321,13 @@ function CreateDialog({
   onClose,
   onSuccess,
   leads,
+  inquiries,
 }: {
   open: boolean;
   onClose: () => void;
   onSuccess: (creds: NewCredentials) => void;
   leads: LeadForImport[];
+  inquiries: InquiryForImport[];
 }) {
   const [buildingType, setBuildingType] = useState<BuildingType>("trial");
   const [buildingName, setBuildingName] = useState("");
@@ -325,10 +339,9 @@ function CreateDialog({
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [duration, setDuration] = useState<TrialDurationDays>(7);
   const [selectedLeadId, setSelectedLeadId] = useState("");
+  const [selectedInquiryId, setSelectedInquiryId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  // Prevents PricingSection's flatLimit-change effect from overwriting a
-  // quoted_amount we just imported from a lead.
   const suppressChargeRecalc = useRef(false);
 
   function resetForm() {
@@ -342,12 +355,14 @@ function CreateDialog({
     setWhatsappNumber("");
     setDuration(7);
     setSelectedLeadId("");
+    setSelectedInquiryId("");
     suppressChargeRecalc.current = false;
     setError(null);
   }
 
   function handleLeadSelect(leadId: string) {
     setSelectedLeadId(leadId);
+    setSelectedInquiryId("");
     if (!leadId) return;
     const lead = leads.find((l) => l.id === leadId);
     if (!lead) return;
@@ -369,6 +384,20 @@ function CreateDialog({
       suppressChargeRecalc.current = true;
       setMonthlyCharge(String(Math.round(lead.quoted_amount)));
     }
+  }
+
+  function handleInquirySelect(inquiryId: string) {
+    setSelectedInquiryId(inquiryId);
+    setSelectedLeadId("");
+    if (!inquiryId) return;
+    const inq = inquiries.find((i) => i.id === inquiryId);
+    if (!inq) return;
+    setBuildingName(inq.building_name);
+    if (inq.city) setCity(inq.city);
+    setFlatLimit(String(Math.min(9999, inq.num_flats)));
+    setContactName(inq.president_name);
+    setWhatsappNumber(inq.whatsapp || inq.phone);
+    if (inq.email) setContactEmail(inq.email);
   }
 
   function handleClose() {
@@ -434,7 +463,7 @@ function CreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Building2 className="w-5 h-5 text-primary" />
@@ -444,28 +473,49 @@ function CreateDialog({
 
         <div className="space-y-4 py-2">
 
-          {/* Fill from lead */}
-          {leads.length > 0 && (
-            <div className="space-y-1.5">
-              <Label htmlFor="lead-import" className="text-base">Fill from Lead</Label>
-              <select
-                id="lead-import"
-                value={selectedLeadId}
-                onChange={(e) => handleLeadSelect(e.target.value)}
-                className="w-full h-12 rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— Select a lead to auto-fill —</option>
-                {leads.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.building_name}
-                    {l.flat_count_estimate ? ` · ${l.flat_count_estimate} flats` : ""}
-                    {l.city ? ` · ${l.city}` : ""}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">
-                Auto-fills building name, contact, WhatsApp, flat count, and quoted amount. You can edit any field after.
-              </p>
+          {/* Fill from source */}
+          {(leads.length > 0 || inquiries.length > 0) && (
+            <div className="grid grid-cols-2 gap-3">
+              {leads.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="lead-import" className="text-base">Fill from Lead</Label>
+                  <select
+                    id="lead-import"
+                    value={selectedLeadId}
+                    onChange={(e) => handleLeadSelect(e.target.value)}
+                    className="w-full h-12 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">— Select lead —</option>
+                    {leads.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.building_name}
+                        {l.flat_count_estimate ? ` · ${l.flat_count_estimate}f` : ""}
+                        {l.city ? ` · ${l.city}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {inquiries.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="inquiry-import" className="text-base">Fill from Inquiry</Label>
+                  <select
+                    id="inquiry-import"
+                    value={selectedInquiryId}
+                    onChange={(e) => handleInquirySelect(e.target.value)}
+                    className="w-full h-12 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">— Select inquiry —</option>
+                    {inquiries.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.building_name}
+                        {` · ${i.num_flats}f`}
+                        {i.city ? ` · ${i.city}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
@@ -1121,7 +1171,7 @@ function EditFeeDialog({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export function TrialsClient({ trials, userRole, leads }: Props) {
+export function TrialsClient({ trials, userRole, leads, inquiries }: Props) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
   const [newCreds, setNewCreds] = useState<NewCredentials | null>(null);
@@ -1390,6 +1440,7 @@ export function TrialsClient({ trials, userRole, leads }: Props) {
           setNewCreds(creds);
         }}
         leads={leads}
+        inquiries={inquiries}
       />
 
       <CredentialsDialog

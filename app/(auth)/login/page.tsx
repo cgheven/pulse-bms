@@ -164,6 +164,13 @@ export default function LoginPage() {
         <p className="mt-5 text-center text-xs text-muted-foreground">
           Need help signing in? Contact your building admin.
         </p>
+
+        <div className="mt-4 text-center">
+          <p className="text-xs text-muted-foreground">New to Pulse?</p>
+          <a href="/pricing" className="text-sm font-semibold text-primary hover:underline">
+            View pricing &amp; request a demo →
+          </a>
+        </div>
       </div>
     </div>
   );

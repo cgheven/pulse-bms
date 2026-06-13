@@ -29,11 +29,21 @@ export default async function TrialsPage() {
     .order("building_name", { ascending: true })
     .limit(200);
 
+  // Website inquiries (new + contacted) for "Fill from Inquiry" dropdown.
+  // Uses adminDb so sales users (who lack an RLS SELECT policy) see the same list.
+  const { data: inquiries } = await adminDb
+    .from("bms_website_inquiries")
+    .select("id, building_name, city, num_flats, president_name, phone, whatsapp, email")
+    .in("status", ["new", "contacted"])
+    .order("created_at", { ascending: false })
+    .limit(200);
+
   return (
     <TrialsClient
       trials={trials ?? []}
       userRole={profile.role}
       leads={leads ?? []}
+      inquiries={inquiries ?? []}
     />
   );
 }

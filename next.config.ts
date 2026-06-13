@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
     formats: ["image/avif", "image/webp"],
   },
   experimental: {
-    serverActions: { bodySizeLimit: "10mb" },
+    serverActions: { bodySizeLimit: "1mb" },
     // Tree-shake icon and chart imports — ships only what's used
     optimizePackageImports: [
       "lucide-react",
