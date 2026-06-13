@@ -92,26 +92,70 @@ async function BillsData({ searchParams }: { searchParams: SearchParams }) {
     billsQuery = billsQuery.eq("bill_account_id", billAccountFilter);
   }
 
-  const [{ data: bills }, { data: bankAccounts }, { data: billAccounts }] =
-    await Promise.all([
-      billsQuery,
-      supabase
-        .from("bms_bank_accounts")
-        .select("id, name, type")
-        .eq("building_id", buildingId)
-        .order("type", { ascending: false })
-        .order("name"),
-      supabase
-        .from("bms_bill_accounts")
-        .select("id, nickname, provider, provider_label, is_active")
-        .eq("building_id", buildingId)
-        .order("nickname"),
-    ]);
+  const [
+    { data: bills },
+    { data: bankAccounts },
+    { data: billAccounts },
+    { data: buildingRow },
+    { data: paymentsPrePeriod },
+    { data: expensesPrePeriod },
+    { data: salariesPrePeriod },
+  ] = await Promise.all([
+    billsQuery,
+    supabase
+      .from("bms_bank_accounts")
+      .select("id, name, type")
+      .eq("building_id", buildingId)
+      .order("type", { ascending: false })
+      .order("name"),
+    supabase
+      .from("bms_bill_accounts")
+      .select("id, nickname, provider, provider_label, is_active")
+      .eq("building_id", buildingId)
+      .order("nickname"),
+    // Building's seed fund balance (same field the dashboard reads).
+    supabase
+      .from("bms_buildings")
+      .select("fund_balance")
+      .eq("id", buildingId)
+      .single(),
+    // All maintenance payments collected BEFORE the period start.
+    supabase
+      .from("bms_payments")
+      .select("amount")
+      .eq("building_id", buildingId)
+      .lt("payment_date", dateRange.from),
+    // All expenses paid BEFORE the period start (bills + non-bills).
+    supabase
+      .from("bms_expenses")
+      .select("amount")
+      .eq("building_id", buildingId)
+      .lt("expense_date", dateRange.from),
+    // All salary payments made BEFORE the period start.
+    supabase
+      .from("bms_salary_payments")
+      .select("amount")
+      .eq("building_id", buildingId)
+      .lt("payment_date", dateRange.from),
+  ]);
+
+  // Opening balance = building fund at the START of the selected period.
+  // Same formula as the dashboard "Funds Available" card, but bounded to
+  // period_start so it represents the actual cash position on that date.
+  const sumRows = (rows: { amount: number | string | null }[] | null) =>
+    (rows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+
+  const openingBalance =
+    Number(buildingRow?.fund_balance ?? 0) +
+    sumRows(paymentsPrePeriod) -
+    sumRows(expensesPrePeriod) -
+    sumRows(salariesPrePeriod);
 
   return (
     <BillsReportClient
       buildingName={buildingName}
       initialDateRange={dateRange}
+      openingBalance={openingBalance}
       initialBillAccountId={billAccountFilter}
       initialCategory={categoryFilter}
       initialWithUnits={initialWithUnits}

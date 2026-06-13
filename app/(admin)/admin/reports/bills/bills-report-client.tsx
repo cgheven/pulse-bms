@@ -133,6 +133,7 @@ const CATEGORY_FILTER_OPTIONS: ProviderCategory[] = CATEGORY_ORDER;
 export function BillsReportClient({
   buildingName,
   initialDateRange,
+  openingBalance,
   initialBillAccountId,
   initialCategory,
   initialWithUnits,
@@ -144,6 +145,7 @@ export function BillsReportClient({
 }: {
   buildingName: string;
   initialDateRange: DateRange;
+  openingBalance: number;
   initialBillAccountId: string | null;
   initialCategory: string | null;
   initialWithUnits: boolean;
@@ -603,6 +605,42 @@ export function BillsReportClient({
     return Array.from(seen.entries());
   }, [filtered]);
 
+  // Opening balance = building fund at the START of the selected period
+  // (same formula as the dashboard "Funds Available" card, bounded to
+  // period_start). Bills paid in the period reduce that fund.
+  const openingTotal = openingBalance;
+
+  // Closing = opening minus ALL bills paid in the period — not just the
+  // filtered subset. Client-side filters (vendor, category, overdue) only
+  // narrow WHAT IS SHOWN; the fund was reduced by every bill that was paid.
+  const periodTotalAllBills = useMemo(
+    () => enriched.reduce((s, r) => s + r.amount, 0),
+    [enriched],
+  );
+  const closingTotal = openingTotal - periodTotalAllBills;
+
+  // Pre-computed cells for the pinned balance rows — aligned to visibleColumns.
+  // Label goes in column 0; amount goes in the "amount" column; all others blank.
+  const pinnedTopRow = useMemo(
+    () =>
+      visibleColumns.map((c, i) => {
+        if (i === 0) return "Opening Balance";
+        if (c.id === "amount") return openingTotal;
+        return "";
+      }),
+    [visibleColumns, openingTotal],
+  );
+
+  const pinnedBottomRow = useMemo(
+    () =>
+      visibleColumns.map((c, i) => {
+        if (i === 0) return "Closing Balance";
+        if (c.id === "amount") return closingTotal;
+        return "";
+      }),
+    [visibleColumns, closingTotal],
+  );
+
   return (
     <div className="space-y-5">
       {/* Compact KPI strip — sits above ReportShell so accountant /
@@ -691,6 +729,8 @@ export function BillsReportClient({
         setColumn={setColumn}
         rows={filtered}
         emptyText="No bills recorded in this period."
+        pinnedTopRow={pinnedTopRow}
+        pinnedBottomRow={pinnedBottomRow}
       />
 
       {/* Units-only toggle — small affordance under the table to flip

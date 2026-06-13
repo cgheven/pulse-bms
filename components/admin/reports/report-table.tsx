@@ -17,11 +17,17 @@ export function ReportTable<Row>({
   rows,
   emptyText = "No rows match these filters.",
   showTotals = true,
+  pinnedTopRow,
+  pinnedBottomRow,
 }: {
   columns: ReportColumn<Row>[];
   rows: Row[];
   emptyText?: string;
   showTotals?: boolean;
+  /** Pre-computed cells rendered as the first body row (e.g. Opening Balance). */
+  pinnedTopRow?: (string | number)[];
+  /** Pre-computed cells rendered as the last body row, after totals (e.g. Closing Balance). */
+  pinnedBottomRow?: (string | number)[];
 }) {
   if (columns.length === 0) {
     return (
@@ -74,6 +80,24 @@ export function ReportTable<Row>({
             </tr>
           </thead>
           <tbody>
+            {/* Opening Balance — pinned before data rows */}
+            {pinnedTopRow && (
+              <tr className="bg-blue-50/60 border-b border-blue-100 font-semibold">
+                {pinnedTopRow.map((cell, i) => (
+                  <td
+                    key={i}
+                    className={`px-3 py-2.5 text-gray-800 ${
+                      columns[i]?.numeric ? "text-right tabular-nums" : ""
+                    }`}
+                  >
+                    {columns[i]?.numeric && typeof cell === "number"
+                      ? formatCurrency(cell)
+                      : cell}
+                  </td>
+                ))}
+              </tr>
+            )}
+
             {rows.map((row, idx) => (
               <tr
                 key={idx}
@@ -98,6 +122,7 @@ export function ReportTable<Row>({
                 })}
               </tr>
             ))}
+
             {showTotals && (
               <tr className="bg-gray-50 font-semibold border-t-2 border-gray-300">
                 {totals.map((t, idx) => {
@@ -115,6 +140,24 @@ export function ReportTable<Row>({
                     </td>
                   );
                 })}
+              </tr>
+            )}
+
+            {/* Closing Balance — pinned after totals */}
+            {pinnedBottomRow && (
+              <tr className="bg-indigo-50/60 border-t-2 border-indigo-200 font-bold">
+                {pinnedBottomRow.map((cell, i) => (
+                  <td
+                    key={i}
+                    className={`px-3 py-3 text-gray-900 ${
+                      columns[i]?.numeric ? "text-right tabular-nums" : ""
+                    }`}
+                  >
+                    {columns[i]?.numeric && typeof cell === "number"
+                      ? formatCurrency(cell)
+                      : cell}
+                  </td>
+                ))}
               </tr>
             )}
           </tbody>

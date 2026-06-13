@@ -24,14 +24,21 @@ export function downloadReportCsv<Row>(opts: {
   rows: Row[];
   /** Show a totals row at the bottom for numeric columns. */
   totalsRow?: boolean;
+  /** Optional row of pre-computed cells prepended before the data rows (e.g. Opening Balance). */
+  pinnedTopRow?: (string | number)[];
+  /** Optional row of pre-computed cells appended after the totals row (e.g. Closing Balance). */
+  pinnedBottomRow?: (string | number)[];
 }): void {
-  const { filename, columns, rows, totalsRow = true } = opts;
+  const { filename, columns, rows, totalsRow = true, pinnedTopRow, pinnedBottomRow } = opts;
 
   const header = columns.map((c) => escapeCell(c.label)).join(",");
+
+  const pinnedTopLine = pinnedTopRow
+    ? pinnedTopRow.map(escapeCell).join(",") + "\n"
+    : "";
+
   const body = rows
-    .map((row) =>
-      columns.map((c) => escapeCell(c.accessor(row))).join(","),
-    )
+    .map((row) => columns.map((c) => escapeCell(c.accessor(row))).join(","))
     .join("\n");
 
   let totals = "";
@@ -48,10 +55,12 @@ export function downloadReportCsv<Row>(opts: {
     totals = "\n" + totalsCells.join(",");
   }
 
-  // BOM + body. The empty line before totals visually separates the
-  // totals row in spreadsheet apps that otherwise glue it onto the last
-  // data row.
-  const csv = "﻿" + header + "\n" + body + (totalsRow ? "\n" + totals : "");
+  const pinnedBottomLine = pinnedBottomRow
+    ? "\n" + pinnedBottomRow.map(escapeCell).join(",")
+    : "";
+
+  const csv =
+    "﻿" + header + "\n" + pinnedTopLine + body + totals + pinnedBottomLine;
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

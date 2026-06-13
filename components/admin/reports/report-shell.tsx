@@ -44,6 +44,8 @@ export function ReportShell<Row>({
   rows,
   emptyText,
   showTotals = true,
+  pinnedTopRow,
+  pinnedBottomRow,
 }: {
   title: string;
   subtitle?: string;
@@ -63,6 +65,10 @@ export function ReportShell<Row>({
   rows: Row[];
   emptyText?: string;
   showTotals?: boolean;
+  /** Pre-computed cells prepended as the first table row (e.g. Opening Balance). */
+  pinnedTopRow?: (string | number)[];
+  /** Pre-computed cells appended as the last table row, after totals (e.g. Closing Balance). */
+  pinnedBottomRow?: (string | number)[];
 }) {
   const [exporting, setExporting] = useState(false);
 
@@ -76,6 +82,8 @@ export function ReportShell<Row>({
       columns: visibleColumns,
       rows,
       totalsRow: showTotals,
+      pinnedTopRow,
+      pinnedBottomRow,
     });
   };
 
@@ -93,6 +101,8 @@ export function ReportShell<Row>({
         columns: visibleColumns,
         rows,
         totalsRow: showTotals,
+        pinnedTopRow,
+        pinnedBottomRow,
       });
     } finally {
       setExporting(false);
@@ -155,6 +165,8 @@ export function ReportShell<Row>({
         rows={rows}
         emptyText={emptyText}
         showTotals={showTotals}
+        pinnedTopRow={pinnedTopRow}
+        pinnedBottomRow={pinnedBottomRow}
       />
     </div>
   );
