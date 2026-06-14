@@ -7,7 +7,7 @@ import { BuildingSettingsForm } from "@/components/union/building-settings-form"
 export const dynamic = "force-dynamic";
 
 export default async function UnionSettingsPage() {
-  await requireRole(["union", "admin"]);
+  await requireRole(["admin"]);
 
   return (
     <div className="space-y-5 animate-fade-up">
@@ -28,7 +28,7 @@ export default async function UnionSettingsPage() {
 }
 
 async function SettingsLoader() {
-  const { profile } = await requireRole(["union", "admin"]);
+  const { profile } = await requireRole(["admin"]);
   if (!profile.building_id) {
     return (
       <div className="card-soft">

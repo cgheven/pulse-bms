@@ -375,8 +375,8 @@ export type BuildingSettingsInput = {
 
 export async function updateBuildingSettings(input: BuildingSettingsInput) {
   await requireNotDemo();
-  // Super Admin is intentionally excluded — this surface is owned by the building.
-  const { profile, user } = await requireRole(["union", "admin"]);
+  // Only admins may change building settings — union members must not.
+  const { profile, user } = await requireRole(["admin"]);
   if (!profile.building_id) throw new Error("No building assigned");
 
   // App-layer guard rails. The RPC re-validates server-side, but bailing here

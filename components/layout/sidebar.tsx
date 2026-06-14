@@ -164,12 +164,6 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/union/notices", label: "Notices", icon: Megaphone },
       ],
     },
-    {
-      label: "Configuration",
-      items: [
-        { href: "/union/settings", label: "Settings", icon: Settings },
-      ],
-    },
   ],
   resident: [
     {

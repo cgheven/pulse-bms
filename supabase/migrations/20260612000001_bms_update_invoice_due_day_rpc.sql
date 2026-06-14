@@ -24,7 +24,7 @@ BEGIN
     FROM public.bms_profiles
    WHERE id = auth.uid();
 
-  IF v_role NOT IN ('admin', 'union', 'super_admin') THEN
+  IF v_role NOT IN ('admin', 'super_admin') THEN
     RAISE EXCEPTION 'Not authorized';
   END IF;
 
