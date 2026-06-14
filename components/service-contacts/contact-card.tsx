@@ -41,7 +41,6 @@ interface ContactCardProps {
 export function ContactCard({ contact, isAdmin, onEdit, onDelete }: ContactCardProps) {
   const trade = getTrade(contact.trade);
   const Icon = TRADE_ICONS[contact.trade] ?? Wrench;
-  const callHref = `tel:${contact.phone.replace(/\s/g, "")}`;
   const waHref = `https://wa.me/${toWhatsAppNumber(contact.whatsapp ?? contact.phone)}`;
   const [copied, setCopied] = useState(false);
   const [copiedWa, setCopiedWa] = useState(false);
@@ -114,15 +113,12 @@ export function ContactCard({ contact, isAdmin, onEdit, onDelete }: ContactCardP
         </div>
 
         {/* ── Row 2: phone number ── */}
-        <a
-          href={callHref}
-          className="flex items-center gap-2 group w-fit"
-        >
-          <Phone className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-          <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+        <div className="flex items-center gap-2">
+          <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span className="text-sm font-semibold text-foreground">
             {formatPhone(contact.phone)}
           </span>
-        </a>
+        </div>
 
         {/* ── Row 3: notes (optional) ── */}
         {contact.notes && (
@@ -133,28 +129,18 @@ export function ContactCard({ contact, isAdmin, onEdit, onDelete }: ContactCardP
 
         {/* ── Row 4: action buttons — mt-auto keeps them pinned to the bottom ── */}
         <div className="flex items-center gap-2 mt-auto">
-          {isAdmin ? (
-            <a
-              href={callHref}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
-            >
-              <Phone className="w-3.5 h-3.5" />
-              Call
-            </a>
-          ) : (
-            <button
-              onClick={copyPhone}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors",
-                copied
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-secondary text-foreground hover:bg-secondary/70",
-              )}
-            >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "Copied!" : "Copy Number"}
-            </button>
-          )}
+          <button
+            onClick={copyPhone}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors",
+              copied
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-secondary text-foreground hover:bg-secondary/70",
+            )}
+          >
+            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? "Copied!" : "Copy Number"}
+          </button>
           <a
             href={waHref}
             target="_blank"
