@@ -3,7 +3,6 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { DuesPill } from "@/components/resident/dues-pill";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 import { AlertTriangle } from "lucide-react";
 
@@ -177,6 +176,44 @@ async function DuesContent({
     return Number(i.amount) - paid <= 0;
   });
 
+  // Normalize invoices + levy charges into one row shape so all three sections
+  // render through the same table — identical columns, widths and alignment.
+  const invoiceToRow = (i: InvoiceRow): DuesRow => {
+    const paid = paidByInvoice.get(i.id) ?? 0;
+    const lp = lastPaymentByInvoice.get(i.id);
+    const due = Number(i.amount) - paid;
+    const kind: DuesRow["statusKind"] =
+      i.status === "waived" ? "waived" : due <= 0 ? "cleared" : "due";
+    return {
+      id: i.id,
+      primary: formatDate(i.billing_month),
+      secondary: multiFlat ? (flatNumberById.get(i.flat_id) ?? null) : null,
+      amount: Number(i.amount),
+      paid,
+      dueDate: i.due_date,
+      statusKind: kind,
+      receiptHref: paid > 0 && lp ? `/resident/payments/${lp.id}/receipt` : null,
+    };
+  };
+
+  const stillDueRows = stillDue.map(invoiceToRow);
+  const clearedRows = cleared.map(invoiceToRow);
+  const levyRows: DuesRow[] = levyCharges.map((lc) => {
+    const levy = Array.isArray(lc.bms_levies) ? lc.bms_levies[0] : lc.bms_levies;
+    const kind: DuesRow["statusKind"] =
+      lc.status === "paid" ? "cleared" : lc.status === "waived" ? "waived" : "due";
+    return {
+      id: lc.id,
+      primary: levy?.name ?? "Special Levy",
+      secondary: levy?.description ?? null,
+      amount: Number(lc.amount),
+      paid: lc.status === "paid" ? Number(lc.amount) : 0,
+      dueDate: lc.due_date,
+      statusKind: kind,
+      receiptHref: null,
+    };
+  });
+
   return (
     <>
       {openCredits > 0 && (
@@ -213,81 +250,24 @@ async function DuesContent({
       </div>
 
       <Section title="Bills still due" count={stillDue.length}>
-        {stillDue.length === 0 ? (
+        {stillDueRows.length === 0 ? (
           <EmptyRow text="All clear — thank you." />
         ) : (
-          <DuesTable
-            rows={stillDue}
-            paidByInvoice={paidByInvoice}
-            flatNumberById={flatNumberById}
-            lastPaymentByInvoice={lastPaymentByInvoice}
-            showFlat={multiFlat}
-          />
+          <DuesTable firstLabel="Month" rows={stillDueRows} />
         )}
       </Section>
 
       <Section title="Payment history" count={cleared.length}>
-        {cleared.length === 0 ? (
+        {clearedRows.length === 0 ? (
           <EmptyRow text="No cleared bills yet." />
         ) : (
-          <DuesTable
-            rows={cleared}
-            paidByInvoice={paidByInvoice}
-            flatNumberById={flatNumberById}
-            lastPaymentByInvoice={lastPaymentByInvoice}
-            showFlat={multiFlat}
-          />
+          <DuesTable firstLabel="Month" rows={clearedRows} />
         )}
       </Section>
 
-      {levyCharges.length > 0 && (
-        <Section title="Special Levy Charges" count={levyCharges.length}>
-          <div className="rounded-lg border border-border bg-card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-secondary/60 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2.5 font-medium">Levy</th>
-                  <th className="px-4 py-2.5 font-medium text-right">Amount</th>
-                  <th className="px-4 py-2.5 font-medium">Due</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {levyCharges.map((lc) => {
-                  const levy = Array.isArray(lc.bms_levies)
-                    ? lc.bms_levies[0]
-                    : lc.bms_levies;
-                  return (
-                    <tr key={lc.id} className="border-t border-border hover:bg-secondary/40">
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{levy?.name ?? "Special Levy"}</p>
-                        {levy?.description && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {levy.description}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold">
-                        {formatCurrency(Number(lc.amount))}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground tabular-nums">
-                        {formatDate(lc.due_date)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {lc.status === "paid" ? (
-                          <span className="status-paid">Paid</span>
-                        ) : lc.status === "waived" ? (
-                          <span className="status-waived">Waived</span>
-                        ) : (
-                          <span className="status-pending">Still due</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+      {levyRows.length > 0 && (
+        <Section title="Special Levy Charges" count={levyRows.length}>
+          <DuesTable firstLabel="Levy" rows={levyRows} />
         </Section>
       )}
     </>
@@ -349,79 +329,102 @@ function EmptyRow({ text }: { text: string }) {
   );
 }
 
-function DuesTable({
-  rows,
-  paidByInvoice,
-  flatNumberById,
-  lastPaymentByInvoice,
-  showFlat,
-}: {
-  rows: InvoiceRow[];
-  paidByInvoice: Map<string, number>;
-  flatNumberById: Map<string, string>;
-  lastPaymentByInvoice: Map<string, PaymentRow>;
-  showFlat: boolean;
-}) {
+// One normalized row shape for every dues section (bills + levies) so they all
+// render through the same table with identical columns, widths and alignment.
+type DuesRow = {
+  id: string;
+  primary: string; // Month (bills) or Levy name
+  secondary: string | null; // Flat (multi-flat) or levy description
+  amount: number;
+  paid: number;
+  dueDate: string | null;
+  statusKind: "cleared" | "due" | "waived";
+  receiptHref: string | null;
+};
+
+function DuesTable({ firstLabel, rows }: { firstLabel: string; rows: DuesRow[] }) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-secondary/60 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+      {/* table-fixed + colgroup → every section lines up; min-w keeps it scrollable on mobile */}
+      <table className="w-full text-sm table-fixed min-w-[600px]">
+        <colgroup>
+          <col className="w-[30%]" />
+          <col className="w-[16%]" />
+          <col className="w-[14%]" />
+          <col className="w-[16%]" />
+          <col className="w-[14%]" />
+          <col className="w-[10%]" />
+        </colgroup>
+        <thead className="bg-secondary/60 text-[11px] uppercase tracking-wider text-muted-foreground">
           <tr>
-            <th className="px-4 py-2.5 font-medium">Month</th>
-            {showFlat && <th className="px-4 py-2.5 font-medium">Flat</th>}
+            <th className="px-4 py-2.5 font-medium text-left">{firstLabel}</th>
             <th className="px-4 py-2.5 font-medium text-right">Amount</th>
             <th className="px-4 py-2.5 font-medium text-right">Paid</th>
-            <th className="px-4 py-2.5 font-medium">Due</th>
-            <th className="px-4 py-2.5 font-medium">Status</th>
+            <th className="px-4 py-2.5 font-medium text-left">Due</th>
+            <th className="px-4 py-2.5 font-medium text-left">Status</th>
             <th className="px-4 py-2.5 font-medium text-right">Receipt</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((i) => {
-            const paid = paidByInvoice.get(i.id) ?? 0;
-            const lp = lastPaymentByInvoice.get(i.id);
-            const flatNum = flatNumberById.get(i.flat_id) ?? "—";
-            return (
-              <tr key={i.id} className="border-t border-border hover:bg-secondary/40">
-                <td className="px-4 py-3 font-medium tabular-nums">
-                  {formatDate(i.billing_month)}
-                </td>
-                {showFlat && <td className="px-4 py-3 tabular-nums">{flatNum}</td>}
-                <td className="px-4 py-3 text-right tabular-nums font-medium">
-                  {formatCurrency(Number(i.amount))}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                  {paid > 0 ? formatCurrency(paid) : "—"}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground tabular-nums">
-                  {i.due_date ? formatDate(i.due_date) : "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <DuesPill
-                    status={i.status}
-                    amount={Number(i.amount)}
-                    paidTotal={paid}
-                  />
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {paid > 0 && lp ? (
-                    <Link
-                      href={`/resident/payments/${lp.id}/receipt`}
-                      target="_blank"
-                      rel="noopener"
-                      className="text-primary hover:underline text-xs"
-                    >
-                      Receipt
-                    </Link>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
+          {rows.map((r) => (
+            <tr key={r.id} className="border-t border-border hover:bg-secondary/40">
+              <td className="px-4 py-3">
+                <p className="font-medium tabular-nums truncate">{r.primary}</p>
+                {r.secondary && (
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                    {r.secondary}
+                  </p>
+                )}
+              </td>
+              <td className="px-4 py-3 text-right tabular-nums font-medium">
+                {formatCurrency(r.amount)}
+              </td>
+              <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                {r.paid > 0 ? formatCurrency(r.paid) : "—"}
+              </td>
+              <td className="px-4 py-3 text-left text-muted-foreground tabular-nums">
+                {r.dueDate ? formatDate(r.dueDate) : "—"}
+              </td>
+              <td className="px-4 py-3 text-left">
+                <DuesStatusPill kind={r.statusKind} />
+              </td>
+              <td className="px-4 py-3 text-right">
+                {r.receiptHref ? (
+                  <Link
+                    href={r.receiptHref}
+                    target="_blank"
+                    rel="noopener"
+                    className="text-primary hover:underline text-xs"
+                  >
+                    Receipt
+                  </Link>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Compact, uniform status pill — same size/shape across all sections. Token
+// classes match the app's status palette (already compiled, no JIT risk).
+function DuesStatusPill({ kind }: { kind: "cleared" | "due" | "waived" }) {
+  const cls =
+    kind === "cleared"
+      ? "bg-[hsl(151_70%_55%/0.12)] text-[hsl(151_70%_55%)] border-[hsl(151_70%_55%/0.30)]"
+      : kind === "waived"
+        ? "bg-muted/40 text-muted-foreground border-border"
+        : "bg-destructive/15 text-destructive border-destructive/30";
+  const label = kind === "cleared" ? "Cleared" : kind === "waived" ? "Waived" : "Still due";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${cls}`}
+    >
+      {label}
+    </span>
   );
 }

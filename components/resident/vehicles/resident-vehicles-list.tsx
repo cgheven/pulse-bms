@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { Plus, Star, Pencil, Trash2, Car } from "lucide-react";
+import { Star, Pencil, Trash2, Car } from "lucide-react";
 import { VEHICLE_TYPE_LABELS, type VehicleType } from "@/types";
 import { deleteVehicle } from "@/app/actions/vehicles";
 import {
@@ -32,7 +32,6 @@ export function ResidentVehiclesList({
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ResidentVehicleFormValues | null>(
     null,
   );
@@ -64,13 +63,6 @@ export function ResidentVehiclesList({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button className="btn-big" onClick={() => setAddOpen(true)}>
-          <Plus className="w-5 h-5" />
-          Add Vehicle
-        </Button>
-      </div>
-
       {vehicles.length === 0 ? (
         <div className="card-soft text-center py-12">
           <Car className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-40" />
@@ -152,10 +144,6 @@ export function ResidentVehiclesList({
         </div>
       )}
 
-      <ResidentVehicleFormDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-      />
       {editTarget && (
         <ResidentVehicleFormDialog
           open={Boolean(editTarget)}

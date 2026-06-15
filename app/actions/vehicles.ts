@@ -441,9 +441,41 @@ export async function searchVehicles({
 
   const trimmed = query?.trim() ?? "";
   if (trimmed) {
-    // Prefix match — leverages bms_vehicles_plate_unique index on lower(plate_number).
-    // Plate searches are typically prefix ("ABC..."). Substring needs pg_trgm GIN later.
-    q = q.ilike("plate_number", `${trimmed}%`);
+    // Strip characters that would break the PostgREST or() filter grammar, and
+    // the LIKE wildcards, so the term is treated literally.
+    const safe = trimmed.replace(/[,()."'\\%_]/g, " ").replace(/\s+/g, " ").trim();
+    if (safe) {
+      const like = `%${safe}%`;
+
+      // Resident name and flat number live on joined tables, so resolve the
+      // matching IDs in this building first, then OR them into the vehicle query.
+      const [{ data: residentMatches }, { data: flatMatches }] = await Promise.all([
+        supabase
+          .from("bms_residents")
+          .select("id")
+          .eq("building_id", effectiveBuilding)
+          .ilike("full_name", like),
+        supabase
+          .from("bms_flats")
+          .select("id")
+          .eq("building_id", effectiveBuilding)
+          .ilike("flat_number", like),
+      ]);
+
+      const residentIds = (residentMatches ?? []).map((r) => r.id);
+      const flatIds = (flatMatches ?? []).map((f) => f.id);
+
+      const orParts = [
+        `plate_number.ilike.${like}`,
+        `make.ilike.${like}`,
+        `model.ilike.${like}`,
+        `color.ilike.${like}`,
+      ];
+      if (residentIds.length) orParts.push(`resident_id.in.(${residentIds.join(",")})`);
+      if (flatIds.length) orParts.push(`flat_id.in.(${flatIds.join(",")})`);
+
+      q = q.or(orParts.join(","));
+    }
   }
 
   const { data, error } = await q;

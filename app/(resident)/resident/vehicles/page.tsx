@@ -5,6 +5,7 @@ import {
   ResidentVehiclesList,
   type ResidentVehicleRow,
 } from "@/components/resident/vehicles/resident-vehicles-list";
+import { AddVehicleButton } from "@/components/resident/vehicles/add-vehicle-button";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
 import type { VehicleType } from "@/types";
 
@@ -13,11 +14,14 @@ export const dynamic = "force-dynamic";
 export default function ResidentVehiclesPage() {
   return (
     <div className="space-y-6 animate-fade-up max-w-4xl">
-      <header>
-        <h1>My Vehicles</h1>
-        <p className="text-muted-foreground">
-          Your cars, bikes and EVs registered with the building.
-        </p>
+      <header className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1>My Vehicles</h1>
+          <p className="text-muted-foreground mt-1">
+            Your cars, bikes and EVs registered with the building.
+          </p>
+        </div>
+        <AddVehicleButton />
       </header>
       <Suspense fallback={<TableSkeleton rows={3} />}>
         <VehiclesContent />

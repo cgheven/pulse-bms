@@ -38,6 +38,7 @@ import {
   FlaskConical,
   PhoneCall,
   Landmark,
+  IdCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -117,8 +118,9 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "People",
       items: [
-        { href: "/admin/staff", label: "Staff", icon: UserCog },
-        { href: "/admin/union", label: "Union", icon: Vote },
+        { href: "/admin/staff",   label: "Staff",   icon: UserCog },
+        { href: "/admin/union",   label: "Union",   icon: Vote },
+        { href: "/admin/drivers", label: "Drivers", icon: IdCard },
       ],
     },
     {
@@ -157,6 +159,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/union/expenses", label: "Expenses", icon: Receipt },
         { href: "/union/facility", label: "Facility", icon: Wrench },
         { href: "/union/vehicles", label: "Vehicles", icon: Car },
+        { href: "/union/drivers",  label: "Drivers",  icon: IdCard },
         { href: "/union/contacts", label: "Contacts", icon: PhoneCall },
       ],
     },
@@ -187,6 +190,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/resident/dues",       label: "Dues",       icon: Wallet },
         { href: "/resident/payments",   label: "Payments",   icon: CreditCard },
         { href: "/resident/vehicles",   label: "Vehicles",   icon: Car },
+        { href: "/resident/drivers",    label: "Drivers",    icon: IdCard },
         { href: "/resident/visitors",   label: "Visitors",   icon: CalendarCheck },
         { href: "/resident/complaints",   label: "Complaints",  icon: MessageSquareWarning },
         { href: "/resident/bill-numbers", label: "Bill Numbers", icon: Zap },

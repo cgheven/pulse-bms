@@ -204,9 +204,6 @@ async function DuesHero({
             <div className="mt-1.5 text-4xl sm:text-5xl font-bold tracking-tight tabular-nums text-destructive">
               {formatCurrency(totalOutstanding)}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Pay anytime — partial payments welcome.
-            </p>
             {lastPayment?.payment_date && (
               <p className="text-xs text-muted-foreground mt-1">
                 Last paid {formatCurrency(Number(lastPayment.amount))} on{" "}
