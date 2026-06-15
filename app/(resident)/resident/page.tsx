@@ -148,47 +148,63 @@ async function DuesHero({
 
   const { data: residentRows } = await supabase
     .from("bms_residents")
-    .select("flat_id, is_primary, bms_flats(id, outstanding_dues)")
+    .select("id, flat_id, is_primary, bms_flats(id, outstanding_dues)")
     .eq("profile_id", profileId)
     .eq("is_active", true)
     .order("is_primary", { ascending: false });
 
   type FlatRow = { id: string; outstanding_dues: number | null };
-  type ResidentRow = { flat_id: string; bms_flats: FlatRow | FlatRow[] | null };
+  type ResidentRow = { id: string; flat_id: string; bms_flats: FlatRow | FlatRow[] | null };
   const rows = (residentRows ?? []) as unknown as ResidentRow[];
   const flats: FlatRow[] = rows
     .map((r) => (Array.isArray(r.bms_flats) ? r.bms_flats[0] : r.bms_flats))
     .filter((f): f is FlatRow => !!f);
+  const residentIds = rows.map((r) => r.id).filter(Boolean);
   const primaryFlatId = flats[0]?.id ?? null;
   const flatIds = flats.map((f) => f.id);
-  const totalOutstanding = flats.reduce(
+  const maintenanceOutstanding = flats.reduce(
     (s, f) => s + (Number(f.outstanding_dues) || 0),
     0,
   );
 
-  // Last payment + open credits in parallel.
-  const [{ data: lastPayment }, { data: credits }] = await Promise.all([
-    primaryFlatId
-      ? supabase
-          .from("bms_payments")
-          .select("amount, payment_date")
-          .eq("flat_id", primaryFlatId)
-          .order("payment_date", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    flatIds.length > 0
-      ? supabase
-          .from("bms_flat_credits")
-          .select("amount")
-          .in("flat_id", flatIds)
-          .is("applied_invoice_id", null)
-      : Promise.resolve({ data: [] }),
-  ]);
+  // Last payment + open credits + pending special-levy charges in parallel.
+  const [{ data: lastPayment }, { data: credits }, { data: levyCharges }] =
+    await Promise.all([
+      primaryFlatId
+        ? supabase
+            .from("bms_payments")
+            .select("amount, payment_date")
+            .eq("flat_id", primaryFlatId)
+            .order("payment_date", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      flatIds.length > 0
+        ? supabase
+            .from("bms_flat_credits")
+            .select("amount")
+            .in("flat_id", flatIds)
+            .is("applied_invoice_id", null)
+        : Promise.resolve({ data: [] }),
+      residentIds.length > 0
+        ? supabase
+            .from("bms_levy_charges")
+            .select("amount")
+            .in("resident_id", residentIds)
+            .eq("status", "pending")
+        : Promise.resolve({ data: [] }),
+    ]);
   const openCredits = (credits ?? []).reduce(
     (s, c) => s + Number((c as { amount: number }).amount ?? 0),
     0,
   );
+  // Special levies (e.g. water tanker) are owed on top of maintenance dues, so
+  // the headline "still due" must include them or it understates what's owed.
+  const levyOutstanding = (levyCharges ?? []).reduce(
+    (s, c) => s + Number((c as { amount: number }).amount ?? 0),
+    0,
+  );
+  const totalOutstanding = maintenanceOutstanding + levyOutstanding;
 
   const hasDues = totalOutstanding > 0;
 
@@ -204,6 +220,14 @@ async function DuesHero({
             <div className="mt-1.5 text-4xl sm:text-5xl font-bold tracking-tight tabular-nums text-destructive">
               {formatCurrency(totalOutstanding)}
             </div>
+            {levyOutstanding > 0 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Includes {formatCurrency(levyOutstanding)} special levy
+                {maintenanceOutstanding > 0
+                  ? ` + ${formatCurrency(maintenanceOutstanding)} maintenance`
+                  : ""}
+              </p>
+            )}
             {lastPayment?.payment_date && (
               <p className="text-xs text-muted-foreground mt-1">
                 Last paid {formatCurrency(Number(lastPayment.amount))} on{" "}
