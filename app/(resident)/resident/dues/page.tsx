@@ -66,7 +66,7 @@ async function DuesContent({
   // page no longer needs to preload building / resident name.
   const { data: residentRows } = await supabase
     .from("bms_residents")
-    .select("flat_id, is_primary, bms_flats(id, flat_number)")
+    .select("id, flat_id, is_primary, bms_flats(id, flat_number)")
     .eq("profile_id", profileId)
     .eq("is_active", true)
     .order("is_primary", { ascending: false });
@@ -74,22 +74,36 @@ async function DuesContent({
 
   type FlatBasic = { id: string; flat_number: string };
   type ResidentRow = {
+    id: string;
     flat_id: string;
     is_primary: boolean | null;
     bms_flats: FlatBasic | FlatBasic[] | null;
   };
-  const flats: FlatBasic[] = ((residentRows ?? []) as unknown as ResidentRow[])
+  const rows = (residentRows ?? []) as unknown as ResidentRow[];
+  const flats: FlatBasic[] = rows
     .map((r) => (Array.isArray(r.bms_flats) ? r.bms_flats[0] : r.bms_flats))
     .filter((f): f is FlatBasic => !!f);
+  const residentIds = rows.map((r) => r.id).filter(Boolean);
   const flatIds = flats.map((f) => f.id);
   const flatNumberById = new Map(flats.map((f) => [f.id, f.flat_number]));
   const multiFlat = flats.length > 1;
 
+  type LevyChargeRow = {
+    id: string;
+    levy_id: string;
+    amount: number;
+    due_date: string;
+    status: string;
+    bms_levies: { name: string; description: string | null } | { name: string; description: string | null }[] | null;
+  };
+
   let invoices: InvoiceRow[] = [];
   let payments: PaymentRow[] = [];
   let openCredits = 0;
+  let levyCharges: LevyChargeRow[] = [];
+
   if (flatIds.length > 0) {
-    const [{ data: inv }, { data: pay }, { data: credits }] = await Promise.all([
+    const [{ data: inv }, { data: pay }, { data: credits }, { data: lc }] = await Promise.all([
       supabase
         .from("bms_invoices")
         .select("id, flat_id, invoice_number, billing_month, amount, status, due_date, notes")
@@ -105,9 +119,17 @@ async function DuesContent({
         .select("amount")
         .in("flat_id", flatIds)
         .is("applied_invoice_id", null),
+      residentIds.length > 0
+        ? supabase
+            .from("bms_levy_charges")
+            .select("id, levy_id, amount, due_date, status, bms_levies(name, description)")
+            .in("resident_id", residentIds)
+            .order("due_date", { ascending: false })
+        : Promise.resolve({ data: [] }),
     ]);
     invoices = (inv ?? []) as InvoiceRow[];
     payments = (pay ?? []) as PaymentRow[];
+    levyCharges = (lc ?? []) as LevyChargeRow[];
     openCredits = (credits ?? []).reduce(
       (s, c) => s + Number((c as { amount: number }).amount ?? 0),
       0,
@@ -133,9 +155,12 @@ async function DuesContent({
     (s, i) => s + (paidByInvoice.get(i.id) ?? 0),
     0,
   );
-  // Per UX rule: never surface the word "Pending" in resident UI. We call
-  // this "Still due" everywhere so the resident sees one consistent label.
-  const totalStillDueYTD = Math.max(0, totalBilled - totalPaidYTD);
+  const pendingLevyTotal = levyCharges
+    .filter((lc) => lc.status === "pending")
+    .reduce((s, lc) => s + Number(lc.amount), 0);
+  const hasUnresolvedLevies = pendingLevyTotal > 0;
+  // Per UX rule: never surface the word "Pending" in resident UI.
+  const totalStillDueYTD = Math.max(0, totalBilled - totalPaidYTD) + pendingLevyTotal;
 
   // Status pills are amount-derived (CLAUDE.md UX rule). An invoice with
   // status='partial' but amount_paid === amount is treated as cleared,
@@ -165,7 +190,7 @@ async function DuesContent({
         </div>
       )}
 
-      {stillDue.length > 1 && (
+      {(stillDue.length > 1 || hasUnresolvedLevies) && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2.5">
           <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
           <div className="text-sm">
@@ -214,6 +239,57 @@ async function DuesContent({
           />
         )}
       </Section>
+
+      {levyCharges.length > 0 && (
+        <Section title="Special Levy Charges" count={levyCharges.length}>
+          <div className="rounded-lg border border-border bg-card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/60 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2.5 font-medium">Levy</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Amount</th>
+                  <th className="px-4 py-2.5 font-medium">Due</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {levyCharges.map((lc) => {
+                  const levy = Array.isArray(lc.bms_levies)
+                    ? lc.bms_levies[0]
+                    : lc.bms_levies;
+                  return (
+                    <tr key={lc.id} className="border-t border-border hover:bg-secondary/40">
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{levy?.name ?? "Special Levy"}</p>
+                        {levy?.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {levy.description}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold">
+                        {formatCurrency(Number(lc.amount))}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                        {formatDate(lc.due_date)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {lc.status === "paid" ? (
+                          <span className="status-paid">Paid</span>
+                        ) : lc.status === "waived" ? (
+                          <span className="status-waived">Waived</span>
+                        ) : (
+                          <span className="status-pending">Still due</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
     </>
   );
 }

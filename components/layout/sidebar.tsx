@@ -37,6 +37,7 @@ import {
   Zap,
   FlaskConical,
   PhoneCall,
+  Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -128,6 +129,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/admin/inventory",  label: "Inventory",  icon: Archive },
         { href: "/admin/utilities",  label: "Utilities",  icon: Zap },
         { href: "/admin/contacts",   label: "Contacts",   icon: PhoneCall },
+        { href: "/admin/levies",     label: "Levies",     icon: Landmark },
       ],
     },
   ],

@@ -168,6 +168,7 @@
   .status-pending   { @apply bg-[hsl(38_92%_55%/0.12)] text-[hsl(38_92%_65%)] border border-[hsl(38_92%_55%/0.2)]; }
   .status-overdue   { @apply bg-[hsl(0_72%_55%/0.12)] text-[hsl(0_72%_65%)] border border-[hsl(0_72%_55%/0.2)]; }
   .status-defaulter { @apply bg-[hsl(0_72%_55%/0.15)] text-[hsl(0_72%_65%)] border border-[hsl(0_72%_55%/0.3)] font-semibold; }
+  .status-waived    { @apply bg-secondary text-muted-foreground border border-border; }
   .status-info      { @apply bg-[hsl(191_100%_50%/0.12)] text-[hsl(191_100%_55%)] border border-[hsl(191_100%_50%/0.2)]; }
 
   /* ── Additional pills (GMS-aligned naming for compatibility) ─────────── */
