@@ -44,7 +44,7 @@ const colWidths = {
   collections: { date: 22, flat: 18, resident: 42, category: 30, amount: 28, mode: 22, receipt: 20 },
   expenses:    { date: 22, category: 35, description: 65, vendor: 32, amount: 28 },
   bills:       { date: 22, billType: 50, vendor: 60, amount: 28, units: 22 },
-  salaries:    { date: 22, staffName: 132, amount: 28 },
+  salaries:    { date: 22, staffName: 90, position: 42, amount: 28 },
   projects:    { date: 22, projectName: 110, amount: 28, mode: 22 },
 };
 
@@ -202,10 +202,11 @@ export async function downloadMonthlyReportPdf(data: MonthlyReportData): Promise
       return acc;
     }, {});
 
-    // Total row
+    // Total row — use pre-passed `total` for the primary amount col, blank elsewhere.
     const totalRow = head.map((_, i) => {
       if (i === 0) return "Total";
-      return numericCols.includes(i) ? fmtPK(body.reduce((s, r) => s + Number(r[i] ?? 0), 0)) : "";
+      if (i === numericCols[0]) return fmtPK(total);
+      return "";
     });
 
     autoTable(doc, {
@@ -242,9 +243,9 @@ export async function downloadMonthlyReportPdf(data: MonthlyReportData): Promise
       data.totals.collected,
       data.collections.length,
       ["Date", "Flat", "Resident", "Category", "Amount", "Mode", "Receipt#"],
-      data.collections.map((r) => [r.date, r.flat, r.resident, r.category, r.amount, r.mode, r.receipt]),
+      data.collections.map((r) => [r.date, r.flat, r.resident, r.category, fmtPK(r.amount), r.mode, r.receipt]),
       [w.date, w.flat, w.resident, w.category, w.amount, w.mode, w.receipt],
-      [4], // amount column index
+      [4],
     );
   }
 
@@ -255,7 +256,7 @@ export async function downloadMonthlyReportPdf(data: MonthlyReportData): Promise
       data.totals.expenses,
       data.expenses.length,
       ["Date", "Category", "Description", "Vendor", "Amount"],
-      data.expenses.map((r) => [r.date, r.category, r.description, r.vendor, r.amount]),
+      data.expenses.map((r) => [r.date, r.category, r.description, r.vendor, fmtPK(r.amount)]),
       [w.date, w.category, w.description, w.vendor, w.amount],
       [4],
     );
@@ -268,7 +269,7 @@ export async function downloadMonthlyReportPdf(data: MonthlyReportData): Promise
       data.totals.bills,
       data.bills.length,
       ["Date", "Bill Type", "Vendor", "Amount", "Units"],
-      data.bills.map((r) => [r.date, r.billType, r.vendor, r.amount, r.units]),
+      data.bills.map((r) => [r.date, r.billType, r.vendor, fmtPK(r.amount), r.units]),
       [w.date, w.billType, w.vendor, w.amount, w.units],
       [3],
     );
@@ -280,10 +281,10 @@ export async function downloadMonthlyReportPdf(data: MonthlyReportData): Promise
       "Staff Salaries",
       data.totals.salaries,
       data.salaries.length,
-      ["Date", "Staff Name", "Amount"],
-      data.salaries.map((r) => [r.date, r.staffName, r.amount]),
-      [w.date, w.staffName, w.amount],
-      [2],
+      ["Date", "Staff Name", "Position", "Amount"],
+      data.salaries.map((r) => [r.date, r.staffName, r.staffRole, fmtPK(r.amount)]),
+      [w.date, w.staffName, w.position, w.amount],
+      [3],
     );
   }
 
@@ -295,7 +296,7 @@ export async function downloadMonthlyReportPdf(data: MonthlyReportData): Promise
       total,
       data.projects.length,
       ["Date", "Project", "Amount", "Mode"],
-      data.projects.map((r) => [r.date, r.projectName, r.amount, r.mode]),
+      data.projects.map((r) => [r.date, r.projectName, fmtPK(r.amount), r.mode]),
       [w.date, w.projectName, w.amount, w.mode],
       [2],
     );

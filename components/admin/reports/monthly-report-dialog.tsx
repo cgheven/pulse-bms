@@ -24,16 +24,23 @@ const SECTIONS: Section[] = [
   { key: "projects",    label: "Projects" },
 ];
 
+function pkToday(): string {
+  return new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function pkMonth(offset = 0) {
   // Compute year/month in PK timezone (UTC+5) then apply `offset` months.
   const pkNow = new Date(Date.now() + 5 * 60 * 60 * 1000);
   const y   = pkNow.getUTCFullYear();
-  const mo  = pkNow.getUTCMonth() + offset;   // may be <0 or >11 — Date handles rollover
+  const mo  = pkNow.getUTCMonth() + offset;
   const base = new Date(Date.UTC(y, mo, 1));
   const from = base.toISOString().slice(0, 10);
-  const to   = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0))
+  // End of month, capped at today for the current month.
+  const endOfMonth = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0))
     .toISOString()
     .slice(0, 10);
+  const today = pkToday();
+  const to = endOfMonth < today ? endOfMonth : today;
   return { from, to };
 }
 
@@ -45,6 +52,8 @@ type Props = {
 export function MonthlyReportDialog({ open, onClose }: Props) {
   const thisMonth = pkMonth(0);
   const lastMonth = pkMonth(-1);
+
+  const today = pkToday();
 
   const [from,     setFrom]     = useState(thisMonth.from);
   const [to,       setTo]       = useState(thisMonth.to);
@@ -66,6 +75,7 @@ export function MonthlyReportDialog({ open, onClose }: Props) {
   const generate = async () => {
     if (!from || !to) { setError("Please set both From and To dates."); return; }
     if (from > to)    { setError("From date must be before To date.");   return; }
+    if (to > today)   { setError("To date cannot be in the future.");    return; }
     if (sections.length === 0) { setError("Select at least one section."); return; }
     setError(null);
     setLoading(true);
@@ -132,6 +142,7 @@ export function MonthlyReportDialog({ open, onClose }: Props) {
                 <Input
                   type="date"
                   value={to}
+                  max={today}
                   onChange={(e) => { setTo(e.target.value); setError(null); }}
                 />
               </div>

@@ -45,6 +45,7 @@ export type MonthlyReportData = {
   salaries: Array<{
     date: string;
     staffName: string;
+    staffRole: string;
     amount: number;
   }> | null;
   projects: Array<{
@@ -53,6 +54,16 @@ export type MonthlyReportData = {
     amount: number;
     mode: string;
   }> | null;
+};
+
+const STAFF_ROLE_LABELS: Record<string, string> = {
+  chowkidar:      "Chowkidar (Guard)",
+  sweeper:        "Sweeper",
+  lift_man:       "Lift Operator",
+  generator_tech: "Generator Technician",
+  plumber:        "Plumber",
+  electrician:    "Electrician",
+  other:          "Other",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -148,7 +159,7 @@ export async function getMonthlyReportData(input: {
         ? supabase.from("bms_expenses").select("id, expense_date, amount, subcategory, vendor, units_consumed").eq("building_id", buildingId).eq("is_bill", true).gte("expense_date", from).lte("expense_date", to).order("expense_date", { ascending: false })
         : none,
       sections.includes("salaries")
-        ? supabase.from("bms_salary_payments").select("id, payment_date, amount, bms_staff(full_name)").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false })
+        ? supabase.from("bms_salary_payments").select("id, payment_date, amount, bms_staff(full_name, role)").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false })
         : none,
       sections.includes("projects")
         ? supabase.from("bms_payments").select("id, payment_date, amount, payment_mode, project_id").eq("building_id", buildingId).eq("category", "project").not("project_id", "is", null).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false })
@@ -230,7 +241,7 @@ export async function getMonthlyReportData(input: {
       id: string;
       payment_date: string;
       amount: number | string;
-      bms_staff: { full_name: string } | { full_name: string }[] | null;
+      bms_staff: { full_name: string; role: string } | { full_name: string; role: string }[] | null;
     };
 
     const salaryRows = salariesRaw
@@ -239,6 +250,7 @@ export async function getMonthlyReportData(input: {
           return {
             date:      formatDate(r.payment_date),
             staffName: staff?.full_name ?? "Staff",
+            staffRole: STAFF_ROLE_LABELS[staff?.role ?? ""] ?? (staff?.role ?? "—"),
             amount:    Number(r.amount ?? 0),
           };
         })
