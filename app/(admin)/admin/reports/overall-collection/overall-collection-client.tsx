@@ -242,8 +242,8 @@ export function OverallCollectionClient({
 
   return (
     <ReportShell
-      title="Income Register"
-      subtitle="Maintenance, entry fees, transfer fees, fines and other income."
+      title="Collections"
+      subtitle="All incoming payments — maintenance, entry fees, transfer fees, fines and other income."
       buildingName={buildingName}
       reportName="overall-collection"
       filename={`overall-collection_${buildingName.replace(/\s+/g, "_")}`}

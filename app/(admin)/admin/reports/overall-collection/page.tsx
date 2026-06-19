@@ -24,10 +24,10 @@ export default function OverallCollectionPage({
       <div className="space-y-1">
         <h1>Reports</h1>
         <p className="text-muted-foreground text-sm">
-          Accountant-grade reports — live preview, column picker, CSV and PDF.
+          All incoming payments — maintenance, entry fees, fines and other income.
         </p>
       </div>
-      <ReportTabs active="overall-collection" />
+      <ReportTabs active="collections" />
       <Suspense fallback={<ReportSkeleton />}>
         <OverallCollectionData searchParams={searchParams} />
       </Suspense>

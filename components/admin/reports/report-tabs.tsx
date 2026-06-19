@@ -1,69 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { Wallet, Receipt, HandCoins, Coins, Banknote, BookText, Sparkles, Archive } from "lucide-react";
+import { LayoutDashboard, Coins, CreditCard, BookText, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/**
- * Horizontal tab strip at the top of every report page. Switching between
- * tabs is a soft nav (Next.js Link with prefetch) — first visit pre-warms
- * the other tabs so subsequent clicks feel instant. Each tab has its own
- * URL so deep-links, browser back/forward, and bookmarks all work.
- */
-
 export type ReportTabId =
-  | "expenses"
-  | "bills"
-  | "projects"
-  | "maintenance-collection"
-  | "overall-collection"
+  | "summary"
+  | "collections"
+  | "spending"
   | "day-book"
-  | "cash-position"
-  | "inventory";
+  | "projects";
 
-// Tab order: Income Register lands first (default view) — that's the
-// committee's day-1 question: "what came in this month?". Day Book is
-// the accountant's narrative "Roznamcha" — sits next to Cash Book which
-// closes the row with the audit close-out check.
-const TABS: { id: ReportTabId; label: string; icon: typeof Wallet; href: string }[] = [
-  {
-    id: "overall-collection",
-    label: "Income Register",
-    icon: Coins,
-    href: "/admin/reports/overall-collection",
-  },
-  {
-    id: "maintenance-collection",
-    label: "Maintenance",
-    icon: HandCoins,
-    href: "/admin/reports/maintenance-collection",
-  },
-  { id: "expenses", label: "Expenses", icon: Wallet, href: "/admin/reports/expenses" },
-  { id: "bills", label: "Bills", icon: Receipt, href: "/admin/reports/bills" },
-  {
-    id: "projects",
-    label: "Projects",
-    icon: Sparkles,
-    href: "/admin/reports/projects",
-  },
-  {
-    id: "day-book",
-    label: "Day Book",
-    icon: BookText,
-    href: "/admin/reports/day-book",
-  },
-  {
-    id: "cash-position",
-    label: "Cash Book",
-    icon: Banknote,
-    href: "/admin/reports/cash-position",
-  },
-  {
-    id: "inventory",
-    label: "Inventory",
-    icon: Archive,
-    href: "/admin/reports/inventory",
-  },
+const TABS: { id: ReportTabId; label: string; icon: typeof Coins; href: string }[] = [
+  { id: "summary",     label: "Summary",     icon: LayoutDashboard, href: "/admin/reports/summary" },
+  { id: "collections", label: "Collections", icon: Coins,           href: "/admin/reports/overall-collection" },
+  { id: "spending",    label: "Spending",    icon: CreditCard,      href: "/admin/reports/spending" },
+  { id: "day-book",    label: "Day Book",    icon: BookText,        href: "/admin/reports/day-book" },
+  { id: "projects",    label: "Projects",    icon: Sparkles,        href: "/admin/reports/projects" },
 ];
 
 export function ReportTabs({ active }: { active: ReportTabId }) {

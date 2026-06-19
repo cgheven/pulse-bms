@@ -25,7 +25,7 @@ export default function ProjectsReportPage({
       <div className="space-y-1">
         <h1>Reports</h1>
         <p className="text-muted-foreground text-sm">
-          Accountant-grade reports — live preview, column picker, CSV and PDF.
+          Capital project spending — track payments and progress per project.
         </p>
       </div>
       <ReportTabs active="projects" />

@@ -24,7 +24,7 @@ export default function DayBookPage({
       <div className="space-y-1">
         <h1>Reports</h1>
         <p className="text-muted-foreground text-sm">
-          Accountant-grade reports — live preview, column picker, CSV and PDF.
+          Every transaction in date order — the full income and expense ledger.
         </p>
       </div>
       <ReportTabs active="day-book" />
