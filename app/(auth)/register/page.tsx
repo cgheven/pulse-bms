@@ -39,10 +39,10 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const flatLimit = parseInt(form.flat_limit, 10);
-    if (!Number.isFinite(flatLimit) || flatLimit < 1 || flatLimit > 500) {
+    if (!Number.isFinite(flatLimit) || flatLimit < 1 || flatLimit > 1500) {
       toast({
         title: "Invalid flat count",
-        description: "Enter a number between 1 and 500.",
+        description: "Enter a number between 1 and 1,500.",
         variant: "destructive",
       });
       return;
