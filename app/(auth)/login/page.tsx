@@ -1,13 +1,15 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Loader2, Building2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Building2, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { resolveLoginIdentifier } from "@/app/actions/auth-resolve";
+import { requestPasswordReset } from "@/app/actions/register";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +17,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -41,10 +48,6 @@ export default function LoginPage() {
       password,
     });
     if (error) {
-      // Supabase auth errors are typically user-safe ("Invalid login credentials",
-      // etc.) but rare backend errors can leak detail — show a generic message in
-      // those cases. Log raw error for debugging.
-      console.error(error);
       const msg = error.message || "";
       const known =
         msg.toLowerCase().includes("invalid") ||
@@ -64,15 +67,31 @@ export default function LoginPage() {
     router.refresh();
   }
 
+  async function handlePasswordReset(e: React.FormEvent) {
+    e.preventDefault();
+    setResetLoading(true);
+    try {
+      const result = await requestPasswordReset(resetEmail);
+      setResetSent(true);
+      toast({ title: "Check your email", description: result.message });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Something went wrong.",
+        variant: "destructive",
+      });
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* Subtle ambient glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-primary/5 blur-3xl" />
       </div>
 
       <div className="w-full max-w-sm relative animate-fade-up">
-        {/* Logo mark */}
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
             <Building2 className="w-6 h-6 text-primary" />
@@ -83,7 +102,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Card */}
         <div className="rounded-2xl border border-sidebar-border bg-card p-8 shadow-2xl">
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-foreground">Welcome back</h2>
@@ -113,12 +131,27 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label
-                htmlFor="password"
-                className="text-sm font-medium text-muted-foreground uppercase tracking-wider"
-              >
-                Password
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="password"
+                  className="text-sm font-medium text-muted-foreground uppercase tracking-wider"
+                >
+                  Password
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReset(!showReset);
+                    setResetSent(false);
+                  }}
+                  className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
+                >
+                  Forgot password?
+                  <ChevronDown
+                    className={`w-3 h-3 transition-transform ${showReset ? "rotate-180" : ""}`}
+                  />
+                </button>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
@@ -158,19 +191,54 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
+
+          {showReset && (
+            <div className="mt-4 pt-4 border-t border-sidebar-border">
+              {resetSent ? (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Check your inbox — a reset link is on its way.
+                </p>
+              ) : (
+                <form onSubmit={handlePasswordReset} className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Enter your email and we&apos;ll send a reset link.
+                  </p>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    required
+                    disabled={resetLoading}
+                    className="h-10 bg-background/50 border-sidebar-border focus-visible:ring-primary/40"
+                  />
+                  <Button
+                    type="submit"
+                    disabled={resetLoading}
+                    variant="outline"
+                    className="w-full h-10 text-sm"
+                  >
+                    {resetLoading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                        Sending…
+                      </>
+                    ) : (
+                      "Send reset link"
+                    )}
+                  </Button>
+                </form>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Help line */}
-        <p className="mt-5 text-center text-xs text-muted-foreground">
-          Need help signing in? Contact your building admin.
+        <p className="mt-5 text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <Link href="/register" className="font-semibold text-primary hover:underline">
+            Start free trial
+          </Link>
         </p>
-
-        <div className="mt-4 text-center">
-          <p className="text-xs text-muted-foreground">New to Pulse?</p>
-          <a href="/pricing" className="text-sm font-semibold text-primary hover:underline">
-            View pricing &amp; request a demo →
-          </a>
-        </div>
       </div>
     </div>
   );

@@ -50,8 +50,11 @@ export async function updateSession(request: NextRequest) {
   // Tight match: only /find and /find/* (not /findings or similar).
   const isFind = pathname === "/find" || pathname.startsWith("/find/");
   const isPricing = pathname === "/pricing";
+  const isRegister = pathname === "/register" || pathname.startsWith("/register/");
+  const isResetPassword =
+    pathname === "/auth/reset-password" || pathname.startsWith("/auth/reset-password/");
   const isPublic =
-    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing;
+    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -59,7 +62,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
+  // Redirect already-authenticated users away from login AND register pages.
+  // /auth/reset-password is excluded intentionally — we don't auto-redirect there
+  // because a logged-in user may still legitimately follow a reset link.
+  if (user && (isAuthRoute || isRegister)) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
