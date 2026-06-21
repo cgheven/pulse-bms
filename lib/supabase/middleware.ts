@@ -25,9 +25,18 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // RSC prefetch requests get a fast path — no auth roundtrip.
-  // Next.js sends a "RSC" header and uses `?_rsc=` for these requests.
-  // The actual page render (full doc load on click) still validates auth below.
+  // getUser() validates the token with Supabase's auth server and refreshes it if needed.
+  // This correctly handles deleted users — if the auth account was removed the token is
+  // rejected, Supabase SSR clears the stale cookies, and routing treats them as logged out.
+  // Must run BEFORE any early return so session cookies are always refreshed and auth
+  // state is always validated — including for RSC prefetch requests.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // RSC prefetch requests skip the redirect logic only — auth was already validated above.
+  // Returning early here (before getUser) would have allowed unauthenticated access to
+  // protected routes by anyone who sets the `rsc: 1` or `next-router-prefetch: 1` header.
   const isRscPrefetch =
     request.headers.get("rsc") === "1" ||
     request.headers.get("next-router-prefetch") === "1";
@@ -35,13 +44,6 @@ export async function updateSession(request: NextRequest) {
   if (isRscPrefetch) {
     return supabaseResponse;
   }
-
-  // getUser() validates the token with Supabase's auth server and refreshes it if needed.
-  // This correctly handles deleted users — if the auth account was removed the token is
-  // rejected, Supabase SSR clears the stale cookies, and routing treats them as logged out.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login");

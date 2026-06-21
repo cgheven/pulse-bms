@@ -96,7 +96,7 @@ function ResetForm() {
             <>
               <div className="mb-6">
                 <h2 className="text-xl font-semibold text-foreground">Set a new password</h2>
-                <p className="text-sm text-muted-foreground mt-1">Must be at least 8 characters.</p>
+                <p className="text-sm text-muted-foreground mt-1">Must be at least 10 characters.</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -111,11 +111,11 @@ function ResetForm() {
                     <Input
                       id="pw"
                       type={showPassword ? "text" : "password"}
-                      placeholder="At least 8 characters"
+                      placeholder="At least 10 characters"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      minLength={8}
+                      minLength={10}
                       disabled={loading}
                       autoComplete="new-password"
                       className="h-11 pr-10 bg-background/50 border-sidebar-border focus-visible:ring-primary/40"
@@ -145,7 +145,7 @@ function ResetForm() {
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     required
-                    minLength={8}
+                    minLength={10}
                     disabled={loading}
                     autoComplete="new-password"
                     className="h-11 bg-background/50 border-sidebar-border focus-visible:ring-primary/40"

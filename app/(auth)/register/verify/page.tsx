@@ -37,9 +37,13 @@ function VerifyForm() {
     if (resendCooldown > 0 || !registrationId) return;
     setResendLoading(true);
     try {
-      await resendOTP(registrationId);
-      setResendCooldown(60);
-      toast({ title: "Code resent", description: "Check your inbox for the new code." });
+      const result = await resendOTP(registrationId);
+      if (result.error) {
+        toast({ title: "Could not resend", description: result.error, variant: "destructive" });
+      } else {
+        setResendCooldown(60);
+        toast({ title: "Code resent", description: "Check your inbox for the new code." });
+      }
     } catch (err) {
       toast({
         title: "Could not resend",
@@ -61,29 +65,31 @@ function VerifyForm() {
       });
       return;
     }
-    if (password.length < 8) {
+    if (password.length < 10) {
       toast({
         title: "Password too short",
-        description: "Use at least 8 characters.",
+        description: "Use at least 10 characters.",
         variant: "destructive",
       });
       return;
     }
     setLoading(true);
     try {
-      const { email } = await verifyOTPAndCreate({
+      const result = await verifyOTPAndCreate({
         registration_id: registrationId,
         otp: otp.trim(),
         password,
       });
+      if (result.error) {
+        toast({ title: "Verification failed", description: result.error, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
       // Auto sign-in using the credentials just created
       const supabase = createClient();
-      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email: result.email!, password });
       if (signInErr) {
-        toast({
-          title: "Account created!",
-          description: "Please sign in with your new credentials.",
-        });
+        toast({ title: "Account created!", description: "Please sign in with your new credentials." });
         router.push("/login");
         return;
       }
@@ -171,11 +177,11 @@ function VerifyForm() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="At least 8 characters"
+                  placeholder="At least 10 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={8}
+                  minLength={10}
                   disabled={loading}
                   autoComplete="new-password"
                   className="h-11 pr-10 bg-background/50 border-sidebar-border focus-visible:ring-primary/40"
@@ -206,7 +212,7 @@ function VerifyForm() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={8}
+                minLength={10}
                 disabled={loading}
                 autoComplete="new-password"
                 className="h-11 bg-background/50 border-sidebar-border focus-visible:ring-primary/40"

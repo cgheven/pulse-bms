@@ -56,6 +56,11 @@ export default function RegisterPage() {
         city: form.city,
         flat_limit: flatLimit,
       });
+      if (result.error) {
+        toast({ title: "Registration failed", description: result.error, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
       router.push(`/register/verify?id=${result.registration_id}`);
     } catch (err) {
       toast({
