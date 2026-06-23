@@ -14,7 +14,7 @@ export default async function TrialsPage() {
     .select(
       "id, name, city, is_active, is_trial, trial_ends_at, trial_duration_days, flat_limit, pulse_monthly_charge, created_at, bms_trial_credentials(login_email, login_password)",
     )
-    .not("trial_created_by", "is", null)
+    .eq("is_trial", true)
     .order("created_at", { ascending: false })
     .limit(200);
 

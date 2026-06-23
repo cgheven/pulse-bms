@@ -234,6 +234,7 @@ async function TeamsTable() {
                         id: m.id,
                         email: m.email,
                         full_name: m.full_name,
+                        phone: m.phone,
                         is_active: !!m.is_active,
                       }}
                     />

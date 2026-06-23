@@ -19,6 +19,7 @@ import { LeadRowInterest } from "@/components/leads/lead-row-interest";
 import { SendDemoButton } from "@/components/leads/send-demo-button";
 import { SetTargetsButton } from "@/components/leads/set-targets-dialog";
 import { getSalesTargets } from "@/app/actions/sales-targets";
+import { SendFollowupDigestButton } from "@/components/leads/send-followup-digest-button";
 import type {
   LeadStatus,
   LeadRole,
@@ -136,7 +137,10 @@ export default async function LeadsPage({
             closed deal.
           </p>
         </div>
-        <AddLeadButton ownerName={ownerName} />
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {profile.role === "super_admin" && <SendFollowupDigestButton />}
+          <AddLeadButton ownerName={ownerName} />
+        </div>
       </div>
 
       <Suspense fallback={<KpiRowSkeleton count={4} />}>

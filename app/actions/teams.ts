@@ -13,7 +13,6 @@
 // any non-super_admin via requireRole().
 
 import { requireRole, requireNotDemo } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
 import { normalizePkPhone } from "@/lib/pk-phone";
@@ -45,6 +44,11 @@ const TEAMS_PATH = "/super-admin/teams";
 function isValidEmail(s: string): boolean {
   // Cheap RFC-lite check; the real validator is Supabase Auth itself.
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUUID(s: string): boolean {
+  return UUID_RE.test(s);
 }
 
 /**
@@ -101,26 +105,33 @@ export async function createTeamMember(input: TeamMemberInput) {
   // would cause a downstream crash; surface a clear error now.
   const { data: existingByEmail, error: emailLookupErr } = await admin
     .from("bms_profiles")
-    .select("id, email")
+    .select("id, role")
     .eq("email", email)
     .maybeSingle();
-  if (emailLookupErr) throw new Error(emailLookupErr.message);
+  if (emailLookupErr) throw new Error("Could not check for existing users.");
   if (existingByEmail) {
+    if (!rawEmail) {
+      throw new Error("A team member with this mobile number already exists.");
+    }
+    const isTeamClash = existingByEmail.role === "sales";
     throw new Error(
-      rawEmail
-        ? "A user with this email already exists. Pick a different address."
-        : "A team member with this mobile number already exists.",
+      isTeamClash
+        ? "Another team member is already using this email address."
+        : "This email belongs to an existing account (e.g. a building admin or resident). Every account needs a unique email — use a different address for this team member.",
     );
   }
   const { data: existingByPhone, error: phoneLookupErr } = await admin
     .from("bms_profiles")
-    .select("id, phone")
+    .select("id, role")
     .eq("phone", canonicalPhone)
     .maybeSingle();
-  if (phoneLookupErr) throw new Error(phoneLookupErr.message);
+  if (phoneLookupErr) throw new Error("Could not check for existing users.");
   if (existingByPhone) {
+    const isTeamClash = existingByPhone.role === "sales";
     throw new Error(
-      "A user with this mobile number already exists.",
+      isTeamClash
+        ? "Another team member is already using this mobile number."
+        : "This mobile number belongs to an existing account (e.g. a building admin or resident). Use a different number.",
     );
   }
 
@@ -213,6 +224,138 @@ export async function createTeamMember(input: TeamMemberInput) {
     // these credentials" hint when there's no real email.
     synthesized_email: !rawEmail,
   };
+}
+
+export type UpdateTeamMemberInput = {
+  profileId: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+};
+
+export async function updateTeamMember(input: UpdateTeamMemberInput) {
+  await requireNotDemo();
+  const { user, profile } = await requireRole("super_admin");
+
+  // Validate profileId format before it ever reaches the DB. An invalid
+  // UUID would cause PostgreSQL to throw with the raw input in the message.
+  if (!input.profileId || !isUUID(input.profileId)) {
+    throw new Error("Invalid team member id.");
+  }
+
+  const admin = createAdminClient();
+  const { data: target, error: tErr } = await admin
+    .from("bms_profiles")
+    .select("id, role, email, full_name, phone")
+    .eq("id", input.profileId)
+    .maybeSingle();
+  if (tErr) throw new Error("Could not look up team member.");
+  if (!target) throw new Error("Team member not found.");
+  // Role guard — prevents this action from touching admins/residents.
+  if (target.role !== "sales") {
+    throw new Error("This action is for sales-team members only.");
+  }
+
+  const full_name = input.full_name?.trim();
+  const rawEmail = input.email?.trim().toLowerCase();
+  const rawPhone = input.phone?.trim();
+
+  // Input length guards — prevent oversized payloads reaching the DB.
+  if (full_name && full_name.length > 100) {
+    throw new Error("Full name must be 100 characters or fewer.");
+  }
+  if (rawEmail && rawEmail.length > 254) {
+    throw new Error("Email address is too long.");
+  }
+
+  if (rawEmail !== undefined && rawEmail !== "" && !isValidEmail(rawEmail)) {
+    throw new Error("That doesn't look like a valid email address.");
+  }
+
+  const canonicalPhone = rawPhone ? normalizePkPhone(rawPhone) : undefined;
+  if (canonicalPhone !== undefined && canonicalPhone.length < 10) {
+    throw new Error("A valid mobile number is required.");
+  }
+
+  // Collision checks — exclude the member being edited.
+  if (rawEmail && rawEmail !== target.email) {
+    const { data: clash } = await admin
+      .from("bms_profiles")
+      .select("id, role")
+      .eq("email", rawEmail)
+      .neq("id", input.profileId)
+      .maybeSingle();
+    if (clash) {
+      throw new Error(
+        clash.role === "sales"
+          ? "Another team member is already using this email address."
+          : "This email belongs to an existing account (e.g. a building admin or resident). Every account needs a unique email — use a different address.",
+      );
+    }
+  }
+  if (canonicalPhone && canonicalPhone !== target.phone) {
+    const { data: clash } = await admin
+      .from("bms_profiles")
+      .select("id, role")
+      .eq("phone", canonicalPhone)
+      .neq("id", input.profileId)
+      .maybeSingle();
+    if (clash) {
+      throw new Error(
+        clash.role === "sales"
+          ? "Another team member is already using this mobile number."
+          : "This mobile number belongs to an existing account (e.g. a building admin or resident). Use a different number.",
+      );
+    }
+  }
+
+  // Build the diff — only fields that actually changed.
+  const profileUpdates: Record<string, unknown> = {};
+  if (full_name && full_name !== target.full_name) profileUpdates.full_name = full_name;
+  if (rawEmail && rawEmail !== target.email) profileUpdates.email = rawEmail;
+  if (canonicalPhone && canonicalPhone !== target.phone) profileUpdates.phone = canonicalPhone;
+
+  // Early return if nothing changed — avoid a spurious DB write and audit entry.
+  if (Object.keys(profileUpdates).length === 0) return;
+
+  // Update auth.users for fields it owns (email + display name).
+  const authUpdates: Record<string, unknown> = {};
+  if (profileUpdates.email) authUpdates.email = profileUpdates.email;
+  if (profileUpdates.full_name) authUpdates.user_metadata = { full_name: profileUpdates.full_name };
+
+  if (Object.keys(authUpdates).length > 0) {
+    const { error: authErr } = await admin.auth.admin.updateUserById(
+      input.profileId,
+      authUpdates,
+    );
+    if (authErr) throw new Error("Could not update login credentials.");
+  }
+
+  const { error: profErr } = await admin
+    .from("bms_profiles")
+    .update(profileUpdates)
+    .eq("id", input.profileId);
+  if (profErr) throw new Error("Could not update team member profile.");
+
+  // Record before/after so the audit log is useful for forensics.
+  await writeAuditLog({
+    actor_id: user.id,
+    actor_email: user.email,
+    actor_role: profile.role,
+    action: "team.update",
+    entity: "profile",
+    entity_id: input.profileId,
+    meta: {
+      before: {
+        full_name: target.full_name,
+        email: target.email,
+        phone: target.phone,
+      },
+      after: profileUpdates,
+    },
+  });
+
+  revalidatePath(TEAMS_PATH);
 }
 
 export async function deactivateTeamMember(profileId: string) {
