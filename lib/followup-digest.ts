@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendFollowupDigest, type DigestLead } from "@/lib/email";
 
-const DIGEST_CC = process.env.DIGEST_CC_EMAIL ?? "musabkhan.queries@gmail.com";
+const DIGEST_CC = process.env.DIGEST_CC_EMAIL;
 
 export type DigestResult =
   | { sent: true; todayCount: number; overdueCount: number }
@@ -97,7 +97,8 @@ export async function buildAndSendDigest(): Promise<DigestResult> {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
-  const { error } = await sendFollowupDigest(toEmails, [DIGEST_CC], todayLeads, overdueLeads, dateStr);
+  const ccList = DIGEST_CC ? [DIGEST_CC] : [];
+  const { error } = await sendFollowupDigest(toEmails, ccList, todayLeads, overdueLeads, dateStr);
   if (error) return { sent: false, reason: error };
 
   console.info("[digest] sent", { to: toEmails, cc: DIGEST_CC, todayCount: todayLeads.length, overdueCount: overdueLeads.length });

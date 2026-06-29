@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { AdminDashboardShell } from "@/components/admin/admin-dashboard-shell";
 import { requireRole } from "@/lib/auth";
 import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
@@ -90,39 +91,47 @@ export default async function AdminDashboardPage() {
         </p>
       </header>
 
-      <Suspense fallback={<FinancialCardsSkeleton />}>
-        <FinancialCards
-          buildingId={buildingId}
-          monthStart={monthStart}
-          nextMonthStart={nextMonthStart}
-          prevMonthStart={prevMonthStart}
-          sixMonthsAgo={sixMonthsAgo}
-          monthLabel={monthLabel}
-        />
-      </Suspense>
+      <AdminDashboardShell
+        governanceTile={
+          <Suspense fallback={<KpiRowSkeleton count={1} />}>
+            <GovernanceTile buildingId={buildingId} />
+          </Suspense>
+        }
+      >
+        <Suspense fallback={<FinancialCardsSkeleton />}>
+          <FinancialCards
+            buildingId={buildingId}
+            monthStart={monthStart}
+            nextMonthStart={nextMonthStart}
+            prevMonthStart={prevMonthStart}
+            sixMonthsAgo={sixMonthsAgo}
+            monthLabel={monthLabel}
+          />
+        </Suspense>
 
-      <Suspense fallback={<KpiRowSkeleton count={3} />}>
-        <StatusTiles
-          buildingId={buildingId}
-          monthStart={monthStart}
-          prevMonthStart={prevMonthStart}
-          todayIso={todayIso}
-        />
-      </Suspense>
+        <Suspense fallback={<KpiRowSkeleton count={2} />}>
+          <StatusTiles
+            buildingId={buildingId}
+            monthStart={monthStart}
+            prevMonthStart={prevMonthStart}
+            todayIso={todayIso}
+          />
+        </Suspense>
 
-      <Suspense fallback={<ActionCenterSkeleton />}>
-        <ActionCenter
-          buildingId={buildingId}
-          monthStart={monthStart}
-          todayIso={todayIso}
-        />
-      </Suspense>
+        <Suspense fallback={<ActionCenterSkeleton />}>
+          <ActionCenter
+            buildingId={buildingId}
+            monthStart={monthStart}
+            todayIso={todayIso}
+          />
+        </Suspense>
 
-      <Suspense fallback={<TableSkeleton rows={6} />}>
-        <ActivityFeed buildingId={buildingId} sinceIso={sevenDaysAgo} />
-      </Suspense>
+        <Suspense fallback={<TableSkeleton rows={6} />}>
+          <ActivityFeed buildingId={buildingId} sinceIso={sevenDaysAgo} />
+        </Suspense>
 
-      <ActionFooter />
+        <ActionFooter />
+      </AdminDashboardShell>
     </div>
   );
 }
@@ -528,10 +537,16 @@ async function FinancialCards({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {/* Card 1 · Cash available (hero) */}
-      <div className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/8 via-card to-card p-4 sm:p-5 glow-amber">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          <Wallet className="w-3.5 h-3.5 text-primary" />
-          Cash available
+      <Link
+        href="/admin/reports"
+        className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/8 via-card to-card p-4 sm:p-5 glow-amber block transition-colors hover:border-primary/50 hover:bg-primary/5 group"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <Wallet className="w-3.5 h-3.5 text-primary" />
+            Cash available
+          </div>
+          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
         </div>
         <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-foreground">
           {formatCurrency(fundBalance)}
@@ -539,13 +554,19 @@ async function FinancialCards({
         <div className="mt-3">
           <p className="text-[11px] text-muted-foreground">Total cash held</p>
         </div>
-      </div>
+      </Link>
 
       {/* Card 2 · Maintenance collection */}
-      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          <CreditCard className="w-3.5 h-3.5 text-[hsl(151_70%_55%)]" />
-          Maintenance collection
+      <Link
+        href="/admin/maintenance?tab=dues"
+        className="rounded-xl border border-border bg-card p-4 sm:p-5 block transition-colors hover:border-[hsl(151_70%_55%/0.4)] hover:bg-secondary/30 group"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <CreditCard className="w-3.5 h-3.5 text-[hsl(151_70%_55%)]" />
+            Maintenance collection
+          </div>
+          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[hsl(151_70%_55%)]" />
         </div>
         <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-[hsl(151_70%_55%)]">
           {formatCurrency(collected)}
@@ -573,7 +594,7 @@ async function FinancialCards({
             </span>
           )}
         </div>
-      </div>
+      </Link>
 
       {/* Card 3 · Expenses — clickable, navigates to full expenses ledger */}
       <Link
@@ -618,17 +639,24 @@ async function FinancialCards({
       </Link>
 
       {/* Card 4 · Remaining (this month) */}
-      <div
+      <Link
+        href="/admin/reports"
         className={cn(
-          "rounded-xl border bg-card p-4 sm:p-5",
+          "rounded-xl border bg-card p-4 sm:p-5 block transition-colors group",
           net >= 0
-            ? "border-[hsl(151_70%_55%/0.25)]"
-            : "border-destructive/30",
+            ? "border-[hsl(151_70%_55%/0.25)] hover:border-[hsl(151_70%_55%/0.5)] hover:bg-secondary/30"
+            : "border-destructive/30 hover:border-destructive/50 hover:bg-secondary/30",
         )}
       >
-        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          <Scale className="w-3.5 h-3.5 text-foreground" />
-          Remaining · {monthLabel}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <Scale className="w-3.5 h-3.5 text-foreground" />
+            Remaining · {monthLabel}
+          </div>
+          <ArrowRight className={cn(
+            "w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5",
+            net >= 0 ? "group-hover:text-[hsl(151_70%_55%)]" : "group-hover:text-destructive",
+          )} />
         </div>
         <div
           className={cn(
@@ -646,7 +674,7 @@ async function FinancialCards({
               : "Deficit · spending more than collecting"}
           </p>
         </div>
-      </div>
+      </Link>
     </div>
   );
 }
@@ -665,7 +693,7 @@ function FinancialCardsSkeleton() {
   );
 }
 
-/* ═══════════════  3. Status tiles (Defaulters / Complaints / Governance)  ═══════════════ */
+/* ═══════════════  3. Status tiles (Defaulters / Complaints)  ═══════════════ */
 
 async function StatusTiles({
   buildingId,
@@ -685,7 +713,6 @@ async function StatusTiles({
     { data: flats },
     { data: outstandingInvoices },
     { data: complaintsAll },
-    { data: proposalsPending },
   ] = await Promise.all([
     supabase
       .from("bms_buildings")
@@ -706,11 +733,6 @@ async function StatusTiles({
       .select("id, status, priority, created_at, resolved_at")
       .eq("building_id", buildingId)
       .gte("created_at", new Date(Date.now() - 60 * 86400_000).toISOString()),
-    supabase
-      .from("bms_proposals")
-      .select("id")
-      .eq("building_id", buildingId)
-      .eq("status", "pending"),
   ]);
 
   // Long-term defaulters — flats with cutoff+ months unpaid
@@ -774,7 +796,7 @@ async function StatusTiles({
   void todayIso;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <StatusTile
         label={`Defaulters · ${cutoff}+ months`}
         primary={
@@ -811,22 +833,30 @@ async function StatusTiles({
         }
         href="/admin/facility"
       />
-      <StatusTile
-        label="Governance"
-        primary={
-          (proposalsPending ?? []).length === 0
-            ? "Quiet"
-            : `${(proposalsPending ?? []).length} pending vote${(proposalsPending ?? []).length === 1 ? "" : "s"}`
-        }
-        secondary={
-          (proposalsPending ?? []).length === 0
-            ? "No open proposals"
-            : "Awaiting union votes"
-        }
-        tone={(proposalsPending ?? []).length === 0 ? "ok" : "warning"}
-        href="/admin/union"
-      />
     </div>
+  );
+}
+
+/* ═══════════════  3b. Governance tile (opt-in via settings)  ═══════════════ */
+
+async function GovernanceTile({ buildingId }: { buildingId: string }) {
+  const supabase = await createClient();
+  const { data: proposalsPending } = await supabase
+    .from("bms_proposals")
+    .select("id")
+    .eq("building_id", buildingId)
+    .eq("status", "pending");
+
+  const count = (proposalsPending ?? []).length;
+
+  return (
+    <StatusTile
+      label="Governance"
+      primary={count === 0 ? "Quiet" : `${count} pending vote${count === 1 ? "" : "s"}`}
+      secondary={count === 0 ? "No open proposals" : "Awaiting union votes"}
+      tone={count === 0 ? "ok" : "warning"}
+      href="/admin/union"
+    />
   );
 }
 

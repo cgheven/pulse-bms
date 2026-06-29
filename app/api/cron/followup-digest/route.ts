@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { buildAndSendDigest } from "@/lib/followup-digest";
 
@@ -16,7 +17,12 @@ export async function GET(req: NextRequest) {
   }
 
   const auth = req.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${secret}`) {
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const provided = Buffer.from(auth);
+  const valid =
+    expected.length === provided.length &&
+    timingSafeEqual(expected, provided);
+  if (!valid) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
