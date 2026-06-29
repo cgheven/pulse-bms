@@ -453,7 +453,7 @@ async function FinancialCards({
     supabase.from("bms_salary_payments").select("amount").eq("building_id", buildingId),
     supabase
       .from("bms_invoices")
-      .select("id, amount, status")
+      .select("id, amount, status, flat_id, bms_flats(flat_number)")
       .eq("building_id", buildingId)
       .eq("billing_month", monthStart),
     supabase
@@ -489,17 +489,28 @@ async function FinancialCards({
     sum(allSalaries ?? null);
 
   // Maintenance collection (money tied to current-month invoices)
+  type InvRow = { id: string; amount: number | string | null; status: string | null; flat_id: string | null; bms_flats: { flat_number: string } | { flat_number: string }[] | null };
   let billedTotal = 0;
   let paidCount = 0;
   let totalInvCount = 0;
   const monthInvoiceIds: string[] = [];
-  for (const i of monthInvoices ?? []) {
+  const paidFlatNumbers: string[] = [];
+  for (const i of (monthInvoices ?? []) as InvRow[]) {
     if (i.status === "waived") continue;
     billedTotal += Number(i.amount ?? 0);
     totalInvCount += 1;
     monthInvoiceIds.push(i.id);
-    if (i.status === "paid") paidCount += 1;
+    if (i.status === "paid") {
+      paidCount += 1;
+      const flatNum = i.bms_flats
+        ? Array.isArray(i.bms_flats)
+          ? i.bms_flats[0]?.flat_number
+          : i.bms_flats.flat_number
+        : null;
+      if (flatNum) paidFlatNumbers.push(flatNum);
+    }
   }
+  paidFlatNumbers.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   let collected = 0;
   if (monthInvoiceIds.length > 0) {
     const { data: invPay } = await supabase
@@ -533,6 +544,9 @@ async function FinancialCards({
   const prevRate = prevBilled > 0 ? (prevCollected / prevBilled) * 100 : 0;
   const collectionDelta =
     prevBilled > 0 ? Math.round(collectionRate - prevRate) : null;
+
+  const paidSample = paidFlatNumbers.slice(0, 5).join(" · ");
+  const paidOverflow = paidFlatNumbers.length > 5 ? ` +${paidFlatNumbers.length - 5} more` : "";
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -596,7 +610,31 @@ async function FinancialCards({
         </div>
       </Link>
 
-      {/* Card 3 · Expenses — clickable, navigates to full expenses ledger */}
+      {/* Card 3 · Paid this month */}
+      <Link
+        href="/admin/maintenance?tab=payments"
+        className="rounded-xl border border-border bg-card p-4 sm:p-5 block transition-colors hover:border-[hsl(151_70%_55%/0.4)] hover:bg-secondary/30 group"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(151_70%_55%)]" />
+            Paid this month
+          </div>
+          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[hsl(151_70%_55%)]" />
+        </div>
+        <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-[hsl(151_70%_55%)]">
+          {paidCount === 0 ? "None yet" : `${paidCount} flat${paidCount === 1 ? "" : "s"}`}
+        </div>
+        <div className="mt-3">
+          <p className="text-[11px] text-muted-foreground line-clamp-1">
+            {paidFlatNumbers.length === 0
+              ? "No payments recorded this month"
+              : `${paidSample}${paidOverflow}`}
+          </p>
+        </div>
+      </Link>
+
+      {/* Card 4 · Expenses — clickable, navigates to full expenses ledger */}
       <Link
         href="/admin/expenses"
         className="rounded-xl border border-border bg-card p-4 sm:p-5 block transition-colors hover:border-destructive/40 hover:bg-secondary/30 group"
@@ -638,11 +676,11 @@ async function FinancialCards({
         </div>
       </Link>
 
-      {/* Card 4 · Remaining (this month) */}
+      {/* Card 5 · Remaining (this month) — spans full width */}
       <Link
         href="/admin/reports"
         className={cn(
-          "rounded-xl border bg-card p-4 sm:p-5 block transition-colors group",
+          "rounded-xl border bg-card p-4 sm:p-5 block transition-colors group sm:col-span-2",
           net >= 0
             ? "border-[hsl(151_70%_55%/0.25)] hover:border-[hsl(151_70%_55%/0.5)] hover:bg-secondary/30"
             : "border-destructive/30 hover:border-destructive/50 hover:bg-secondary/30",
