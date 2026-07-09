@@ -39,6 +39,7 @@ import {
   PhoneCall,
   Landmark,
   IdCard,
+  ArrowUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -93,9 +94,10 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       label: "Building",
       items: [
-        { href: "/admin/flats",     label: "Flats",     icon: Home },
-        { href: "/admin/residents", label: "Residents", icon: Users },
-        { href: "/admin/vehicles",  label: "Vehicles",  icon: Car },
+        { href: "/admin/flats",          label: "Flats",           icon: Home },
+        { href: "/admin/residents",      label: "Residents",       icon: Users },
+        { href: "/admin/vehicles",       label: "Vehicles",        icon: Car },
+        { href: "/admin/import-export",  label: "Import / Export", icon: ArrowUpDown },
       ],
     },
     {
