@@ -55,8 +55,9 @@ export async function updateSession(request: NextRequest) {
   const isRegister = pathname === "/register" || pathname.startsWith("/register/");
   const isResetPassword =
     pathname === "/auth/reset-password" || pathname.startsWith("/auth/reset-password/");
+  const isLanding = pathname === "/";
   const isPublic =
-    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword;
+    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword || isLanding;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
