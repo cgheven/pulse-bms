@@ -221,7 +221,7 @@ export async function recordPayment(input: PaymentInput) {
         p_flat_id: input.flat_id,
       },
     );
-    if (lockErr) throw new Error(lockErr.message);
+    if (lockErr) throw new Error("Could not record payment. Please try again.");
   }
 
   // Map TS "bank_transfer" → DB "bank" (legacy DB enum). The check constraint
@@ -261,7 +261,7 @@ export async function recordPayment(input: PaymentInput) {
     .insert(insertPayload)
     .select()
     .single();
-  if (payErr) throw new Error(payErr.message);
+  if (payErr) throw new Error("Could not record payment. Please try again.");
 
   let overflow = 0;
   let cappedAmount = Number(input.amount);
@@ -386,7 +386,7 @@ export async function recordPayment(input: PaymentInput) {
           .insert(spillRow)
           .select("id")
           .single();
-        if (spillErr) throw new Error(spillErr.message);
+        if (spillErr) throw new Error("Payment carry-forward failed. Please try again.");
         spilloverPaymentIds.push(spill.id);
         remainingOverflow -= apply;
 
@@ -412,7 +412,7 @@ export async function recordPayment(input: PaymentInput) {
         })
         .select("id")
         .single();
-      if (creditErr) throw new Error(creditErr.message);
+      if (creditErr) throw new Error("Could not record surplus credit. Please try again.");
       creditId = credit.id;
     }
   }
@@ -522,7 +522,7 @@ export async function deletePayment(id: string) {
     .delete()
     .eq("id", id)
     .eq("building_id", buildingId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("Could not delete payment. Please try again.");
 
   if (pay.invoice_id) {
     await refreshInvoiceStatus(supabase, pay.invoice_id, buildingId);

@@ -52,18 +52,18 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient();
   const buildingName = (await getCurrentBuildingName()) ?? "Building";
 
-  // Day Book is per-transaction narrative — but opening balance on the
-  // first visible day needs ALL movements BEFORE dateRange.from. So we
-  // fetch up to `to` only (lte) — admin can't see future-dated rows
-  // they haven't entered yet — and let the client roll the running
-  // balance forward day-by-day with the same O(N + D) memoized math
-  // Cash Book uses.
+  // Row queries: in-range only (≥ from, ≤ to). Pre-range opening balance is
+  // computed server-side via SUM aggregates grouped by bank_account_id so the
+  // client can apply its bank filter without iterating unbounded history rows.
   const [
     { data: building },
     { data: bankAccounts },
     { data: payments },
     { data: expenses },
     { data: salaryPayments },
+    { data: prePaySums },
+    { data: preExpSums },
+    { data: preSalSums },
   ] = await Promise.all([
     supabase
       .from("bms_buildings")
@@ -87,6 +87,7 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
          bms_residents(full_name)`,
       )
       .eq("building_id", buildingId)
+      .gte("payment_date", dateRange.from)
       .lte("payment_date", dateRange.to)
       .order("payment_date", { ascending: true }),
     supabase
@@ -95,6 +96,7 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
         "id, expense_date, category, subcategory, description, vendor, amount, bank_account_id",
       )
       .eq("building_id", buildingId)
+      .gte("expense_date", dateRange.from)
       .lte("expense_date", dateRange.to)
       .order("expense_date", { ascending: true }),
     supabase
@@ -105,9 +107,47 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
          bms_staff(full_name)`,
       )
       .eq("building_id", buildingId)
+      .gte("payment_date", dateRange.from)
       .lte("payment_date", dateRange.to)
       .order("payment_date", { ascending: true }),
+    // Pre-range SUM aggregates grouped by bank_account_id so the client can
+    // apply any bank filter without needing the full historical row set.
+    supabase
+      .from("bms_payments")
+      .select("bank_account_id, amount.sum()")
+      .eq("building_id", buildingId)
+      .lt("payment_date", dateRange.from),
+    supabase
+      .from("bms_expenses")
+      .select("bank_account_id, amount.sum()")
+      .eq("building_id", buildingId)
+      .lt("expense_date", dateRange.from),
+    supabase
+      .from("bms_salary_payments")
+      .select("bank_account_id, amount.sum()")
+      .eq("building_id", buildingId)
+      .lt("payment_date", dateRange.from),
   ]);
+
+  // Merge pre-range expense + salary sums by bank_account_id.
+  // PostgREST aggregate returns { bank_account_id, sum } — cast via unknown
+  // because the generated type incorrectly types sum as number rather than
+  // string | null (PostgREST always returns aggregate results as strings).
+  type PreSumRow = { bank_account_id: string | null; sum: string | null };
+  type RawSumRow = { bank_account_id: string | null; sum: string | number | null };
+  const preExpMap = new Map<string | null, number>();
+  for (const r of (preExpSums ?? []) as unknown as RawSumRow[]) {
+    const k = r.bank_account_id ?? null;
+    preExpMap.set(k, (preExpMap.get(k) ?? 0) + Number(r.sum ?? 0));
+  }
+  for (const r of (preSalSums ?? []) as unknown as RawSumRow[]) {
+    const k = r.bank_account_id ?? null;
+    preExpMap.set(k, (preExpMap.get(k) ?? 0) + Number(r.sum ?? 0));
+  }
+  const preRangeIncomeSums: PreSumRow[] = (prePaySums ?? []) as unknown as PreSumRow[];
+  const preRangeExpenseSums: PreSumRow[] = Array.from(preExpMap.entries()).map(
+    ([bank_account_id, total]) => ({ bank_account_id, sum: String(total) }),
+  );
 
   type RawPayment = {
     id: string;
@@ -207,6 +247,8 @@ async function DayBookData({ searchParams }: { searchParams: SearchParams }) {
       payments={paymentRows}
       expenses={expenseRows}
       salaries={salaryRows}
+      preRangeIncomeSums={preRangeIncomeSums}
+      preRangeExpenseSums={preRangeExpenseSums}
     />
   );
 }

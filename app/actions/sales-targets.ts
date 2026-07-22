@@ -27,7 +27,7 @@ export async function getSalesTargets(): Promise<SalesTargets> {
 }
 
 export async function updateSalesTargets(targets: SalesTargets): Promise<void> {
-  const { user } = await requireRole(["super_admin"]);
+  const { profile } = await requireRole(["super_admin"]);
   const supabase = await createClient();
   const { error } = await supabase
     .from("bms_sales_targets")
@@ -35,16 +35,19 @@ export async function updateSalesTargets(targets: SalesTargets): Promise<void> {
       daily_target: targets.daily_target,
       weekly_target: targets.weekly_target,
       monthly_target: targets.monthly_target,
-      updated_by: user.id,
+      updated_by: profile.id,
       updated_at: new Date().toISOString(),
     })
     .eq("id", 1);
   if (error) throw new Error(error.message);
   await writeAuditLog({
-    actor_id: user.id,
+    actor_id: profile.id,
+    actor_email: profile.email,
+    actor_role: profile.role,
     action: "update_sales_targets",
     entity: "sales_targets",
     entity_id: "1",
+    building_id: profile.building_id,
     meta: targets as unknown as Record<string, unknown>,
   });
   revalidatePath("/super-admin/leads");

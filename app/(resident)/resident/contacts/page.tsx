@@ -24,7 +24,7 @@ async function ContactsContent() {
 
   const supabase = await createClient();
   const [contacts, { data: building }] = await Promise.all([
-    getServiceContacts(buildingId),
+    getServiceContacts(),
     supabase
       .from("bms_buildings")
       .select("name")

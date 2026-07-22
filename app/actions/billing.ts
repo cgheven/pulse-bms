@@ -296,6 +296,7 @@ export async function waiveInvoice(id: string, reason?: string) {
 
   revalidatePath("/admin/maintenance");
   revalidatePath("/admin");
+  revalidatePath("/admin/reports");
   return { ok: true };
 }
 
@@ -358,6 +359,7 @@ export async function deleteInvoice(id: string) {
 
   revalidatePath("/admin/maintenance");
   revalidatePath("/admin");
+  revalidatePath("/admin/reports");
   return { ok: true };
 }
 

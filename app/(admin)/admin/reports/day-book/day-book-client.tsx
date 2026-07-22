@@ -141,6 +141,8 @@ function expenseLabel(category: string, subcategory: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+type PreSumRow = { bank_account_id: string | null; sum: string | null };
+
 export function DayBookClient({
   buildingName,
   initialDateRange,
@@ -150,6 +152,8 @@ export function DayBookClient({
   payments,
   expenses,
   salaries,
+  preRangeIncomeSums,
+  preRangeExpenseSums,
 }: {
   buildingName: string;
   initialDateRange: DateRange;
@@ -163,6 +167,11 @@ export function DayBookClient({
   payments: PaymentRow[];
   expenses: ExpenseRow[];
   salaries: SalaryRow[];
+  // Server-side SUM aggregates for the period BEFORE dateRange.from,
+  // grouped by bank_account_id. Used to compute opening balance without
+  // fetching (and iterating) unbounded historical rows client-side.
+  preRangeIncomeSums: PreSumRow[];
+  preRangeExpenseSums: PreSumRow[];
 }) {
   const [dateRange, setDateRange] = useReportDateRange(initialDateRange);
   // bank filter: "all" (combined) | "cash" (cash drawers only) | bank account uuid
@@ -351,8 +360,16 @@ export function DayBookClient({
     ) {
       baseOpening += buildingOpening;
     }
-    for (const [d, v] of realIncomeByDate) if (d < dateRange.from) baseOpening += v;
-    for (const [d, v] of expenseByDate) if (d < dateRange.from) baseOpening -= v;
+    // Use server-side pre-range SUM aggregates (grouped by bank_account_id)
+    // instead of iterating historical rows — avoids PostgREST max_rows risk.
+    for (const row of preRangeIncomeSums) {
+      if (inFilter({ bank_account_id: row.bank_account_id ?? null }))
+        baseOpening += Number(row.sum ?? 0);
+    }
+    for (const row of preRangeExpenseSums) {
+      if (inFilter({ bank_account_id: row.bank_account_id ?? null }))
+        baseOpening -= Number(row.sum ?? 0);
+    }
 
     // Per-day seed contributions WITHIN the range (rare — admin
     // backdating cash on hand mid-range).

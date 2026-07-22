@@ -55,6 +55,8 @@ export async function createNotice(input: NoticeInput) {
   });
 
   revalidatePath("/admin/notices");
+  revalidatePath("/resident/notices");
+  revalidatePath("/union/notices");
   return data;
 }
 
@@ -86,6 +88,8 @@ export async function updateNotice(id: string, input: Partial<NoticeInput>) {
   });
 
   revalidatePath("/admin/notices");
+  revalidatePath("/resident/notices");
+  revalidatePath("/union/notices");
   return data;
 }
 
@@ -113,4 +117,6 @@ export async function deleteNotice(id: string) {
   });
 
   revalidatePath("/admin/notices");
+  revalidatePath("/resident/notices");
+  revalidatePath("/union/notices");
 }

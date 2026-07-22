@@ -193,7 +193,13 @@ function parseXLSXFile(file: File): Promise<Record<SheetKey, Record<string, stri
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: "array", cellDates: false });
+        const wb = XLSX.read(data, { type: "array", cellDates: false, cellFormula: false });
+
+        // Strip leading formula-injection characters so an uploaded cell like
+        // "=CMD()" or "+foo" cannot be executed when the sheet is re-opened.
+        function sanitizeCell(v: string): string {
+          return /^[=+\-@]/.test(v) ? v.replace(/^[=+\-@]+/, "") : v;
+        }
 
         function readSheet(sheetName: string): Record<string, string>[] {
           const ws = wb.Sheets[sheetName];
@@ -216,7 +222,7 @@ function parseXLSXFile(file: File): Promise<Record<SheetKey, Record<string, stri
                   .toLowerCase()
                   .replace(/\s+/g, "_")
                   .replace(/[^a-z0-9_]/g, "");
-                out[key] = String(v ?? "").trim();
+                out[key] = sanitizeCell(String(v ?? "").trim());
               }
               return out;
             })
@@ -241,9 +247,14 @@ function parseXLSXFile(file: File): Promise<Record<SheetKey, Record<string, stri
   });
 }
 
+function sanitizeExportCell(v: unknown): string {
+  const s = String(v ?? "");
+  return /^[=+\-@]/.test(s) ? s.replace(/^[=+\-@]+/, "") : s;
+}
+
 function downloadExport(filename: string, headers: string[], rows: Record<string, unknown>[]) {
   const wb = XLSX.utils.book_new();
-  const data = [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ""))];
+  const data = [headers, ...rows.map((r) => headers.map((h) => sanitizeExportCell(r[h])))];
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws["!cols"] = headers.map(() => ({ wch: 22 }));
   XLSX.utils.book_append_sheet(wb, ws, "Data");

@@ -12,18 +12,20 @@ import { useAdminDashboardSettings } from "@/hooks/use-admin-dashboard-settings"
 type Props = {
   children: React.ReactNode;
   governanceTile: React.ReactNode;
+  header: React.ReactNode;
 };
 
-export function AdminDashboardShell({ children, governanceTile }: Props) {
+export function AdminDashboardShell({ children, governanceTile, header }: Props) {
   const { settings, update, mounted } = useAdminDashboardSettings();
   const showGovernance = mounted ? settings.showGovernance : false;
 
   return (
     <>
-      <div className="flex items-center justify-end mb-[-8px]">
+      <div className="flex items-start justify-between gap-4">
+        <div>{header}</div>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-muted-foreground hover:text-foreground shrink-0 mt-1">
               <Settings2 className="w-3.5 h-3.5" />
               Customise
             </Button>

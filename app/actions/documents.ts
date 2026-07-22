@@ -137,7 +137,7 @@ export async function uploadResidentDocument(formData: FormData) {
   const { error: uploadErr } = await adminClient.storage
     .from(BUCKET)
     .upload(storagePath, file, { contentType: file.type, upsert: false });
-  if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
+  if (uploadErr) throw new Error("Upload failed. Please try again.");
 
   const { error: dbErr } = await supabase
     .from("bms_resident_documents")
@@ -158,7 +158,7 @@ export async function uploadResidentDocument(formData: FormData) {
     const { error: removeErr } = await adminClient.storage.from(BUCKET).remove([storagePath]);
     if (removeErr)
       console.error("[documents] Storage rollback failed after DB error:", removeErr.message);
-    throw new Error(dbErr.message);
+    throw new Error("Could not save document record. Please try again.");
   }
 
   await writeAuditLog({
@@ -200,7 +200,7 @@ export async function deleteResidentDocument(documentId: string) {
     .from("bms_resident_documents")
     .delete()
     .eq("id", documentId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("Could not delete document. Please try again.");
 
   await writeAuditLog({
     actor_id:   user.id,
@@ -242,7 +242,7 @@ export async function createDocumentSignedUrl(documentId: string): Promise<strin
 
 // Not exported — for server component page rendering only,
 // after the caller has already confirmed access via RLS.
-export async function _signedUrlFromPath(
+async function _signedUrlFromPath(
   storagePath: string,
   mimeType: string | null,
 ): Promise<string> {

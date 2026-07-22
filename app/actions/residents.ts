@@ -143,6 +143,7 @@ export async function updateResident(id: string, input: Partial<ResidentInput>) 
       .from("bms_residents")
       .update({ is_primary: false })
       .eq("flat_id", existing.flat_id)
+      .eq("building_id", buildingId)
       .neq("id", id);
   }
 

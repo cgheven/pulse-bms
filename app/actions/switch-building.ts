@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, requireNotDemo } from "@/lib/auth";
 import { ACTIVE_BUILDING_COOKIE } from "@/lib/building-context";
+import { writeAuditLog } from "@/lib/audit";
 
 /**
  * Switches the admin's active building by setting the bms-active-building cookie.
@@ -39,6 +40,17 @@ export async function switchBuilding(buildingId: string) {
     path: "/",
     maxAge: 60 * 60 * 24 * 30, // 30 days
     secure: process.env.NODE_ENV === "production",
+  });
+
+  await writeAuditLog({
+    actor_id: profile.id,
+    actor_email: profile.email,
+    actor_role: profile.role,
+    action: "building_switched",
+    entity: "building",
+    entity_id: buildingId,
+    building_id: buildingId,
+    meta: { switched_to: buildingId },
   });
 
   revalidatePath("/admin", "layout");

@@ -1,6 +1,7 @@
 "use server";
 
 import { requireRole } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
 import { createClient } from "@/lib/supabase/server";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -269,12 +270,24 @@ export async function verifyVisitorPass(
         verified_by: profile.id,
         verified_at: new Date().toISOString(),
       })
-      .eq("id", passId);
+      .eq("id", passId)
+      .eq("building_id", profile.building_id);
 
     if (updateError) {
       console.error("[guard/verifyVisitorPass]", updateError.message);
       return { success: false, error: "Failed to verify pass. Please try again." };
     }
+
+    await writeAuditLog({
+      actor_id: profile.id,
+      actor_email: profile.email,
+      actor_role: profile.role,
+      action: "visitor_pass_verified",
+      entity: "visitor_pass",
+      entity_id: passId,
+      building_id: profile.building_id,
+      meta: { pass_id: passId },
+    });
 
     return { success: true, error: null };
   } catch (err) {

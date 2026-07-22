@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { Plus, Star, KeyRound, UserX } from "lucide-react";
+import { Plus, Star, KeyRound, UserX, Pencil, Trash2 } from "lucide-react";
 import { cn, formatDate, formatPhone, formatCNIC } from "@/lib/utils";
 import {
   ResidentFormDialog,
   type FlatOption,
 } from "./resident-form-dialog";
 import { ResidentLoginDialog } from "./resident-login-dialog";
-import { revokeResidentLogin } from "@/app/actions/residents";
+import { revokeResidentLogin, deleteResident } from "@/app/actions/residents";
 
 export type ResidentRow = {
   id: string;
@@ -29,6 +29,8 @@ export type ResidentRow = {
   is_primary: boolean;
   is_active: boolean;
   move_in_date: string | null;
+  move_out_date: string | null;
+  entry_fee_paid: number;
   profile_id: string | null;
 };
 
@@ -54,6 +56,13 @@ export function ResidentsTable({
     mode: "create" | "reset";
   } | null>(null);
 
+  // Edit dialog
+  const [editTarget, setEditTarget] = useState<ResidentRow | null>(null);
+
+  // Delete confirm
+  const [deleteTarget, setDeleteTarget] = useState<ResidentRow | null>(null);
+  const [deleting, startDelete] = useTransition();
+
   // Revoke confirm
   const [revokeTarget, setRevokeTarget] = useState<ResidentRow | null>(null);
   const [revoking, startRevoke] = useTransition();
@@ -69,6 +78,24 @@ export function ResidentsTable({
         (r.cnic ?? "").toLowerCase().includes(s),
     );
   }, [residents, q]);
+
+  function handleDelete() {
+    if (!deleteTarget) return;
+    startDelete(async () => {
+      try {
+        await deleteResident(deleteTarget.id);
+        toast({ title: "Resident deleted", description: `${deleteTarget.full_name} has been removed.` });
+        setDeleteTarget(null);
+        router.refresh();
+      } catch (err) {
+        toast({
+          title: "Could not delete resident",
+          description: friendlyErrorMessage(err),
+          variant: "destructive",
+        });
+      }
+    });
+  }
 
   function handleRevoke() {
     if (!revokeTarget) return;
@@ -126,7 +153,7 @@ export function ResidentsTable({
                 <th className="px-4 py-3 font-semibold">CNIC</th>
                 <th className="px-4 py-3 font-semibold">Move-in</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold text-right">Login</th>
+                <th className="px-4 py-3 font-semibold text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -188,7 +215,7 @@ export function ResidentsTable({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {/* Adaptive primary action — same slot, label flips */}
+                        {/* Adaptive login action */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -206,7 +233,7 @@ export function ResidentsTable({
                             {hasLogin ? "Reset PW" : "Add Login"}
                           </span>
                         </Button>
-                        {/* Revoke — invisible (not hidden) so column width stays consistent */}
+                        {/* Revoke — invisible when no login so column width stays consistent */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -220,6 +247,30 @@ export function ResidentsTable({
                           <UserX className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Revoke</span>
                         </Button>
+                        {/* Divider */}
+                        <div className="w-px h-4 bg-border mx-0.5" />
+                        {/* Edit */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                          onClick={() => setEditTarget(r)}
+                          title="Edit resident"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Edit</span>
+                        </Button>
+                        {/* Delete */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTarget(r)}
+                          title="Delete resident"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Delete</span>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -229,6 +280,30 @@ export function ResidentsTable({
           </table>
         </div>
       </div>
+
+      {/* Edit dialog */}
+      {editTarget && (
+        <ResidentFormDialog
+          open={Boolean(editTarget)}
+          onOpenChange={(open) => { if (!open) setEditTarget(null); }}
+          flats={flats}
+          buildingDefaults={buildingDefaults}
+          initial={{
+            id: editTarget.id,
+            flat_id: editTarget.flat_id,
+            full_name: editTarget.full_name,
+            phone: editTarget.phone ?? "",
+            email: editTarget.email ?? "",
+            cnic: editTarget.cnic ?? "",
+            relationship: editTarget.relationship === "tenant" ? "tenant" : "owner",
+            is_primary: editTarget.is_primary,
+            is_active: editTarget.is_active,
+            move_in_date: editTarget.move_in_date ?? "",
+            move_out_date: editTarget.move_out_date ?? "",
+            entry_fee_paid: editTarget.entry_fee_paid,
+          }}
+        />
+      )}
 
       <ResidentLoginDialog
         open={Boolean(loginTarget)}
@@ -246,6 +321,15 @@ export function ResidentsTable({
             : null
         }
         buildingName={buildingName}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.full_name}?`}
+        description="This permanently removes the resident and all their data. This cannot be undone."
+        confirmLabel={deleting ? "Deleting…" : "Delete resident"}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
       />
 
       <ConfirmDialog

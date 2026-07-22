@@ -43,6 +43,7 @@ export async function createMeeting(input: {
   });
 
   revalidatePath("/union/meetings");
+  revalidatePath("/admin/union");
   return data;
 }
 
@@ -91,6 +92,7 @@ export async function updateMeeting(
   });
 
   revalidatePath("/union/meetings");
+  revalidatePath("/admin/union");
   return data;
 }
 
@@ -117,4 +119,5 @@ export async function deleteMeeting(id: string) {
     entity_id: id,
   });
   revalidatePath("/union/meetings");
+  revalidatePath("/admin/union");
 }

@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { TrialsClient } from "./trials-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function TrialsPage() {
   const { user, profile } = await requireRole(["super_admin", "sales"]);
 

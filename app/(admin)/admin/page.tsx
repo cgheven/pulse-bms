@@ -84,14 +84,15 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="space-y-5 animate-fade-up max-w-5xl">
-      <header>
-        <h1>Admin Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Sunrise · {monthLabel} · Today is {todayLabel}
-        </p>
-      </header>
-
       <AdminDashboardShell
+        header={
+          <header>
+            <h1>Admin Dashboard</h1>
+            <p className="text-muted-foreground mt-1">
+              Sunrise · {monthLabel} · Today is {todayLabel}
+            </p>
+          </header>
+        }
         governanceTile={
           <Suspense fallback={<KpiRowSkeleton count={1} />}>
             <GovernanceTile buildingId={buildingId} />

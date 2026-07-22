@@ -64,43 +64,48 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
       .from("bms_payments")
       .select("amount, payment_date")
       .eq("building_id", buildingId)
-      .gte("payment_date", start12Iso),
+      .gte("payment_date", start12Iso)
+      .limit(5000),
     supabase
       .from("bms_expenses")
       .select("amount, expense_date, category")
       .eq("building_id", buildingId)
-      .gte("expense_date", start12Iso),
+      .gte("expense_date", start12Iso)
+      .limit(5000),
     supabase
       .from("bms_salary_payments")
       .select("amount, payment_date")
       .eq("building_id", buildingId)
-      .gte("payment_date", start12Iso),
+      .gte("payment_date", start12Iso)
+      .limit(5000),
     supabase
       .from("bms_payments")
-      .select("amount")
+      .select("amount.sum()")
       .eq("building_id", buildingId)
       .gte("payment_date", ytdStart),
     supabase
       .from("bms_expenses")
-      .select("amount")
+      .select("amount.sum()")
       .eq("building_id", buildingId)
       .gte("expense_date", ytdStart),
     supabase
       .from("bms_salary_payments")
-      .select("amount")
+      .select("amount.sum()")
       .eq("building_id", buildingId)
       .gte("payment_date", ytdStart),
+    // Server-side SUM aggregates — avoids fetching every row across all time
+    // and eliminates the PostgREST max_rows truncation risk on the fund balance.
     supabase
       .from("bms_payments")
-      .select("amount")
+      .select("amount.sum()")
       .eq("building_id", buildingId),
     supabase
       .from("bms_expenses")
-      .select("amount")
+      .select("amount.sum()")
       .eq("building_id", buildingId),
     supabase
       .from("bms_salary_payments")
-      .select("amount")
+      .select("amount.sum()")
       .eq("building_id", buildingId),
   ]);
   const initialFund = Number(building?.fund_balance ?? 0);
@@ -108,14 +113,16 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
   const sum = (rows: { amount: number | string | null }[] | null) =>
     (rows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
 
-  const income_ytd = sum(paymentsYtd ?? null);
-  const expense_ytd = sum(expensesYtd ?? null) + sum(salariesYtd ?? null);
+  const income_ytd = Number((paymentsYtd as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
+  const expense_ytd =
+    Number((expensesYtd as { sum: string | null }[] | null)?.[0]?.sum ?? 0) +
+    Number((salariesYtd as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
   const net_ytd = income_ytd - expense_ytd;
   const fund_balance =
     initialFund +
-    sum(paymentsAll ?? null) -
-    sum(expensesAll ?? null) -
-    sum(salariesAll ?? null);
+    Number((paymentsAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0) -
+    Number((expensesAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0) -
+    Number((salariesAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
 
   // Build 12-month buckets
   const buckets: Map<string, FinanceMonthly> = new Map();

@@ -140,14 +140,14 @@ export async function getMonthlyReportData(input: {
     ] = await Promise.all([
       supabase.from("bms_buildings").select("fund_balance").eq("id", buildingId).single(),
       // All-time totals for fund balance
-      supabase.from("bms_payments").select("amount").eq("building_id", buildingId),
-      supabase.from("bms_expenses").select("amount").eq("building_id", buildingId),
-      supabase.from("bms_salary_payments").select("amount").eq("building_id", buildingId),
+      supabase.from("bms_payments").select("amount.sum()").eq("building_id", buildingId),
+      supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId),
+      supabase.from("bms_salary_payments").select("amount.sum()").eq("building_id", buildingId),
       // Period totals for KPI summary
-      supabase.from("bms_payments").select("amount").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to),
-      supabase.from("bms_expenses").select("amount").eq("building_id", buildingId).eq("is_bill", false).gte("expense_date", from).lte("expense_date", to),
-      supabase.from("bms_expenses").select("amount").eq("building_id", buildingId).eq("is_bill", true).gte("expense_date", from).lte("expense_date", to),
-      supabase.from("bms_salary_payments").select("amount").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to),
+      supabase.from("bms_payments").select("amount.sum()").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to),
+      supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId).eq("is_bill", false).gte("expense_date", from).lte("expense_date", to),
+      supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId).eq("is_bill", true).gte("expense_date", from).lte("expense_date", to),
+      supabase.from("bms_salary_payments").select("amount.sum()").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to),
       // Section rows — only fetched when selected
       sections.includes("collections")
         ? supabase.from("bms_payments").select(`id, payment_date, amount, payment_mode, category, receipt_no, notes, bms_flats!inner(flat_number), bms_residents(full_name)`).eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false })
@@ -169,19 +169,16 @@ export async function getMonthlyReportData(input: {
         : none,
     ]);
 
-    const sumAmt = (rows: { amount?: number | string | null }[] | null) =>
-      (rows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
-
     const fundBalance =
       Number(building?.fund_balance ?? 0) +
-      sumAmt(payAll) -
-      sumAmt(expAll) -
-      sumAmt(salAll);
+      Number((payAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0) -
+      Number((expAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0) -
+      Number((salAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
 
-    const collected = sumAmt(payPeriod);
-    const expenses  = sumAmt(expPeriod);
-    const bills     = sumAmt(billPeriod);
-    const salaries  = sumAmt(salPeriod);
+    const collected = Number((payPeriod  as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
+    const expenses  = Number((expPeriod  as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
+    const bills     = Number((billPeriod as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
+    const salaries  = Number((salPeriod  as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
     const net       = collected - expenses - bills - salaries;
 
     // Build collections rows

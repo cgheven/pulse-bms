@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBuilding } from "@/lib/building-context";
 import { writeAuditLog } from "@/lib/audit";
@@ -51,6 +51,7 @@ function revalidate() {
 
 export async function upsertServiceContact(input: ContactInput): Promise<ServiceContact> {
   const { profile, user } = await requireRole(["admin", "super_admin"]);
+  await requireNotDemo();
   const buildingId = await getActiveBuilding();
   // super_admin with no active building selected has no scope to create contacts
   if (!buildingId) throw new Error("No active building selected.");
@@ -80,7 +81,7 @@ export async function upsertServiceContact(input: ContactInput): Promise<Service
       .eq("building_id", buildingId)
       .select("*")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) throw new Error("Could not update contact. Please try again.");
     data = row as ServiceContact;
   } else {
     const { data: row, error } = await supabase
@@ -88,7 +89,7 @@ export async function upsertServiceContact(input: ContactInput): Promise<Service
       .insert(payload)
       .select("*")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) throw new Error("Could not save contact. Please try again.");
     data = row as ServiceContact;
   }
 
@@ -109,6 +110,7 @@ export async function upsertServiceContact(input: ContactInput): Promise<Service
 
 export async function deleteServiceContact(id: string): Promise<void> {
   const { profile, user } = await requireRole(["admin", "super_admin"]);
+  await requireNotDemo();
   const buildingId = await getActiveBuilding();
   if (!buildingId) throw new Error("No active building selected.");
   if (!UUID_RE.test(id)) throw new Error("Invalid contact ID");
@@ -120,7 +122,7 @@ export async function deleteServiceContact(id: string): Promise<void> {
     .delete()
     .eq("id", id)
     .eq("building_id", buildingId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("Could not delete contact. Please try again.");
 
   await writeAuditLog({
     actor_id: user.id,
@@ -135,9 +137,11 @@ export async function deleteServiceContact(id: string): Promise<void> {
   revalidate();
 }
 
-export async function getServiceContacts(buildingId: string): Promise<ServiceContact[]> {
+export async function getServiceContacts(): Promise<ServiceContact[]> {
   // Require authentication — this file is "use server" so callable from client
   await requireRole(["admin", "super_admin", "union", "resident"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) throw new Error("No active building.");
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("bms_service_contacts")
