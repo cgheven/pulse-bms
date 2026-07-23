@@ -69,6 +69,15 @@ export async function importFlats(
       continue;
     }
 
+    // Derive ownership_type from import data; default to "owner" (not "vacant")
+    // so the flat is billable. Admin can mark genuinely empty units as vacant
+    // individually after import.
+    const rawOwnership = row.ownership_type?.toLowerCase().trim();
+    const ownership_type =
+      rawOwnership === "tenant" ? "tenant"
+      : rawOwnership === "vacant" ? "vacant"
+      : "owner";
+
     const { error } = await supabase.from("bms_flats").insert({
       building_id:    buildingId,
       flat_number:    num,
@@ -76,7 +85,7 @@ export async function importFlats(
       block:          row.block?.trim() || null,
       size_sqft:      row.size_sqft ? parseFloat(row.size_sqft) : null,
       monthly_fee:    parseMoney(row.monthly_fee ?? ""),
-      ownership_type: "vacant",
+      ownership_type,
       notes:          row.notes?.trim() || null,
     });
 
@@ -186,6 +195,16 @@ export async function importResidents(
       result.errors.push({ row: i + 2, label, message: error.message });
     } else {
       result.success++;
+      // Promote flat from "vacant" to the correct occupancy type so it
+      // becomes billable. Only upgrade — never downgrade an already-set type
+      // (e.g. a second resident on the same flat won't clobber the owner flag).
+      const flatOwnershipType = relationship === "tenant" ? "tenant" : "owner";
+      await supabase
+        .from("bms_flats")
+        .update({ ownership_type: flatOwnershipType })
+        .eq("id", flatId)
+        .eq("building_id", buildingId)
+        .eq("ownership_type", "vacant");
     }
   }
 

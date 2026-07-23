@@ -29,9 +29,13 @@ export function GenerateInvoicesButton({ defaultMonth }: { defaultMonth: string 
     start(async () => {
       try {
         const res = await generateMonthlyInvoices({ month });
+        const parts: string[] = [`Created ${res.inserted}`];
+        if (res.alreadyBilled > 0) parts.push(`${res.alreadyBilled} already billed`);
+        if (res.vacantCount > 0) parts.push(`${res.vacantCount} vacant`);
+        if (res.creditsApplied > 0) parts.push(`${res.creditsApplied} credits auto-applied`);
         toast({
-          title: "Invoices generated",
-          description: `Created ${res.inserted}, skipped ${res.skipped}.`,
+          title: res.inserted > 0 ? "Invoices generated" : "Nothing new to generate",
+          description: parts.join(" · "),
         });
         setOpen(false);
         router.refresh();

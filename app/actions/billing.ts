@@ -81,6 +81,11 @@ export async function generateMonthlyInvoices(params: { month: string }) {
     });
   }
 
+  const vacantCount = (flats ?? []).filter(
+    (f) => f.ownership_type === "vacant",
+  ).length;
+  const alreadyBilled = existingSet.size;
+
   let inserted = 0;
   let creditsApplied = 0;
   let creditsAmount = 0;
@@ -239,7 +244,8 @@ export async function generateMonthlyInvoices(params: { month: string }) {
   revalidatePath("/resident/dues");
   return {
     inserted,
-    skipped: (flats?.length ?? 0) - inserted,
+    alreadyBilled,
+    vacantCount,
     creditsApplied,
     creditsAmount,
   };
