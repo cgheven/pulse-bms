@@ -119,24 +119,25 @@ function TierCard({ tier, annual, applyDiscount }: { tier: Tier; annual: boolean
   const flatSave   = flatBase * 12 - flatAnnual;
 
   return (
-    <div style={{
-      position: "relative",
-      height: "100%",
-      borderRadius: 24,
-      background: dark
-        ? "linear-gradient(145deg, #0A1628 0%, #0C3330 100%)"
-        : C.white,
-      border: dark ? "1px solid rgba(45,212,191,0.18)" : `1px solid ${C.border}`,
-      padding: "36px 30px 30px",
-      display: "flex",
-      flexDirection: "column",
-      gap: 24,
-      boxShadow: dark
-        ? "0 32px 80px rgba(10,22,40,0.55), 0 0 0 1px rgba(45,212,191,0.10), inset 0 1px 0 rgba(255,255,255,0.06)"
-        : "0 2px 12px rgba(0,0,0,0.06)",
-      transform: dark ? "scale(1.04)" : "scale(1)",
-      zIndex: dark ? 2 : 1,
-    }}>
+    <div
+      className={`tier-card${dark ? " tier-card-highlight" : ""}`}
+      style={{
+        position: "relative",
+        height: "100%",
+        borderRadius: 24,
+        background: dark
+          ? "linear-gradient(145deg, #0A1628 0%, #0C3330 100%)"
+          : C.white,
+        border: dark ? "1px solid rgba(45,212,191,0.18)" : `1px solid ${C.border}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+        boxShadow: dark
+          ? "0 32px 80px rgba(10,22,40,0.55), 0 0 0 1px rgba(45,212,191,0.10), inset 0 1px 0 rgba(255,255,255,0.06)"
+          : "0 2px 12px rgba(0,0,0,0.06)",
+        zIndex: dark ? 2 : 1,
+      }}
+    >
 
       {/* Top accent stripe for light cards */}
       {!dark && (
@@ -279,6 +280,20 @@ export default function PricingPage() {
 
   return (
     <div className={dm.className} style={{ minHeight: "100vh", background: C.white, color: C.ink }}>
+      <style>{`
+        .pricing-grid { display:grid; grid-template-columns:1fr; gap:24px; padding:24px 0; }
+        @media (min-width:768px) { .pricing-grid { grid-template-columns:repeat(3,1fr); align-items:stretch; } }
+        .tier-card { padding:28px 20px 24px; }
+        @media (min-width:768px) { .tier-card { padding:36px 30px 30px; } }
+        @media (min-width:768px) { .tier-card-highlight { transform:scale(1.04); } }
+        .features-manifest { display:grid; grid-template-columns:1fr; }
+        @media (min-width:640px) { .features-manifest { grid-template-columns:1fr 1fr; } }
+        .feature-header { padding:24px 20px; }
+        @media (min-width:640px) { .feature-header { padding:32px 40px; } }
+        .feature-row { display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid #E2E8F0; }
+        .feature-row:last-child { border-bottom:none; }
+        @media (min-width:640px) { .feature-row { padding:16px 32px; } .feature-row:nth-child(odd) { border-right:1px solid #E2E8F0; } .feature-row:nth-last-child(-n+2) { border-bottom:none; } }
+      `}</style>
 
       {/* Nav */}
       <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.92)", backdropFilter: "blur(16px)", borderBottom: `1px solid ${C.border}` }}>
@@ -290,8 +305,8 @@ export default function PricingPage() {
             <span style={{ fontSize: 17, fontWeight: 700, color: C.ink, letterSpacing: "-0.01em" }}>Pulse</span>
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <Link href="/" style={{ fontSize: 14, color: C.inkMid, textDecoration: "none", fontWeight: 500 }}>← Home</Link>
-            <Link href="/login" style={{ fontSize: 14, color: C.inkMid, textDecoration: "none", fontWeight: 500 }}>Log in</Link>
+            <Link href="/" className="hidden sm:inline" style={{ fontSize: 14, color: C.inkMid, textDecoration: "none", fontWeight: 500 }}>← Home</Link>
+            <Link href="/login" className="hidden sm:inline" style={{ fontSize: 14, color: C.inkMid, textDecoration: "none", fontWeight: 500 }}>Log in</Link>
             <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, padding: "8px 18px", borderRadius: 9, background: C.teal, color: C.white, textDecoration: "none" }}>
               Sign up free <ArrowRight style={{ width: 13, height: 13 }} />
             </Link>
@@ -331,7 +346,7 @@ export default function PricingPage() {
 
       {/* Tier cards */}
       <section style={{ padding: "0 24px 64px", maxWidth: 1120, margin: "0 auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, alignItems: "stretch", paddingTop: 24, paddingBottom: 24 }}>
+        <div className="pricing-grid">
           {TIERS.map((tier) => (
             <TierCard key={tier.name} tier={tier} annual={annual} applyDiscount={applyDiscount} />
           ))}
@@ -344,7 +359,7 @@ export default function PricingPage() {
       {/* Feature manifest */}
       <section style={{ padding: "0 24px 64px", maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ borderRadius: 20, border: `1px solid ${C.border}`, overflow: "hidden", background: C.white }}>
-          <div style={{ padding: "32px 40px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, flexWrap: "wrap", background: C.bgSoft }}>
+          <div className="feature-header" style={{ borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, flexWrap: "wrap", background: C.bgSoft }}>
             <div>
               <p style={{ fontSize: 11, fontWeight: 700, color: C.teal, letterSpacing: "0.12em", margin: "0 0 8px" }}>WHAT&apos;S INCLUDED</p>
               <h3 style={{ fontSize: 24, fontWeight: 700, color: C.ink, letterSpacing: "-0.02em", margin: "0 0 6px" }}>Every plan. Every feature.</h3>
@@ -356,19 +371,9 @@ export default function PricingPage() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+          <div className="features-manifest">
             {ALL_FEATURES.map((f, i) => (
-              <div
-                key={f}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "16px 32px",
-                  borderBottom: i < ALL_FEATURES.length - (ALL_FEATURES.length % 2 === 0 ? 2 : 1) ? `1px solid ${C.border}` : "none",
-                  borderRight: i % 2 === 0 ? `1px solid ${C.border}` : "none",
-                }}
-              >
+              <div key={f} className="feature-row">
                 <span style={{ fontSize: 11, fontWeight: 700, color: C.inkLight, minWidth: 22, fontVariantNumeric: "tabular-nums" }}>
                   {String(i + 1).padStart(2, "0")}
                 </span>
