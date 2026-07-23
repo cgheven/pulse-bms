@@ -431,6 +431,23 @@ export function LandingPage() {
         @media (prefers-reduced-motion:reduce) {
           * { animation:none !important; transition-duration:0.01ms !important; }
         }
+        /* ── Responsive grids ── */
+        .hero-grid { display:grid; grid-template-columns:1fr; gap:40px; align-items:start; width:100%; max-width:1120px; margin:0 auto; padding:48px 20px; position:relative; }
+        @media (min-width:1024px) { .hero-grid { grid-template-columns:1fr 1fr; gap:56px; align-items:center; padding:60px 24px; } }
+        .hero-mockup { display:none; }
+        @media (min-width:1024px) { .hero-mockup { display:block; } }
+        .features-grid { display:grid; grid-template-columns:1fr; }
+        @media (min-width:640px) { .features-grid { grid-template-columns:1fr 1fr; } }
+        @media (min-width:1024px) { .features-grid { grid-template-columns:repeat(3,1fr); } }
+        .feature-item { padding:28px 24px; border-bottom:1px solid #E2E8F0; }
+        .feature-item:last-child { border-bottom:none; }
+        @media (min-width:640px) and (max-width:1023px) { .feature-item:nth-child(odd) { border-right:1px solid #E2E8F0; } .feature-item:nth-last-child(-n+2) { border-bottom:none; } }
+        @media (min-width:1024px) { .feature-item { padding:36px 32px; border-right:1px solid #E2E8F0; border-bottom:1px solid #E2E8F0; } .feature-item:nth-child(3n) { border-right:none; } .feature-item:nth-last-child(-n+3) { border-bottom:none; } }
+        .marketplace-grid { display:grid; grid-template-columns:1fr; gap:48px; align-items:center; }
+        @media (min-width:1024px) { .marketplace-grid { grid-template-columns:1fr 1fr; gap:80px; } }
+        .roles-grid { display:grid; grid-template-columns:1fr; gap:16px; }
+        @media (min-width:640px) { .roles-grid { grid-template-columns:1fr 1fr; } }
+        @media (min-width:1024px) { .roles-grid { grid-template-columns:repeat(4,1fr); } }
       `}</style>
 
       {/* ─── Navigation ──────────────────────────────────────────────────── */}
@@ -483,7 +500,7 @@ export function LandingPage() {
           </Link>
 
           {/* Nav links */}
-          <div style={{ display: "flex", gap: 28, alignItems: "center" }} className="hidden md:flex">
+          <div style={{ gap: 28, alignItems: "center" }} className="hidden md:flex">
             {[["#features", "Features"], ["#why", "Why Pulse"], ["/pricing", "Pricing"]].map(([href, label]) => (
               <a
                 key={href}
@@ -505,26 +522,6 @@ export function LandingPage() {
 
           {/* Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <a
-              href="https://wa.me/923336673553?text=Hi%2C%20I%20came%20across%20Pulse%20BMS%20and%20I%27d%20like%20to%20learn%20more%20about%20managing%20my%20building%20with%20it."
-              className="hidden sm:flex"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 13,
-                fontWeight: 500,
-                color: "#25D366",
-                textDecoration: "none",
-                transition: "opacity 0.15s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.75")}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-              Chat with us
-            </a>
-            <div style={{ width: 1, height: 16, background: C.border }} className="hidden sm:block" />
             <Link
               href="/login"
               style={{
@@ -596,20 +593,7 @@ export function LandingPage() {
           }}
         />
 
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 1120,
-            margin: "0 auto",
-            padding: "60px 24px",
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 56,
-            alignItems: "center",
-            position: "relative",
-          }}
-          className="grid-cols-1 lg:grid-cols-2"
-        >
+        <div className="hero-grid">
           {/* Left — copy */}
           <div>
             {/* Badge */}
@@ -740,8 +724,8 @@ export function LandingPage() {
 
           </div>
 
-          {/* Right — dashboard */}
-          <div style={{ animation: "fadeUp 0.7s ease 0.35s both" }}>
+          {/* Right — dashboard (hidden below lg to avoid illegible tiny mockup) */}
+          <div style={{ animation: "fadeUp 0.7s ease 0.35s both" }} className="hero-mockup">
             <DashboardMockup />
           </div>
         </div>
@@ -771,13 +755,7 @@ export function LandingPage() {
           </FadeUp>
 
           {/* Feature grid — icon + title + one line */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 2,
-            }}
-          >
+          <div className="features-grid">
             {[
               {
                 Icon: Receipt,
@@ -829,13 +807,7 @@ export function LandingPage() {
               },
             ].map(({ Icon, color, bg, border, title, line }, i) => (
               <FadeUp key={title} delay={i * 40}>
-                <div
-                  style={{
-                    padding: "36px 32px",
-                    borderRight: (i + 1) % 3 !== 0 ? `1px solid ${C.border}` : "none",
-                    borderBottom: i < 3 ? `1px solid ${C.border}` : "none",
-                  }}
-                >
+                <div className="feature-item">
                   <div
                     style={{
                       width: 44,
@@ -874,7 +846,7 @@ export function LandingPage() {
 
       {/* ─── Marketplace ─────────────────────────────────────────────────── */}
       <section style={{ padding: "96px 24px", background: C.white }}>
-        <div style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto" }} className="marketplace-grid">
 
           {/* Left — copy */}
           <FadeUp>
@@ -983,8 +955,7 @@ export function LandingPage() {
             </h2>
           </FadeUp>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}
-            className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="roles-grid">
             {[
               { Icon: Shield,    role: "Admin",       color: C.teal,    bg: C.tealSoft,                 border: C.tealBorder,                      perks: ["Manage flats & residents","Generate & collect invoices","Track staff & payroll","Full audit log"] },
               { Icon: Vote,      role: "Union",       color: C.orange,  bg: "rgba(217,119,6,0.07)",     border: "rgba(217,119,6,0.14)",             perks: ["Create & vote on proposals","Schedule meetings","Approve expenses","Post building notices"] },
@@ -1182,6 +1153,66 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* ─── Floating WhatsApp button ─────────────────────────────────── */}
+      <FloatingWhatsApp />
     </div>
+  );
+}
+
+function FloatingWhatsApp() {
+  const [hov, setHov] = useState(false);
+  return (
+    <a
+      href="https://wa.me/923336673553?text=Hi%2C%20I%20came%20across%20Pulse%20BMS%20and%20I%27d%20like%20to%20learn%20more%20about%20managing%20my%20building%20with%20it."
+      target="_blank"
+      rel="noopener noreferrer"
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        position: "fixed",
+        bottom: 28,
+        right: 28,
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: hov ? "12px 20px 12px 14px" : "14px",
+        borderRadius: 100,
+        background: "#25D366",
+        color: "#fff",
+        textDecoration: "none",
+        boxShadow: hov
+          ? "0 8px 32px rgba(37,211,102,0.45)"
+          : "0 4px 20px rgba(37,211,102,0.35)",
+        transition: "padding 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s, transform 0.2s",
+        transform: hov ? "scale(1.04)" : "scale(1)",
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+      }}
+      aria-label="Chat with us on WhatsApp"
+    >
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        style={{ flexShrink: 0 }}
+      >
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+      </svg>
+      <span
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          maxWidth: hov ? 100 : 0,
+          opacity: hov ? 1 : 0,
+          transition: "max-width 0.25s cubic-bezier(0.16,1,0.3,1), opacity 0.2s",
+          overflow: "hidden",
+        }}
+      >
+        Chat with us
+      </span>
+    </a>
   );
 }
