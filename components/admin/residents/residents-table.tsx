@@ -295,7 +295,7 @@ export function ResidentsTable({
             phone: editTarget.phone ?? "",
             email: editTarget.email ?? "",
             cnic: editTarget.cnic ?? "",
-            relationship: editTarget.relationship === "tenant" ? "tenant" : "owner",
+            relationship: (editTarget.relationship as "owner" | "tenant" | "family") ?? "owner",
             is_primary: editTarget.is_primary,
             is_active: editTarget.is_active,
             move_in_date: editTarget.move_in_date ?? "",

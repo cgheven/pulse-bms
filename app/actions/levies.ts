@@ -164,6 +164,17 @@ export async function distributeLevy(id: string) {
 
   const supabase = await createClient();
 
+  // Check residents BEFORE flipping status so the levy can't get stuck
+  // as "distributed" with no charges if the building has no active residents.
+  const { data: residents, error: resErr } = await supabase
+    .from("bms_residents")
+    .select("id, flat_id")
+    .eq("building_id", buildingId)
+    .eq("is_active", true);
+  if (resErr) throw new Error(resErr.message);
+  if (!residents || residents.length === 0)
+    throw new Error("No active residents found. Cannot distribute levy.");
+
   // Atomically flip status draft → distributed; only one concurrent caller wins.
   // If another request already distributed, .maybeSingle() returns null.
   const { data: levy, error: flipErr } = await supabase
@@ -182,15 +193,6 @@ export async function distributeLevy(id: string) {
     throw new Error(
       "Levy could not be distributed. It may already be distributed or was not found.",
     );
-
-  const { data: residents, error: resErr } = await supabase
-    .from("bms_residents")
-    .select("id, flat_id")
-    .eq("building_id", buildingId)
-    .eq("is_active", true);
-  if (resErr) throw new Error(resErr.message);
-  if (!residents || residents.length === 0)
-    throw new Error("No active residents found. Cannot distribute levy.");
 
   const residentCount = residents.length;
   const residentShareTotal =

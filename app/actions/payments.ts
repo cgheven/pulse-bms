@@ -229,7 +229,7 @@ export async function recordPayment(input: PaymentInput) {
   const dbPaymentMode = (() => {
     const m = input.payment_mode || PAYMENT_MODE.CASH;
     if (m === PAYMENT_MODE.BANK_TRANSFER) return PAYMENT_MODE.BANK;
-    if (m === PAYMENT_MODE.OTHER) return PAYMENT_MODE.ONLINE; // best-effort fallback
+    if (m === PAYMENT_MODE.OTHER) return PAYMENT_MODE.CASH; // DB constraint doesn't include 'other'; cash is the safest fallback
     return m;
   })();
 

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { NoticeForm } from "./notice-form";
 import { deleteNotice, type NoticeInput } from "@/app/actions/notices";
@@ -19,6 +20,7 @@ export function NoticeRowActions({
   defaulterTemplate?: string;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [edit, setEdit] = useState(false);
   const [del, setDel] = useState(false);
   const [pending, start] = useTransition();
@@ -30,7 +32,7 @@ export function NoticeRowActions({
         setDel(false);
         router.refresh();
       } catch (e) {
-        alert(friendlyErrorMessage(e, "Could not delete notice"));
+        toast({ title: "Could not delete notice", description: friendlyErrorMessage(e, "Please try again."), variant: "destructive" });
       }
     });
   };

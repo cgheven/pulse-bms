@@ -84,6 +84,18 @@ export async function updateFlat(id: string, input: Partial<FlatInput>) {
     .single();
   if (error) throw new Error(error.message);
 
+  // If the flat was just set to vacant, deactivate all active residents so
+  // they no longer appear in billing runs or the occupied-count dashboard.
+  if (patch.ownership_type === "vacant") {
+    await supabase
+      .from("bms_residents")
+      .update({ is_active: false, move_out_date: new Date().toISOString().slice(0, 10) })
+      .eq("flat_id", id)
+      .eq("building_id", buildingId)
+      .eq("is_active", true)
+      .is("move_out_date", null);
+  }
+
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
@@ -97,6 +109,7 @@ export async function updateFlat(id: string, input: Partial<FlatInput>) {
 
   revalidatePath("/admin/flats");
   revalidatePath(`/admin/flats/${id}`);
+  revalidatePath("/admin/residents");
   revalidatePath("/admin");
   return data;
 }

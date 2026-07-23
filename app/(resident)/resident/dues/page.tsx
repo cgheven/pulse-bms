@@ -147,10 +147,9 @@ async function DuesContent({
     if (!lastPaymentByInvoice.has(p.invoice_id)) lastPaymentByInvoice.set(p.invoice_id, p);
   }
 
-  const yearStart = `${new Date().getFullYear()}-01-01`;
-  const ytdInvoices = invoices.filter((i) => i.billing_month >= yearStart);
-  const totalBilled = ytdInvoices.reduce((s, i) => s + Number(i.amount), 0);
-  const totalPaidYTD = ytdInvoices.reduce(
+  // Use all invoices (not just YTD) so the KPI matches the "Bills still due" table below.
+  const totalBilled = invoices.reduce((s, i) => s + Number(i.amount), 0);
+  const totalPaidYTD = invoices.reduce(
     (s, i) => s + (paidByInvoice.get(i.id) ?? 0),
     0,
   );

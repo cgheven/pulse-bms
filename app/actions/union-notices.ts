@@ -50,6 +50,8 @@ export async function createUnionNotice(input: {
   });
 
   revalidatePath("/union/notices");
+  revalidatePath("/resident/notices");
+  revalidatePath("/admin/notices");
   return data;
 }
 
@@ -76,4 +78,6 @@ export async function deleteUnionNotice(id: string) {
     entity_id: id,
   });
   revalidatePath("/union/notices");
+  revalidatePath("/resident/notices");
+  revalidatePath("/admin/notices");
 }

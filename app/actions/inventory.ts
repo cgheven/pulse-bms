@@ -309,6 +309,11 @@ export async function recordStockMovement(input: {
 
   if (fetchErr || !item) throw new Error("Item not found");
 
+  if (input.type === "adjustment" && input.quantity < 0)
+    throw new Error("Adjusted stock cannot be negative.");
+  if (input.type !== "adjustment" && input.quantity <= 0)
+    throw new Error("Quantity must be a positive number.");
+
   let newStock: number;
   if (input.type === "adjustment") {
     newStock = input.quantity;

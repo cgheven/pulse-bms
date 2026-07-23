@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +49,7 @@ export function NoticeForm({
   defaulterTemplate?: string;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<NoticeInput>({
@@ -80,6 +82,7 @@ export function NoticeForm({
         } else {
           await createNotice(form);
         }
+        toast({ title: notice?.id ? "Notice updated" : "Notice published" });
         onOpenChange(false);
         router.refresh();
       } catch (e) {

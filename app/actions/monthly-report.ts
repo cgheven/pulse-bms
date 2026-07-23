@@ -150,19 +150,19 @@ export async function getMonthlyReportData(input: {
       supabase.from("bms_salary_payments").select("amount.sum()").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to),
       // Section rows — only fetched when selected
       sections.includes("collections")
-        ? supabase.from("bms_payments").select(`id, payment_date, amount, payment_mode, category, receipt_no, notes, bms_flats!inner(flat_number), bms_residents(full_name)`).eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false })
+        ? supabase.from("bms_payments").select(`id, payment_date, amount, payment_mode, category, receipt_no, notes, bms_flats!inner(flat_number), bms_residents(full_name)`).eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false }).limit(5000)
         : none,
       sections.includes("expenses")
-        ? supabase.from("bms_expenses").select("id, expense_date, amount, category, description, vendor").eq("building_id", buildingId).eq("is_bill", false).gte("expense_date", from).lte("expense_date", to).order("expense_date", { ascending: false })
+        ? supabase.from("bms_expenses").select("id, expense_date, amount, category, description, vendor").eq("building_id", buildingId).eq("is_bill", false).gte("expense_date", from).lte("expense_date", to).order("expense_date", { ascending: false }).limit(5000)
         : none,
       sections.includes("bills")
-        ? supabase.from("bms_expenses").select("id, expense_date, amount, subcategory, vendor, units_consumed").eq("building_id", buildingId).eq("is_bill", true).gte("expense_date", from).lte("expense_date", to).order("expense_date", { ascending: false })
+        ? supabase.from("bms_expenses").select("id, expense_date, amount, subcategory, vendor, units_consumed").eq("building_id", buildingId).eq("is_bill", true).gte("expense_date", from).lte("expense_date", to).order("expense_date", { ascending: false }).limit(5000)
         : none,
       sections.includes("salaries")
-        ? supabase.from("bms_salary_payments").select("id, payment_date, amount, bms_staff(full_name, role)").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false })
+        ? supabase.from("bms_salary_payments").select("id, payment_date, amount, bms_staff(full_name, role)").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false }).limit(5000)
         : none,
       sections.includes("projects")
-        ? supabase.from("bms_payments").select("id, payment_date, amount, payment_mode, project_id").eq("building_id", buildingId).eq("category", "project").not("project_id", "is", null).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false })
+        ? supabase.from("bms_payments").select("id, payment_date, amount, payment_mode, project_id").eq("building_id", buildingId).eq("category", "project").not("project_id", "is", null).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false }).limit(5000)
         : none,
       sections.includes("projects")
         ? supabase.from("bms_projects").select("id, name").eq("building_id", buildingId)

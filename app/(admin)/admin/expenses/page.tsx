@@ -36,6 +36,13 @@ export default function ExpensesPage({ searchParams }: { searchParams: SearchPar
 async function ExpensesContent({ searchParams }: { searchParams: SearchParams }) {
   await requireRole(["admin", "super_admin"]);
   const buildingId = await getActiveBuilding();
+  if (!buildingId) {
+    return (
+      <div className="card-soft">
+        <p className="text-muted-foreground">No building assigned to your account.</p>
+      </div>
+    );
+  }
   const sp = await searchParams;
   const supabase = await createClient();
   const month = getMonthRange();

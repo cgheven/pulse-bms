@@ -236,6 +236,16 @@ export async function paySalary(input: {
   if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
+  // Guard against double salary payment for the same staff member and month.
+  const { data: existingSalary } = await supabase
+    .from("bms_salary_payments")
+    .select("id")
+    .eq("staff_id", input.staff_id)
+    .eq("pay_month", input.pay_month)
+    .eq("building_id", buildingId)
+    .maybeSingle();
+  if (existingSalary) throw new Error("Salary for this month has already been recorded.");
+
   const { data, error } = await supabase
     .from("bms_salary_payments")
     .insert({

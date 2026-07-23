@@ -12,7 +12,9 @@
 import type { DayBookDay } from "@/app/(admin)/admin/reports/day-book/day-book-client";
 
 function escapeCell(value: string | number): string {
-  const s = typeof value === "number" ? String(value) : value ?? "";
+  let s = typeof value === "number" ? String(value) : value ?? "";
+  // Strip leading formula-injection characters per OWASP CSV injection prevention.
+  if (typeof s === "string") s = s.replace(/^[=+\-@\t\r]+/, "");
   return `"${s.replace(/"/g, '""')}"`;
 }
 

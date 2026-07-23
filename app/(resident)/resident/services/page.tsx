@@ -19,16 +19,23 @@ export default function ResidentServicesPage() {
 
 async function ServicesLoader() {
   const { profile } = await requireRole("resident");
+
+  if (!profile.building_id) {
+    return (
+      <div className="card-soft">
+        <p className="text-muted-foreground">No building assigned to your account. Please contact your building admin.</p>
+      </div>
+    );
+  }
+
   const supabase = await createClient();
 
   // Light building info for header + the WhatsApp message context.
-  const { data: building } = profile.building_id
-    ? await supabase
-        .from("bms_buildings")
-        .select("name")
-        .eq("id", profile.building_id)
-        .maybeSingle()
-    : { data: null };
+  const { data: building } = await supabase
+    .from("bms_buildings")
+    .select("name")
+    .eq("id", profile.building_id)
+    .maybeSingle();
 
   const { myUserId, services } = await getBuildingServices();
 

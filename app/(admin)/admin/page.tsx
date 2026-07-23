@@ -49,35 +49,37 @@ export default async function AdminDashboardPage() {
       </div>
     );
   }
-  const now = new Date();
-  const todayIso = now.toISOString().slice(0, 10);
+  // Use PKT (UTC+5) for month boundaries so the dashboard shows the correct
+  // month during the first 5 hours of each calendar day in Pakistan.
+  const pkNow = new Date(Date.now() + 5 * 60 * 60 * 1000);
+  const todayIso = pkNow.toISOString().slice(0, 10);
   const ym = todayIso.slice(0, 7);
   const monthStart = `${ym}-01`;
   const nextMonthStart = new Date(
-    now.getUTCFullYear(),
-    now.getUTCMonth() + 1,
+    pkNow.getUTCFullYear(),
+    pkNow.getUTCMonth() + 1,
     1,
   )
     .toISOString()
     .slice(0, 10);
   const prevMonthStart = new Date(
-    now.getUTCFullYear(),
-    now.getUTCMonth() - 1,
+    pkNow.getUTCFullYear(),
+    pkNow.getUTCMonth() - 1,
     1,
   )
     .toISOString()
     .slice(0, 10);
-  const sixMonthsAgo = new Date(now.getUTCFullYear(), now.getUTCMonth() - 5, 1)
+  const sixMonthsAgo = new Date(pkNow.getUTCFullYear(), pkNow.getUTCMonth() - 5, 1)
     .toISOString()
     .slice(0, 10);
-  const sevenDaysAgo = new Date(now.getTime() - ACTIVITY_DAYS * 86400_000)
+  const sevenDaysAgo = new Date(pkNow.getTime() - ACTIVITY_DAYS * 86400_000)
     .toISOString();
 
   const monthLabel = new Date(`${monthStart}T00:00:00`).toLocaleDateString(
     "en-US",
     { month: "long", year: "numeric" },
   );
-  const todayLabel = new Date(now).toLocaleDateString("en-PK", {
+  const todayLabel = new Date(pkNow).toLocaleDateString("en-PK", {
     day: "2-digit",
     month: "long",
   });
@@ -449,9 +451,9 @@ async function FinancialCards({
       .eq("building_id", buildingId)
       .gte("payment_date", prevMonthStart)
       .lt("payment_date", monthStart),
-    supabase.from("bms_payments").select("amount").eq("building_id", buildingId),
-    supabase.from("bms_expenses").select("amount").eq("building_id", buildingId),
-    supabase.from("bms_salary_payments").select("amount").eq("building_id", buildingId),
+    supabase.from("bms_payments").select("amount.sum()").eq("building_id", buildingId),
+    supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId),
+    supabase.from("bms_salary_payments").select("amount.sum()").eq("building_id", buildingId),
     supabase
       .from("bms_invoices")
       .select("id, amount, status, flat_id, bms_flats(flat_number)")
@@ -482,12 +484,14 @@ async function FinancialCards({
   const expenseDeltaPct =
     prevOutflow > 0 ? Math.round(((outflow - prevOutflow) / prevOutflow) * 100) : null;
 
-  // Cash balance (cumulative)
+  // Cash balance (cumulative) — uses server-side SUM so PostgREST max_rows
+  // never silently truncates buildings with >1,000 historical records.
+  type SumRow = { sum: string | null };
   const fundBalance =
     Number(building?.fund_balance ?? 0) +
-    sum(allPayments ?? null) -
-    sum(allExpenses ?? null) -
-    sum(allSalaries ?? null);
+    Number((allPayments as SumRow[] | null)?.[0]?.sum ?? 0) -
+    Number((allExpenses as SumRow[] | null)?.[0]?.sum ?? 0) -
+    Number((allSalaries as SumRow[] | null)?.[0]?.sum ?? 0);
 
   // Maintenance collection (money tied to current-month invoices)
   type InvRow = { id: string; amount: number | string | null; status: string | null; flat_id: string | null; bms_flats: { flat_number: string } | { flat_number: string }[] | null };

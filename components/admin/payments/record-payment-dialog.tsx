@@ -379,6 +379,10 @@ export function RecordPaymentDialog({
       toast({ title: "Pick a flat", variant: "destructive" });
       return;
     }
+    if (!target) {
+      toast({ title: "Pick an invoice or payment category", variant: "destructive" });
+      return;
+    }
     const amt = Number(amount);
     if (!amt || amt <= 0) {
       toast({ title: "Enter a valid amount", variant: "destructive" });

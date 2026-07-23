@@ -698,6 +698,7 @@ export function ExpenseForm({
             disabled={
               pending ||
               !form.description.trim() ||
+              !form.expense_date ||
               form.amount <= 0 ||
               !amountInput.trim()
             }

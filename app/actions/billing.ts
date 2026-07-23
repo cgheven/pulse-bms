@@ -275,13 +275,24 @@ export async function waiveInvoice(id: string, reason?: string) {
 
   // reduce outstanding dues for flat (scope by building_id — defence-in-depth)
   if (inv.status !== "paid" && inv.status !== "waived") {
+    // Subtract only the UNPAID portion — partial payments already reduced dues
+    // when they were recorded, so subtracting the full invoice amount here
+    // would double-count the collected portion.
+    const { data: paidRows } = await supabase
+      .from("bms_payments")
+      .select("amount")
+      .eq("invoice_id", id)
+      .eq("building_id", buildingId);
+    const alreadyPaid = (paidRows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+    const unpaidRemainder = Math.max(0, Number(inv.amount) - alreadyPaid);
+
     const { data: flatRow } = await supabase
       .from("bms_flats")
       .select("outstanding_dues")
       .eq("id", inv.flat_id)
       .eq("building_id", buildingId)
       .single();
-    const newDues = Math.max(0, Number(flatRow?.outstanding_dues ?? 0) - Number(inv.amount));
+    const newDues = Math.max(0, Number(flatRow?.outstanding_dues ?? 0) - unpaidRemainder);
     await supabase
       .from("bms_flats")
       .update({ outstanding_dues: newDues })
@@ -303,6 +314,8 @@ export async function waiveInvoice(id: string, reason?: string) {
   revalidatePath("/admin/maintenance");
   revalidatePath("/admin");
   revalidatePath("/admin/reports");
+  revalidatePath("/resident");
+  revalidatePath("/resident/dues");
   return { ok: true };
 }
 
@@ -366,6 +379,8 @@ export async function deleteInvoice(id: string) {
   revalidatePath("/admin/maintenance");
   revalidatePath("/admin");
   revalidatePath("/admin/reports");
+  revalidatePath("/resident");
+  revalidatePath("/resident/dues");
   return { ok: true };
 }
 

@@ -132,6 +132,16 @@ export async function importResidents(
     (flats ?? []).map((f) => [f.flat_number.toLowerCase(), f.id])
   );
 
+  // Build a dedup set of existing residents (flatId|name) so re-uploading
+  // the same file doesn't create duplicate rows.
+  const { data: existingResidents } = await supabase
+    .from("bms_residents")
+    .select("flat_id, full_name")
+    .eq("building_id", buildingId);
+  const existingResidentSet = new Set(
+    (existingResidents ?? []).map((r) => `${r.flat_id}|${r.full_name.toLowerCase().trim()}`)
+  );
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const label =
@@ -156,6 +166,13 @@ export async function importResidents(
         row: i + 2, label,
         message: `Flat "${row.flat_number}" not found — import flats first`,
       });
+      continue;
+    }
+
+    // Skip exact duplicates (same flat + same name already exists).
+    const dupKey = `${flatId}|${row.full_name.trim().toLowerCase()}`;
+    if (existingResidentSet.has(dupKey)) {
+      result.errors.push({ row: i + 2, label, message: "Already exists — skipped" });
       continue;
     }
 
@@ -195,6 +212,8 @@ export async function importResidents(
       result.errors.push({ row: i + 2, label, message: error.message });
     } else {
       result.success++;
+      // Track inserted residents so in-file duplicates (same name twice) are caught.
+      existingResidentSet.add(dupKey);
       // Promote flat from "vacant" to the correct occupancy type so it
       // becomes billable. Only upgrade — never downgrade an already-set type
       // (e.g. a second resident on the same flat won't clobber the owner flag).

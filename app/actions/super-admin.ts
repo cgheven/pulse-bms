@@ -608,6 +608,12 @@ export async function setAdminActive(profileId: string, isActive: boolean) {
 
   if (error) throw new Error(error.message);
 
+  // Revoke the JWT immediately on deactivation so the session cannot be used
+  // until expiry (matches the pattern in teams.ts setTeamMemberActive).
+  if (!isActive) {
+    await admin.auth.admin.signOut(profileId, "global");
+  }
+
   // Invalidate the profile cache so getSession() picks up the new is_active
   // value immediately — inactive users will be treated as unauthenticated on
   // their very next request.

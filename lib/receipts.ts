@@ -100,10 +100,12 @@ export async function loadReceiptData(
     }
   } else {
     invoice = {
-      period_label: new Date(payment.payment_date).toLocaleDateString("en-PK", {
-        month: "long",
-        year: "numeric",
-      }),
+      period_label: payment.payment_date
+        ? new Date(payment.payment_date).toLocaleDateString("en-PK", {
+            month: "long",
+            year: "numeric",
+          })
+        : "—",
       purpose: purposeLabel(payment.category),
     };
   }

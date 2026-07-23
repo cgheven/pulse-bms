@@ -183,6 +183,15 @@ export async function castVote(
   if (!prop) throw new Error("Proposal not found.");
   if (prop.status !== "pending") throw new Error("Voting is closed for this proposal.");
 
+  // Prevent double-voting: each union member may cast exactly one vote per proposal.
+  const { data: existingVote } = await supabase
+    .from("bms_proposal_votes")
+    .select("id")
+    .eq("proposal_id", proposal_id)
+    .eq("union_member_id", um.id)
+    .maybeSingle();
+  if (existingVote) throw new Error("You have already voted on this proposal.");
+
   const { data, error } = await supabase
     .from("bms_proposal_votes")
     .insert({

@@ -168,6 +168,21 @@ export async function updateResident(id: string, input: Partial<ResidentInput>) 
     .single();
   if (error) throw new Error(error.message);
 
+  // Sync flat ownership_type when relationship changes to owner/tenant.
+  // Mirrors the same update done in createResident so the flat badge is
+  // always consistent with who lives there.
+  if (
+    existing?.flat_id &&
+    input.relationship &&
+    (input.relationship === "owner" || input.relationship === "tenant")
+  ) {
+    await supabase
+      .from("bms_flats")
+      .update({ ownership_type: input.relationship })
+      .eq("id", existing.flat_id)
+      .eq("building_id", buildingId);
+  }
+
   await writeAuditLog({
     actor_id: user.id,
     actor_email: user.email,
@@ -192,12 +207,38 @@ export async function deleteResident(id: string) {
   if (!buildingId) throw new Error("No active building selected.");
   const supabase = await createClient();
 
+  // Load resident first so we know which flat to clean up after deletion.
+  const { data: resident } = await supabase
+    .from("bms_residents")
+    .select("flat_id, is_primary")
+    .eq("id", id)
+    .eq("building_id", buildingId)
+    .single();
+
   const { error } = await supabase
     .from("bms_residents")
     .delete()
     .eq("id", id)
     .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
+
+  // After deletion, if no active residents remain on that flat, mark it vacant
+  // so it won't appear in billing runs or as occupied on the dashboard.
+  if (resident?.flat_id) {
+    const { count } = await supabase
+      .from("bms_residents")
+      .select("*", { count: "exact", head: true })
+      .eq("flat_id", resident.flat_id)
+      .eq("building_id", buildingId)
+      .eq("is_active", true);
+    if ((count ?? 0) === 0) {
+      await supabase
+        .from("bms_flats")
+        .update({ ownership_type: "vacant" })
+        .eq("id", resident.flat_id)
+        .eq("building_id", buildingId);
+    }
+  }
 
   await writeAuditLog({
     actor_id: user.id,
@@ -210,6 +251,11 @@ export async function deleteResident(id: string) {
   });
 
   revalidatePath("/admin/residents");
+  if (resident?.flat_id) {
+    revalidatePath("/admin/flats");
+    revalidatePath(`/admin/flats/${resident.flat_id}`);
+  }
+  revalidatePath("/admin");
   return { ok: true };
 }
 

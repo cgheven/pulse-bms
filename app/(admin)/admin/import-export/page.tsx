@@ -252,12 +252,12 @@ function sanitizeExportCell(v: unknown): string {
   return /^[=+\-@]/.test(s) ? s.replace(/^[=+\-@]+/, "") : s;
 }
 
-function downloadExport(filename: string, headers: string[], rows: Record<string, unknown>[]) {
+function downloadExport(filename: string, headers: string[], rows: Record<string, unknown>[], sheetName: string) {
   const wb = XLSX.utils.book_new();
   const data = [headers, ...rows.map((r) => headers.map((h) => sanitizeExportCell(r[h])))];
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws["!cols"] = headers.map(() => ({ wch: 22 }));
-  XLSX.utils.book_append_sheet(wb, ws, "Data");
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, filename);
 }
 
@@ -411,13 +411,15 @@ export default function ImportExportPage() {
           const rows = await exportFlats();
           downloadExport("flats-export.xlsx",
             ["flat_number", "floor", "block", "size_sqft", "monthly_fee", "outstanding_dues", "notes"],
-            rows
+            rows,
+            SHEET_FLATS
           );
         } else {
           const rows = await exportResidents();
           downloadExport("residents-export.xlsx",
             ["flat_number", "full_name", "relationship", "phone", "cnic", "email", "move_in_date", "entry_fee_paid", "is_primary"],
-            rows
+            rows,
+            SHEET_RESIDENTS
           );
         }
         setExportError(null);
