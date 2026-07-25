@@ -56,8 +56,12 @@ export async function updateSession(request: NextRequest) {
   const isResetPassword =
     pathname === "/auth/reset-password" || pathname.startsWith("/auth/reset-password/");
   const isLanding = pathname === "/";
+  // Generated share banners (Next.js opengraph-image convention). Social crawlers
+  // — WhatsApp, Slack, LinkedIn — fetch these with no cookies, so a redirect to
+  // /login here silently breaks every link preview.
+  const isOgImage = pathname === "/opengraph-image" || pathname.endsWith("/opengraph-image");
   const isPublic =
-    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword || isLanding;
+    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword || isLanding || isOgImage;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

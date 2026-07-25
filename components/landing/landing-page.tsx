@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { DM_Sans } from "next/font/google";
 import {
@@ -487,12 +488,13 @@ export function LandingPage() {
                 borderRadius: 9,
                 background: C.tealSoft,
                 border: `1px solid ${C.tealBorder}`,
+                overflow: "hidden",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Building2 style={{ width: 15, height: 15, color: C.teal }} />
+              <Image src="/logo.jpeg" alt="Pulse BMS" width={30} height={30} style={{ width: "100%", height: "100%", objectFit: "cover" }} priority />
             </div>
             <span style={{ fontSize: 15, fontWeight: 700, color: C.ink, letterSpacing: "-0.02em" }}>
               Pulse BMS
@@ -1114,12 +1116,13 @@ export function LandingPage() {
                 borderRadius: 7,
                 background: C.tealSoft,
                 border: `1px solid ${C.tealBorder}`,
+                overflow: "hidden",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Building2 style={{ width: 12, height: 12, color: C.teal }} />
+              <Image src="/logo.jpeg" alt="Pulse BMS" width={24} height={24} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
             <span style={{ fontSize: 13, fontWeight: 700, color: C.inkMid }}>Pulse BMS</span>
             <span style={{ fontSize: 12, color: C.inkLight, marginLeft: 4 }}>© 2025</span>

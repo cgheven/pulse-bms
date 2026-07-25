@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { DM_Sans } from "next/font/google";
 import {
@@ -299,10 +300,10 @@ export default function PricingPage() {
       <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.92)", backdropFilter: "blur(16px)", borderBottom: `1px solid ${C.border}` }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-            <div style={{ width: 32, height: 32, borderRadius: 9, background: C.tealSoft, border: `1px solid ${C.tealBorder}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Building2 style={{ width: 16, height: 16, color: C.teal }} />
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: C.tealSoft, border: `1px solid ${C.tealBorder}`, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Image src="/logo.jpeg" alt="Pulse BMS" width={32} height={32} style={{ width: "100%", height: "100%", objectFit: "cover" }} priority />
             </div>
-            <span style={{ fontSize: 17, fontWeight: 700, color: C.ink, letterSpacing: "-0.01em" }}>Pulse</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.ink, letterSpacing: "-0.02em" }}>Pulse BMS</span>
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <Link href="/" className="hidden sm:inline" style={{ fontSize: 14, color: C.inkMid, textDecoration: "none", fontWeight: 500 }}>← Home</Link>
@@ -402,10 +403,10 @@ export default function PricingPage() {
       <footer style={{ borderTop: `1px solid ${C.border}`, padding: "28px 24px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-            <div style={{ width: 26, height: 26, borderRadius: 7, background: C.tealSoft, border: `1px solid ${C.tealBorder}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Building2 style={{ width: 13, height: 13, color: C.teal }} />
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: C.tealSoft, border: `1px solid ${C.tealBorder}`, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Image src="/logo.jpeg" alt="Pulse BMS" width={26} height={26} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
-            <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Pulse</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.inkMid }}>Pulse BMS</span>
           </Link>
           <p style={{ fontSize: 12, color: C.inkLight, margin: 0 }}>© 2026 Pulse. Built for buildings that mean business.</p>
           <Link href="/login" style={{ fontSize: 13, color: C.inkMid, textDecoration: "none", fontWeight: 500 }}>Sign in →</Link>

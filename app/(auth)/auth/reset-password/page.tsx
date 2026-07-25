@@ -1,7 +1,8 @@
 "use client";
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Building2, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import Image from "next/image";
+import { Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,8 +67,8 @@ function ResetForm() {
 
       <div className="w-full max-w-sm relative animate-fade-up">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
-            <Building2 className="w-6 h-6 text-primary" />
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-5 overflow-hidden">
+            <Image src="/logo.jpeg" alt="Pulse BMS" width={56} height={56} className="w-full h-full object-cover" priority />
           </div>
           <h1 className="font-serif text-3xl text-foreground tracking-tight">Pulse</h1>
           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary/70">
