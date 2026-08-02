@@ -143,9 +143,14 @@ async function sumPaymentsByInvoice(
  *     current month (regardless of which month's invoice they were against)
  *     — this matches the existing payments page semantic and is the more
  *     useful "cash this month" figure for the admin.
- *   - "Defaulters" is the count of distinct invoices across history where
- *     `amount_due > 0` (status != paid/waived AND remaining balance > 0).
- *   - "Credit balances" is the sum of unapplied `bms_flat_credits.amount`.
+ *   - "Defaulters" is the count of distinct FLATS with any unpaid balance
+ *     (status != paid/waived AND remaining > 0). It counted invoices before,
+ *     which read as ~133 defaulters in an 89-flat building because six months
+ *     of arrears counted the same flat six times.
+ *   - "Total outstanding" is the sum of those remaining balances. It replaced
+ *     a "Credit balances" tile that was permanently Rs. 0 — flat credits only
+ *     exist after an overpayment, and are surfaced on the flat detail page and
+ *     the resident portal where they're actionable.
  */
 async function MaintenanceKpis() {
   const { profile } = await requireRole(["admin", "super_admin"]);
@@ -160,7 +165,6 @@ async function MaintenanceKpis() {
     { data: monthInvoices },
     { data: monthPayments },
     { data: openInvoices },
-    { data: credits },
   ] = await Promise.all([
     // Current-month invoices (not waived).
     supabase
@@ -177,19 +181,14 @@ async function MaintenanceKpis() {
       .eq("building_id", buildingId)
       .gte("payment_date", `${ym}-01`)
       .lt("payment_date", nextMonthFirstDay(ym)),
-    // Open invoices (any month) — used to count defaulters.
+    // Open invoices (any month) — used to count defaulters. flat_id is what
+    // makes the count per-flat rather than per-invoice.
     supabase
       .from("bms_invoices")
-      .select("id, amount")
+      .select("id, amount, flat_id")
       .eq("building_id", buildingId)
       .neq("status", "paid")
       .neq("status", "waived"),
-    // Unapplied advance credit (society holds this money on behalf of flats).
-    supabase
-      .from("bms_flat_credits")
-      .select("amount")
-      .eq("building_id", buildingId)
-      .is("applied_invoice_id", null),
   ]);
 
   const monthTotal = (monthInvoices ?? []).reduce(
@@ -201,27 +200,27 @@ async function MaintenanceKpis() {
     0,
   );
 
-  // Defaulters: count of open invoices where remaining > 0 after applying
-  // any payments. Payments are summed via chunked `.in()` lookup so we don't
-  // silently truncate at >500 open invoices (PostgREST URL limit).
+  // Defaulters: distinct FLATS carrying any unpaid balance — NOT the number of
+  // unpaid invoices. A flat six months in arrears is one defaulter, not six.
+  // Payments are summed via chunked `.in()` lookup so we don't silently
+  // truncate at >500 open invoices (PostgREST URL limit).
   const openIds = (openInvoices ?? []).map((i) => i.id);
-  let defaulterCount = 0;
+  const defaulterFlats = new Set<string>();
+  let outstandingTotal = 0;
   if (openIds.length) {
     const paidByInv = await sumPaymentsByInvoice(
       supabase,
       buildingId,
       openIds,
     );
-    defaulterCount = (openInvoices ?? []).filter((inv) => {
+    for (const inv of openInvoices ?? []) {
       const due = Number(inv.amount ?? 0) - (paidByInv.get(inv.id) ?? 0);
-      return due > 0;
-    }).length;
+      if (due <= 0) continue;
+      outstandingTotal += due;
+      if (inv.flat_id) defaulterFlats.add(inv.flat_id);
+    }
   }
-
-  const creditTotal = (credits ?? []).reduce(
-    (s, r) => s + Number(r.amount ?? 0),
-    0,
-  );
+  const defaulterCount = defaulterFlats.size;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -232,14 +231,14 @@ async function MaintenanceKpis() {
         accent="success"
       />
       <Kpi
-        label="Defaulters"
+        label="Defaulters (flats)"
         value={String(defaulterCount)}
         accent={defaulterCount > 0 ? "destructive" : undefined}
       />
       <Kpi
-        label="Credit balances"
-        value={formatCurrency(creditTotal)}
-        accent={creditTotal > 0 ? "success" : undefined}
+        label="Total outstanding"
+        value={formatCurrency(outstandingTotal)}
+        accent={outstandingTotal > 0 ? "destructive" : undefined}
       />
     </div>
   );
