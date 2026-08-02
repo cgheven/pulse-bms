@@ -60,8 +60,15 @@ export async function updateSession(request: NextRequest) {
   // — WhatsApp, Slack, LinkedIn — fetch these with no cookies, so a redirect to
   // /login here silently breaks every link preview.
   const isOgImage = pathname === "/opengraph-image" || pathname.endsWith("/opengraph-image");
+  // Tokenised platform-invoice PDF (/invoice/<share_token>). The link is sent to
+  // a client building over WhatsApp/email and opened by someone who has no Pulse
+  // account at all — the random UUID token IS the credential, checked inside the
+  // route handler. Same reasoning as isOgImage above: an anonymous, cookie-less
+  // fetch, so a redirect to /login here silently kills every invoice we send.
+  // Tight match: only /invoice/* (not /invoices or similar).
+  const isInvoiceShare = pathname.startsWith("/invoice/");
   const isPublic =
-    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword || isLanding || isOgImage;
+    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword || isLanding || isOgImage || isInvoiceShare;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

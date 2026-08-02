@@ -206,3 +206,99 @@ export type TrialCredentials = {
   created_by: string | null;
   created_at: string;
 };
+
+// ─── Pulse Platform Billing ──────────────────────────────────────────────────
+// PulseHub billing the CLIENT BUILDING for its Pulse BMS subscription.
+// Not to be confused with bms_invoices/bms_payments, which are the building's
+// own maintenance billing of its residents.
+// Pricing maths lives in lib/client-pricing.ts (pure, dependency-free).
+
+export type {
+  BillingCycle,
+  PricingTier,
+  PricingTierKey,
+  InvoiceAmounts,
+  ComputeInvoiceAmountsInput,
+} from "@/lib/client-pricing";
+
+export type PlatformInvoiceStatus = "unpaid" | "paid" | "cancelled";
+
+export const PLATFORM_INVOICE_STATUS_LABELS: Record<PlatformInvoiceStatus, string> = {
+  unpaid:    "Pending Payment",
+  paid:      "Paid",
+  cancelled: "Cancelled",
+};
+
+/** Row of bms_client_billing — one per building. */
+export type ClientBilling = {
+  id: string;
+  building_id: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  billing_cycle: "monthly" | "annual";
+  /**
+   * Super-admin override of the charged monthly amount, PRE annual discount.
+   * NULL = charge the standard tier price for the building's flat count.
+   * 0 = fully comped.
+   */
+  monthly_rate: number | null;
+  /** Applied only when billing_cycle = 'annual'. Defaults to 20. */
+  annual_discount_pct: number;
+  /** Defaults to TRUE — the onboarding fee is opt-in. First invoice only. */
+  waive_onboarding: boolean;
+  next_invoice_date: string | null;
+  pricing_notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Row of bms_platform_invoices.
+ *
+ * Everything from flats_count through amount is a SNAPSHOT frozen at
+ * generation time. The invoice PDF renders from these columns only and must
+ * never recompute against the building's current flat count or config.
+ */
+export type PlatformInvoice = {
+  id: string;
+  /** Sequence-backed human number, e.g. "INV-B0000042". */
+  invoice_no: string;
+  building_id: string;
+
+  billing_period_start: string;
+  billing_period_end: string;
+  /** e.g. "Aug 2026" (monthly) or "2026" (annual). */
+  period_label: string;
+  billing_cycle: "monthly" | "annual";
+
+  // ── Pricing snapshot ──
+  flats_count: number;
+  /** List price per month for flats_count at generation time. */
+  standard_monthly_rate: number;
+  /** Charged price per month, pre annual discount. */
+  monthly_rate: number;
+  /** Effective total discount vs. standard, display only. */
+  discount_pct: number;
+  /** List price for the whole period. */
+  standard_amount: number;
+  /** Charged subscription for the whole period, excludes onboarding. */
+  subscription_amount: number;
+  onboarding_fee_charged: number;
+  is_first_invoice: boolean;
+  /** Grand total: subscription_amount + onboarding_fee_charged. */
+  amount: number;
+
+  // ── Lifecycle ──
+  status: PlatformInvoiceStatus;
+  issue_date: string;
+  /** Net 7 from issue_date. */
+  due_date: string;
+  paid_at: string | null;
+  marked_paid_by: string | null;
+  /** Credential for the public /invoice/[token] PDF route. Never log it. */
+  share_token: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};

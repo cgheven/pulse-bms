@@ -69,6 +69,10 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
         { href: "/super-admin/teams",      label: "Team Members",     icon: Users },
         { href: "/super-admin/leads",      label: "Leads",            icon: Target },
         { href: "/super-admin/trials",     label: "Client Buildings", icon: Building2 },
+        // Pulse-bills-the-client platform billing. super_admin ONLY — sales
+        // must never see or edit platform invoices, so this is deliberately
+        // absent from the `sales` nav below.
+        { href: "/super-admin/billing",    label: "Platform Billing", icon: Receipt },
         { href: "/super-admin/inquiries",  label: "Inquiries",        icon: ClipboardList },
         { href: "/super-admin/audit",      label: "Audit Log",        icon: ScrollText },
       ],
