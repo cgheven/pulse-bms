@@ -3,7 +3,13 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBuilding } from "@/lib/building-context";
-import { formatCurrency, formatDate, getMonthRange } from "@/lib/utils";
+import {
+  formatCurrency,
+  formatDate,
+  formatMonthLabel,
+  getMonthBounds,
+  getMonthRange,
+} from "@/lib/utils";
 import {
   EXPENSE_CATEGORY_LABELS,
   EXPENSE_FILTER_CATEGORIES,
@@ -11,6 +17,7 @@ import {
 } from "@/lib/expense-constants";
 import { AddExpenseButton } from "@/components/admin/expenses/add-expense-button";
 import { ExpenseRowActions } from "@/components/admin/expenses/expense-row-actions";
+import { ExpenseMonthFilter } from "@/components/admin/expenses/expense-month-filter";
 import {
   Tabs,
   TabsContent,
@@ -21,7 +28,41 @@ import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ category?: string; tab?: string }>;
+type SearchParams = Promise<{ category?: string; tab?: string; month?: string }>;
+
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/**
+ * Every month between the building's first and last recorded expense, newest
+ * first. Months with no rows are kept in the list on purpose — picking one and
+ * seeing zero is a legitimate answer ("did we log anything in March?").
+ */
+function buildMonthOptions(
+  oldest: string | undefined,
+  newest: string | undefined,
+  selected?: string,
+): string[] {
+  const set = new Set<string>();
+  if (oldest && newest) {
+    const [oy, om] = oldest.slice(0, 7).split("-").map(Number);
+    const [ny, nm] = newest.slice(0, 7).split("-").map(Number);
+    let y = oy;
+    let m = om;
+    // Hard iteration cap so a malformed date can't spin this forever.
+    for (let i = 0; i < 600 && (y < ny || (y === ny && m <= nm)); i++) {
+      set.add(`${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}`);
+      if (m === 12) {
+        y += 1;
+        m = 1;
+      } else {
+        m += 1;
+      }
+    }
+  }
+  // Keep a deep-linked month selectable even if it falls outside the data range.
+  if (selected) set.add(selected);
+  return Array.from(set).sort().reverse();
+}
 
 export default function ExpensesPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -45,11 +86,22 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
   }
   const sp = await searchParams;
   const supabase = await createClient();
-  const month = getMonthRange();
 
-  // Category filter pushed to the DB so the .limit(500) cap is applied
-  // after filtering, not before (avoids silently missing older rows of a
-  // requested category).
+  // `?month=YYYY-MM` narrows both lists and the summary. Validated against a
+  // strict pattern so a junk value can't silently blank the page.
+  const selectedMonth = sp.month && MONTH_RE.test(sp.month) ? sp.month : undefined;
+  // Summary falls back to the current month when nothing is picked.
+  const month = selectedMonth ? getMonthBounds(selectedMonth) : getMonthRange();
+
+  // Category + month filters are pushed to the DB so the .limit(500) cap is
+  // applied after filtering, not before (avoids silently missing older rows
+  // of a requested category/month).
+  let billsQuery = supabase
+    .from("bms_expenses")
+    .select("*")
+    .eq("building_id", buildingId)
+    .eq("is_bill", true);
+
   let expensesQuery = supabase
     .from("bms_expenses")
     .select("*")
@@ -58,20 +110,24 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
   if (sp.category) {
     expensesQuery = expensesQuery.eq("category", sp.category);
   }
+  if (selectedMonth) {
+    billsQuery = billsQuery
+      .gte("expense_date", month.start)
+      .lte("expense_date", month.end);
+    expensesQuery = expensesQuery
+      .gte("expense_date", month.start)
+      .lte("expense_date", month.end);
+  }
 
   const [
     { data: billsRaw, error: billsErr },
     { data: expensesRaw, error: expensesErr },
     { data: billAccounts, error: baErr },
     { data: thisMonth, error: tmErr },
+    { data: oldestRow },
+    { data: newestRow },
   ] = await Promise.all([
-    supabase
-      .from("bms_expenses")
-      .select("*")
-      .eq("building_id", buildingId)
-      .eq("is_bill", true)
-      .order("expense_date", { ascending: false })
-      .limit(500),
+    billsQuery.order("expense_date", { ascending: false }).limit(500),
     expensesQuery
       .order("expense_date", { ascending: false })
       .limit(500),
@@ -85,7 +141,28 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
       .eq("building_id", buildingId)
       .gte("expense_date", month.start)
       .lte("expense_date", month.end),
+    // Month options are derived from the first/last dated row rather than by
+    // pulling every expense_date — two indexed single-row reads, and no risk
+    // of the option list being truncated by a row cap.
+    supabase
+      .from("bms_expenses")
+      .select("expense_date")
+      .eq("building_id", buildingId)
+      .order("expense_date", { ascending: true })
+      .limit(1),
+    supabase
+      .from("bms_expenses")
+      .select("expense_date")
+      .eq("building_id", buildingId)
+      .order("expense_date", { ascending: false })
+      .limit(1),
   ]);
+
+  const monthOptions = buildMonthOptions(
+    oldestRow?.[0]?.expense_date,
+    newestRow?.[0]?.expense_date,
+    selectedMonth,
+  );
 
   if (billsErr) console.error("[expenses] bills query failed:", billsErr.message);
   if (expensesErr) console.error("[expenses] expenses query failed:", expensesErr.message);
@@ -138,11 +215,13 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
     ? sp.tab!
     : "bills";
 
-  // Helper: build a category-filter URL that also preserves the expenses tab.
-  const filterHref = (cat?: string) =>
-    cat
-      ? `/admin/expenses?tab=expenses&category=${cat}`
-      : "/admin/expenses?tab=expenses";
+  // Helper: build a category-filter URL that preserves the tab and month.
+  const filterHref = (cat?: string) => {
+    const params = new URLSearchParams({ tab: "expenses" });
+    if (cat) params.set("category", cat);
+    if (selectedMonth) params.set("month", selectedMonth);
+    return `/admin/expenses?${params.toString()}`;
+  };
 
   return (
     <>
@@ -158,21 +237,33 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
           because defaultValue is only consumed at initial mount and Next.js
           App Router reconciles client components in place without remounting. */}
       <Tabs key={activeTab} defaultValue={activeTab}>
-        <TabsList>
-          <TabsTrigger value="bills">
-            Bills
-            {bills.length > 0 && (
-              <span className="ml-1.5 text-xs text-muted-foreground">({bills.length})</span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="expenses">
-            Expenses
-            {expenses.length > 0 && (
-              <span className="ml-1.5 text-xs text-muted-foreground">({expenses.length})</span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="summary">This Month</TabsTrigger>
-        </TabsList>
+        {/* Tabs and the month filter share one row — the tab pill is only as
+            wide as its labels, so the leftover space carries the filter. */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <TabsList>
+            <TabsTrigger value="bills">
+              Bills
+              {bills.length > 0 && (
+                <span className="ml-1.5 text-xs text-muted-foreground">({bills.length})</span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="expenses">
+              Expenses
+              {expenses.length > 0 && (
+                <span className="ml-1.5 text-xs text-muted-foreground">({expenses.length})</span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="summary">
+              {selectedMonth ? formatMonthLabel(selectedMonth) : "This Month"}
+            </TabsTrigger>
+          </TabsList>
+          <ExpenseMonthFilter
+            months={monthOptions}
+            value={selectedMonth ?? "all"}
+            tab={activeTab}
+            category={sp.category}
+          />
+        </div>
 
         {/* ── Bills tab ── */}
         <TabsContent value="bills" className="space-y-3">
@@ -194,8 +285,14 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
                   {bills.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-3 py-12 text-center text-muted-foreground">
-                        No bills recorded yet. Click{" "}
-                        <span className="font-medium text-foreground">Add Bill</span> to get started.
+                        {selectedMonth ? (
+                          <>No bills recorded in {formatMonthLabel(selectedMonth)}.</>
+                        ) : (
+                          <>
+                            No bills recorded yet. Click{" "}
+                            <span className="font-medium text-foreground">Add Bill</span> to get started.
+                          </>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -292,8 +389,8 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
                   {expenses.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-3 py-12 text-center text-muted-foreground">
-                        {sp.category
-                          ? "No expenses in this category."
+                        {sp.category || selectedMonth
+                          ? "No expenses match these filters."
                           : <>No expenses recorded yet. Click <span className="font-medium text-foreground">Add Expense</span> to get started.</>}
                       </td>
                     </tr>
@@ -333,7 +430,11 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
         <TabsContent value="summary">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <div className="card-soft">
-              <div className="text-muted-foreground text-sm">Total this month</div>
+              <div className="text-muted-foreground text-sm">
+                {selectedMonth
+                  ? `Total — ${formatMonthLabel(selectedMonth)}`
+                  : "Total this month"}
+              </div>
               <div className="text-3xl font-bold mt-1">
                 {formatCurrency(billsTotal + expensesTotal)}
               </div>

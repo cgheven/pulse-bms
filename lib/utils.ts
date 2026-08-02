@@ -78,6 +78,29 @@ export function getMonthRange(date = new Date()) {
   };
 }
 
+/**
+ * "2026-01" → "January 2026". Parsed as local midnight — `new Date("2026-01")`
+ * is treated as UTC and would render the previous month west of Greenwich.
+ */
+export function formatMonthLabel(ym: string): string {
+  return new Date(`${ym}-01T00:00:00`).toLocaleDateString("en-PK", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/**
+ * Inclusive first/last day of a "YYYY-MM" month, as YYYY-MM-DD strings.
+ * Safe for date-only columns (`expense_date`, `billing_month`).
+ */
+export function getMonthBounds(ym: string) {
+  const [y, m] = ym.split("-").map(Number);
+  return {
+    start: `${ym}-01`,
+    end: formatDateInput(new Date(y, m, 0)),
+  };
+}
+
 export function getDaysUntilExpiry(expiryDate: string): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

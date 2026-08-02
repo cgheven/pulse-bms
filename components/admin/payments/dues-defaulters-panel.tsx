@@ -4,7 +4,14 @@ import { useMemo, useState } from "react";
 import { MessageCircle, Receipt, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { formatCurrency, formatDate, formatMonthLabel } from "@/lib/utils";
 import { toIntlNoPlus } from "@/lib/phone";
 import {
   RecordPaymentDialog,
@@ -41,21 +48,30 @@ export function DuesDefaultersPanel({
   flatPickerOptions?: FlatPickerOption[];
 }) {
   const [filter, setFilter] = useState<Filter>("not_paid");
+  const [month, setMonth] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [recordRow, setRecordRow] = useState<DefaulterRow | null>(null);
+
+  // Months that actually carry dues, newest first — no empty options.
+  const months = useMemo(() => {
+    const s = new Set<string>();
+    for (const d of defaulters) s.add(d.billing_month.slice(0, 7));
+    return Array.from(s).sort().reverse();
+  }, [defaulters]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return defaulters.filter((d) => {
       if (filter === "overdue" && d.days_late <= 0) return false;
       if (filter === "not_paid" && d.amount_due <= 0) return false;
+      if (month !== "all" && d.billing_month.slice(0, 7) !== month) return false;
       if (!q) return true;
       return (
         d.flat_number.toLowerCase().includes(q) ||
         (d.resident_name ?? "").toLowerCase().includes(q)
       );
     });
-  }, [defaulters, filter, query]);
+  }, [defaulters, filter, month, query]);
 
   const totalDue = filtered.reduce((s, d) => s + d.amount_due, 0);
 
@@ -85,7 +101,11 @@ export function DuesDefaultersPanel({
             <AlertCircle className="h-5 w-5 text-destructive" />
           </div>
           <div>
-            <h3 className="font-semibold">Maintenance dues — not paid</h3>
+            <h3 className="font-semibold">
+              {month === "all"
+                ? "Maintenance dues — not paid"
+                : `Maintenance dues — ${formatMonthLabel(month)}`}
+            </h3>
             <p className="text-sm text-muted-foreground mt-0.5">
               {filtered.length} {filtered.length === 1 ? "invoice" : "invoices"}{" "}
               • {formatCurrency(totalDue)} still due
@@ -115,6 +135,19 @@ export function DuesDefaultersPanel({
             All
           </FilterChip>
         </div>
+        <Select value={month} onValueChange={setMonth}>
+          <SelectTrigger className="shrink-0 sm:w-48">
+            <SelectValue placeholder="Month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All months</SelectItem>
+            {months.map((m) => (
+              <SelectItem key={m} value={m}>
+                {formatMonthLabel(m)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Input
           placeholder="Search by flat or resident"
           value={query}
