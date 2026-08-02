@@ -13,9 +13,10 @@ type Props = {
   children: React.ReactNode;
   governanceTile: React.ReactNode;
   header: React.ReactNode;
+  monthFilter?: React.ReactNode;
 };
 
-export function AdminDashboardShell({ children, governanceTile, header }: Props) {
+export function AdminDashboardShell({ children, governanceTile, header, monthFilter }: Props) {
   const { settings, update, mounted } = useAdminDashboardSettings();
   const showGovernance = mounted ? settings.showGovernance : false;
 
@@ -23,9 +24,11 @@ export function AdminDashboardShell({ children, governanceTile, header }: Props)
     <>
       <div className="flex items-start justify-between gap-4">
         <div>{header}</div>
-        <Popover>
+        <div className="flex items-center gap-2 shrink-0 mt-1">
+          {monthFilter}
+          <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-muted-foreground hover:text-foreground shrink-0 mt-1">
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-muted-foreground hover:text-foreground shrink-0">
               <Settings2 className="w-3.5 h-3.5" />
               Customise
             </Button>
@@ -51,7 +54,8 @@ export function AdminDashboardShell({ children, governanceTile, header }: Props)
               </div>
             </label>
           </PopoverContent>
-        </Popover>
+          </Popover>
+        </div>
       </div>
 
       {children}

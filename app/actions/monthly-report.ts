@@ -4,6 +4,7 @@ import { requireRole, getCurrentBuildingName } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBuilding } from "@/lib/building-context";
 import { formatReceiptNo, formatDate } from "@/lib/utils";
+import { getCashTotals } from "@/lib/finance-totals";
 
 export type SectionKey = "collections" | "expenses" | "bills" | "salaries" | "projects";
 
@@ -124,13 +125,8 @@ export async function getMonthlyReportData(input: {
 
     const [
       { data: building },
-      { data: payAll },
-      { data: expAll },
-      { data: salAll },
-      { data: payPeriod },
-      { data: expPeriod },
-      { data: billPeriod },
-      { data: salPeriod },
+      lifetime,
+      period,
       { data: collectionsRaw },
       { data: expensesRaw },
       { data: billsRaw },
@@ -139,15 +135,11 @@ export async function getMonthlyReportData(input: {
       { data: projectsLookup },
     ] = await Promise.all([
       supabase.from("bms_buildings").select("fund_balance").eq("id", buildingId).single(),
-      // All-time totals for fund balance
-      supabase.from("bms_payments").select("amount.sum()").eq("building_id", buildingId),
-      supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId),
-      supabase.from("bms_salary_payments").select("amount.sum()").eq("building_id", buildingId),
-      // Period totals for KPI summary
-      supabase.from("bms_payments").select("amount.sum()").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to),
-      supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId).eq("is_bill", false).gte("expense_date", from).lte("expense_date", to),
-      supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId).eq("is_bill", true).gte("expense_date", from).lte("expense_date", to),
-      supabase.from("bms_salary_payments").select("amount.sum()").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to),
+      // All-time totals for fund balance, then the period totals for the KPI
+      // summary. PostgREST aggregates are disabled on this project — these go
+      // via the RPC, falling back to paged sums if it isn't deployed yet.
+      getCashTotals(supabase, buildingId),
+      getCashTotals(supabase, buildingId, { from, to }),
       // Section rows — only fetched when selected
       sections.includes("collections")
         ? supabase.from("bms_payments").select(`id, payment_date, amount, payment_mode, category, receipt_no, notes, bms_flats!inner(flat_number), bms_residents(full_name)`).eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to).order("payment_date", { ascending: false }).limit(5000)
@@ -171,14 +163,16 @@ export async function getMonthlyReportData(input: {
 
     const fundBalance =
       Number(building?.fund_balance ?? 0) +
-      Number((payAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0) -
-      Number((expAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0) -
-      Number((salAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
+      lifetime.payments -
+      lifetime.expenses -
+      lifetime.salaries;
 
-    const collected = Number((payPeriod  as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
-    const expenses  = Number((expPeriod  as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
-    const bills     = Number((billPeriod as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
-    const salaries  = Number((salPeriod  as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
+    const collected = period.payments;
+    // `expenses` here means operations only — bills are reported separately,
+    // so subtract the bill subset rather than double-counting it below.
+    const expenses  = period.expenses - period.bills;
+    const bills     = period.bills;
+    const salaries  = period.salaries;
     const net       = collected - expenses - bills - salaries;
 
     // Build collections rows

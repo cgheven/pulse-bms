@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
-import type { StaffRole } from "@/types";
+import { PAYMENT_MODE, type StaffRole } from "@/types";
 
 export type StaffInput = {
   full_name: string;
@@ -246,6 +246,23 @@ export async function paySalary(input: {
     .maybeSingle();
   if (existingSalary) throw new Error("Salary for this month has already been recorded.");
 
+  // Map the UI's form value to the DB enum, same as recordPayment does.
+  // Without this, "Bank Transfer" was sent raw and violated the check
+  // constraint — the dialog offered a mode the table could not store.
+  const dbPaymentMode = (() => {
+    const m = input.payment_mode || PAYMENT_MODE.CASH;
+    if (m === PAYMENT_MODE.BANK_TRANSFER) return PAYMENT_MODE.BANK;
+    if (
+      m === PAYMENT_MODE.CASH ||
+      m === PAYMENT_MODE.BANK ||
+      m === PAYMENT_MODE.ONLINE ||
+      m === PAYMENT_MODE.CHEQUE
+    ) {
+      return m;
+    }
+    return PAYMENT_MODE.CASH;
+  })();
+
   const { data, error } = await supabase
     .from("bms_salary_payments")
     .insert({
@@ -254,7 +271,7 @@ export async function paySalary(input: {
       pay_month: input.pay_month,
       amount: input.amount,
       payment_date: new Date().toISOString().split("T")[0],
-      payment_mode: input.payment_mode ?? "cash",
+      payment_mode: dbPaymentMode,
       slip_no: input.slip_no ?? null,
       notes: input.notes ?? null,
       paid_by: user.id,

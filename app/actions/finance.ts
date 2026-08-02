@@ -3,6 +3,7 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBuilding } from "@/lib/building-context";
+import { getCashTotals } from "@/lib/finance-totals";
 
 export type FinanceMonthly = {
   month: string; // YYYY-MM
@@ -48,12 +49,8 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
     { data: payments },
     { data: expenses },
     { data: salaries },
-    { data: paymentsYtd },
-    { data: expensesYtd },
-    { data: salariesYtd },
-    { data: paymentsAll },
-    { data: expensesAll },
-    { data: salariesAll },
+    ytd,
+    lifetime,
   ] = await Promise.all([
     supabase
       .from("bms_buildings")
@@ -78,51 +75,21 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
       .eq("building_id", buildingId)
       .gte("payment_date", start12Iso)
       .limit(5000),
-    supabase
-      .from("bms_payments")
-      .select("amount.sum()")
-      .eq("building_id", buildingId)
-      .gte("payment_date", ytdStart),
-    supabase
-      .from("bms_expenses")
-      .select("amount.sum()")
-      .eq("building_id", buildingId)
-      .gte("expense_date", ytdStart),
-    supabase
-      .from("bms_salary_payments")
-      .select("amount.sum()")
-      .eq("building_id", buildingId)
-      .gte("payment_date", ytdStart),
-    // Server-side SUM aggregates — avoids fetching every row across all time
-    // and eliminates the PostgREST max_rows truncation risk on the fund balance.
-    supabase
-      .from("bms_payments")
-      .select("amount.sum()")
-      .eq("building_id", buildingId),
-    supabase
-      .from("bms_expenses")
-      .select("amount.sum()")
-      .eq("building_id", buildingId),
-    supabase
-      .from("bms_salary_payments")
-      .select("amount.sum()")
-      .eq("building_id", buildingId),
+    // PostgREST aggregates are disabled on this project, so both of these go
+    // through the RPC (paged fallback if it isn't deployed yet).
+    getCashTotals(supabase, buildingId, { from: ytdStart }),
+    getCashTotals(supabase, buildingId),
   ]);
   const initialFund = Number(building?.fund_balance ?? 0);
 
   const sum = (rows: { amount: number | string | null }[] | null) =>
     (rows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
 
-  const income_ytd = Number((paymentsYtd as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
-  const expense_ytd =
-    Number((expensesYtd as { sum: string | null }[] | null)?.[0]?.sum ?? 0) +
-    Number((salariesYtd as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
+  const income_ytd = ytd.payments;
+  const expense_ytd = ytd.expenses + ytd.salaries;
   const net_ytd = income_ytd - expense_ytd;
   const fund_balance =
-    initialFund +
-    Number((paymentsAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0) -
-    Number((expensesAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0) -
-    Number((salariesAll as { sum: string | null }[] | null)?.[0]?.sum ?? 0);
+    initialFund + lifetime.payments - lifetime.expenses - lifetime.salaries;
 
   // Build 12-month buckets
   const buckets: Map<string, FinanceMonthly> = new Map();

@@ -7,6 +7,7 @@ import { getActiveBuilding } from "@/lib/building-context";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
 import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
 import { formatCurrency } from "@/lib/utils";
+import { getCashTotals } from "@/lib/finance-totals";
 import { MonthlyReportButton } from "./monthly-report-button";
 
 export const dynamic = "force-dynamic";
@@ -61,9 +62,7 @@ async function SummaryData() {
     { data: expMonth },
     { data: billMonth },
     { data: salMonth },
-    { data: payAll },
-    { data: expAll },
-    { data: salAll },
+    lifetime,
     { data: flatsOwing },
     { data: levyCharges },
   ] = await Promise.all([
@@ -72,11 +71,9 @@ async function SummaryData() {
     supabase.from("bms_expenses").select("amount").eq("building_id", buildingId).eq("is_bill", false).gte("expense_date", from).lte("expense_date", to),
     supabase.from("bms_expenses").select("amount").eq("building_id", buildingId).eq("is_bill", true).gte("expense_date", from).lte("expense_date", to),
     supabase.from("bms_salary_payments").select("amount").eq("building_id", buildingId).gte("payment_date", from).lte("payment_date", to),
-    // Server-side SUM aggregates — one row returned instead of all rows,
-    // prevents PostgREST max_rows truncation from producing a wrong fund balance.
-    supabase.from("bms_payments").select("amount.sum()").eq("building_id", buildingId),
-    supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId),
-    supabase.from("bms_salary_payments").select("amount.sum()").eq("building_id", buildingId),
+    // Lifetime totals for the fund balance. PostgREST aggregates are disabled
+    // on this project, so this goes through the RPC (with a paged fallback).
+    getCashTotals(supabase, buildingId),
     supabase.from("bms_flats").select("outstanding_dues").eq("building_id", buildingId).gt("outstanding_dues", 0),
     supabase.from("bms_levy_charges").select("amount").eq("building_id", buildingId).eq("status", "pending"),
   ]);
@@ -91,12 +88,11 @@ async function SummaryData() {
   const totalSpent = expensesAmt + billsAmt + salariesAmt;
   const net = collected - totalSpent;
 
-  type SumRow = { sum: string | null };
   const fundBalance =
     Number(buildingRow?.fund_balance ?? 0) +
-    Number((payAll as SumRow[] | null)?.[0]?.sum ?? 0) -
-    Number((expAll as SumRow[] | null)?.[0]?.sum ?? 0) -
-    Number((salAll as SumRow[] | null)?.[0]?.sum ?? 0);
+    lifetime.payments -
+    lifetime.expenses -
+    lifetime.salaries;
 
   const pendingMaint = (flatsOwing ?? []).reduce(
     (s, f) => s + Number((f as { outstanding_dues?: number | string }).outstanding_dues ?? 0),

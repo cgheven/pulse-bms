@@ -9,8 +9,11 @@ import {
   formatCurrency,
   formatDate,
   formatLakh,
+  formatMonthLabel,
   formatRelative,
 } from "@/lib/utils";
+import { DashboardMonthFilter } from "@/components/admin/dashboard-month-filter";
+import { getCashTotals, cashBalanceFrom } from "@/lib/finance-totals";
 import { KpiRowSkeleton, TableSkeleton } from "@/components/layout/table-skeleton";
 import {
   ArrowRight,
@@ -36,8 +39,75 @@ import {
 export const dynamic = "force-dynamic";
 
 const ACTIVITY_DAYS = 7;
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
-export default async function AdminDashboardPage() {
+/** First day of a month, N months offset from "YYYY-MM", as YYYY-MM-DD. */
+function monthStartIso(ym: string, offset = 0): string {
+  const [y, m] = ym.split("-").map(Number);
+  // Date.UTC keeps this independent of the server's timezone — building the
+  // date with `new Date(y, m, 1)` then calling toISOString() shifts a day
+  // backwards on any server east of UTC (e.g. a machine set to PKT).
+  return new Date(Date.UTC(y, m - 1 + offset, 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * Selectable months: earliest recorded activity → current month, newest first.
+ * Capped at 60 so an odd imported date can't produce an endless dropdown.
+ */
+function buildMonthOptions(earliest: string, current: string, selected: string): string[] {
+  const set = new Set<string>([current, selected]);
+  let cursor = earliest <= current ? earliest : current;
+  for (let i = 0; i < 60 && cursor <= current; i++) {
+    set.add(cursor);
+    cursor = monthStartIso(cursor, 1).slice(0, 7);
+  }
+  return Array.from(set).sort().reverse();
+}
+
+/**
+ * Oldest month with any financial record, so the picker only offers months the
+ * building actually existed for. Three indexed single-row reads, not a scan.
+ */
+async function earliestActivityMonth(
+  buildingId: string,
+  fallbackYm: string,
+): Promise<string> {
+  const supabase = await createClient();
+  const [{ data: inv }, { data: pay }, { data: exp }] = await Promise.all([
+    supabase
+      .from("bms_invoices")
+      .select("billing_month")
+      .eq("building_id", buildingId)
+      .order("billing_month", { ascending: true })
+      .limit(1),
+    supabase
+      .from("bms_payments")
+      .select("payment_date")
+      .eq("building_id", buildingId)
+      .order("payment_date", { ascending: true })
+      .limit(1),
+    supabase
+      .from("bms_expenses")
+      .select("expense_date")
+      .eq("building_id", buildingId)
+      .order("expense_date", { ascending: true })
+      .limit(1),
+  ]);
+  const candidates = [
+    inv?.[0]?.billing_month,
+    pay?.[0]?.payment_date,
+    exp?.[0]?.expense_date,
+  ]
+    .filter(Boolean)
+    .map((d) => String(d).slice(0, 7));
+  return candidates.length ? candidates.sort()[0] : fallbackYm;
+}
+
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
   const { profile } = await requireRole(["admin", "super_admin"]);
   void profile;
   const buildingId = await getActiveBuilding();
@@ -49,40 +119,46 @@ export default async function AdminDashboardPage() {
       </div>
     );
   }
+  const sp = await searchParams;
   // Use PKT (UTC+5) for month boundaries so the dashboard shows the correct
   // month during the first 5 hours of each calendar day in Pakistan.
   const pkNow = new Date(Date.now() + 5 * 60 * 60 * 1000);
   const todayIso = pkNow.toISOString().slice(0, 10);
-  const ym = todayIso.slice(0, 7);
-  const monthStart = `${ym}-01`;
-  const nextMonthStart = new Date(
-    pkNow.getUTCFullYear(),
-    pkNow.getUTCMonth() + 1,
-    1,
-  )
+  const currentYm = todayIso.slice(0, 7);
+
+  // `?month=YYYY-MM` re-scopes the whole dashboard. Validated so a junk value
+  // silently falls back to the current month rather than blanking every tile.
+  const ym = sp.month && MONTH_RE.test(sp.month) ? sp.month : currentYm;
+  const isCurrentMonth = ym === currentYm;
+
+  const monthStart = monthStartIso(ym);
+  const nextMonthStart = monthStartIso(ym, 1);
+  // Inclusive last day of the selected month — the as-of point for cash held.
+  const monthEnd = new Date(new Date(`${nextMonthStart}T00:00:00Z`).getTime() - 86400_000)
     .toISOString()
     .slice(0, 10);
-  const prevMonthStart = new Date(
-    pkNow.getUTCFullYear(),
-    pkNow.getUTCMonth() - 1,
-    1,
-  )
-    .toISOString()
-    .slice(0, 10);
-  const sixMonthsAgo = new Date(pkNow.getUTCFullYear(), pkNow.getUTCMonth() - 5, 1)
-    .toISOString()
-    .slice(0, 10);
+  const prevMonthStart = monthStartIso(ym, -1);
+  const sixMonthsAgo = monthStartIso(ym, -5);
   const sevenDaysAgo = new Date(pkNow.getTime() - ACTIVITY_DAYS * 86400_000)
     .toISOString();
 
-  const monthLabel = new Date(`${monthStart}T00:00:00`).toLocaleDateString(
-    "en-US",
-    { month: "long", year: "numeric" },
-  );
+  // Recent activity stays a live 7-day feed on the current month; on a past
+  // month it becomes that month's activity so the feed can't contradict the
+  // numbers above it.
+  const feedSince = isCurrentMonth ? sevenDaysAgo : `${monthStart}T00:00:00.000Z`;
+  const feedUntil = `${nextMonthStart}T00:00:00.000Z`;
+
+  const monthLabel = formatMonthLabel(ym);
   const todayLabel = new Date(pkNow).toLocaleDateString("en-PK", {
     day: "2-digit",
     month: "long",
   });
+
+  const monthOptions = buildMonthOptions(
+    await earliestActivityMonth(buildingId, currentYm),
+    currentYm,
+    ym,
+  );
 
   return (
     <div className="space-y-5 animate-fade-up max-w-5xl">
@@ -91,9 +167,17 @@ export default async function AdminDashboardPage() {
           <header>
             <h1>Admin Dashboard</h1>
             <p className="text-muted-foreground mt-1">
-              Sunrise · {monthLabel} · Today is {todayLabel}
+              Sunrise · {monthLabel}
+              {isCurrentMonth ? ` · Today is ${todayLabel}` : " · past month"}
             </p>
           </header>
+        }
+        monthFilter={
+          <DashboardMonthFilter
+            months={monthOptions}
+            value={ym}
+            currentMonth={currentYm}
+          />
         }
         governanceTile={
           <Suspense fallback={<KpiRowSkeleton count={1} />}>
@@ -106,9 +190,11 @@ export default async function AdminDashboardPage() {
             buildingId={buildingId}
             monthStart={monthStart}
             nextMonthStart={nextMonthStart}
+            monthEnd={monthEnd}
             prevMonthStart={prevMonthStart}
             sixMonthsAgo={sixMonthsAgo}
             monthLabel={monthLabel}
+            isCurrentMonth={isCurrentMonth}
           />
         </Suspense>
 
@@ -130,7 +216,13 @@ export default async function AdminDashboardPage() {
         </Suspense>
 
         <Suspense fallback={<TableSkeleton rows={6} />}>
-          <ActivityFeed buildingId={buildingId} sinceIso={sevenDaysAgo} />
+          <ActivityFeed
+            buildingId={buildingId}
+            sinceIso={feedSince}
+            untilIso={feedUntil}
+            monthScoped={!isCurrentMonth}
+            rangeLabel={isCurrentMonth ? `Last ${ACTIVITY_DAYS} days` : monthLabel}
+          />
         </Suspense>
 
         <ActionFooter />
@@ -392,16 +484,20 @@ async function FinancialCards({
   buildingId,
   monthStart,
   nextMonthStart,
+  monthEnd,
   prevMonthStart,
   sixMonthsAgo,
   monthLabel,
+  isCurrentMonth,
 }: {
   buildingId: string;
   monthStart: string;
   nextMonthStart: string;
+  monthEnd: string;
   prevMonthStart: string;
   sixMonthsAgo: string;
   monthLabel: string;
+  isCurrentMonth: boolean;
 }) {
   const supabase = await createClient();
 
@@ -414,13 +510,15 @@ async function FinancialCards({
     { data: monthSalaries },
     { data: prevExpenses },
     { data: prevSalaries },
-    { data: allPayments },
-    { data: allExpenses },
-    { data: allSalaries },
+    cashTotals,
     { data: monthInvoices },
     { data: prevInvoices },
   ] = await Promise.all([
-    supabase.from("bms_buildings").select("fund_balance").eq("id", buildingId).single(),
+    supabase
+      .from("bms_buildings")
+      .select("fund_balance, opening_balance_date")
+      .eq("id", buildingId)
+      .single(),
     supabase
       .from("bms_payments")
       .select("amount")
@@ -451,9 +549,10 @@ async function FinancialCards({
       .eq("building_id", buildingId)
       .gte("payment_date", prevMonthStart)
       .lt("payment_date", monthStart),
-    supabase.from("bms_payments").select("amount.sum()").eq("building_id", buildingId),
-    supabase.from("bms_expenses").select("amount.sum()").eq("building_id", buildingId),
-    supabase.from("bms_salary_payments").select("amount.sum()").eq("building_id", buildingId),
+    // Cumulative up to the END of the selected month, so switching to a past
+    // month shows the closing balance actually held then — not today's. On the
+    // current month this window covers everything, so the figure is unchanged.
+    getCashTotals(supabase, buildingId, { to: monthEnd }),
     supabase
       .from("bms_invoices")
       .select("id, amount, status, flat_id, bms_flats(flat_number)")
@@ -486,12 +585,19 @@ async function FinancialCards({
 
   // Cash balance (cumulative) — uses server-side SUM so PostgREST max_rows
   // never silently truncates buildings with >1,000 historical records.
-  type SumRow = { sum: string | null };
-  const fundBalance =
-    Number(building?.fund_balance ?? 0) +
-    Number((allPayments as SumRow[] | null)?.[0]?.sum ?? 0) -
-    Number((allExpenses as SumRow[] | null)?.[0]?.sum ?? 0) -
-    Number((allSalaries as SumRow[] | null)?.[0]?.sum ?? 0);
+  // The opening balance only counts once its as-of date has arrived — viewing
+  // a month before the society recorded its cash-in-hand shouldn't show money
+  // it didn't have yet. A null date means "always applied" (legacy rows).
+  const fundBalance = cashBalanceFrom(
+    cashTotals,
+    {
+      amount: Number(building?.fund_balance ?? 0),
+      date:
+        (building as { opening_balance_date?: string | null } | null)
+          ?.opening_balance_date ?? null,
+    },
+    monthEnd,
+  );
 
   // Maintenance collection (money tied to current-month invoices)
   type InvRow = { id: string; amount: number | string | null; status: string | null; flat_id: string | null; bms_flats: { flat_number: string } | { flat_number: string }[] | null };
@@ -571,7 +677,11 @@ async function FinancialCards({
           {formatCurrency(fundBalance)}
         </div>
         <div className="mt-3">
-          <p className="text-[11px] text-muted-foreground">Total cash held</p>
+          <p className="text-[11px] text-muted-foreground">
+            {isCurrentMonth
+              ? "Total cash held"
+              : `Closing balance · end of ${monthLabel}`}
+          </p>
         </div>
       </Link>
 
@@ -623,7 +733,7 @@ async function FinancialCards({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(151_70%_55%)]" />
-            Paid this month
+            {isCurrentMonth ? "Paid this month" : `Paid · ${monthLabel}`}
           </div>
           <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[hsl(151_70%_55%)]" />
         </div>
@@ -1002,9 +1112,16 @@ type FeedItem = {
 async function ActivityFeed({
   buildingId,
   sinceIso,
+  untilIso,
+  monthScoped,
+  rangeLabel,
 }: {
   buildingId: string;
   sinceIso: string;
+  untilIso: string;
+  /** True when viewing a past month — trims the feed to that month exactly. */
+  monthScoped: boolean;
+  rangeLabel: string;
 }) {
   const supabase = await createClient();
 
@@ -1024,6 +1141,7 @@ async function ActivityFeed({
       )
       .eq("building_id", buildingId)
       .gte("created_at", sinceIso)
+      .lt("created_at", untilIso)
       .order("created_at", { ascending: false })
       .limit(20),
     supabase
@@ -1031,6 +1149,7 @@ async function ActivityFeed({
       .select("id, amount, expense_date, created_at, description, vendor, category")
       .eq("building_id", buildingId)
       .gte("created_at", sinceIso)
+      .lt("created_at", untilIso)
       .order("created_at", { ascending: false })
       .limit(20),
     supabase
@@ -1040,6 +1159,7 @@ async function ActivityFeed({
       )
       .eq("building_id", buildingId)
       .gte("created_at", sinceIso)
+      .lt("created_at", untilIso)
       .order("created_at", { ascending: false })
       .limit(20),
     supabase
@@ -1053,6 +1173,7 @@ async function ActivityFeed({
       .select("id, title, proposal_type, status, created_at")
       .eq("building_id", buildingId)
       .gte("created_at", sinceIso)
+      .lt("created_at", untilIso)
       .order("created_at", { ascending: false })
       .limit(10),
     supabase
@@ -1060,6 +1181,7 @@ async function ActivityFeed({
       .select("id, title, notice_type, pinned, created_at")
       .eq("building_id", buildingId)
       .gte("created_at", sinceIso)
+      .lt("created_at", untilIso)
       .order("created_at", { ascending: false })
       .limit(10),
     supabase
@@ -1069,6 +1191,7 @@ async function ActivityFeed({
       )
       .eq("building_id", buildingId)
       .gte("move_in_date", sinceIso.slice(0, 10))
+      .lt("move_in_date", untilIso.slice(0, 10))
       .order("move_in_date", { ascending: false })
       .limit(10),
   ]);
@@ -1220,7 +1343,14 @@ async function ActivityFeed({
   }
 
   items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-  const top = items.slice(0, 18);
+  // Complaints are fetched with an OR on created_at/resolved_at, so a row can
+  // land outside the window. Trim precisely here rather than contorting that
+  // query. Only applied for a past month — the current month keeps the live
+  // 7-day feed exactly as it behaved before.
+  const windowed = monthScoped
+    ? items.filter((it) => it.ts >= sinceIso && it.ts < untilIso)
+    : items;
+  const top = windowed.slice(0, 18);
 
   // Group by day (today/yesterday/date)
   const byDay = new Map<string, FeedItem[]>();
@@ -1242,12 +1372,14 @@ async function ActivityFeed({
           <TrendingUp className="w-4 h-4 text-primary" />
           Recent activity
         </h2>
-        <span className="text-[11px] text-muted-foreground">Last {ACTIVITY_DAYS} days</span>
+        <span className="text-[11px] text-muted-foreground">{rangeLabel}</span>
       </div>
 
       {top.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No activity in the last week.
+          {monthScoped
+            ? `No activity recorded in ${rangeLabel}.`
+            : "No activity in the last week."}
         </p>
       ) : (
         <div className="space-y-4">

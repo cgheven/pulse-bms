@@ -51,10 +51,16 @@ export function StaffSalarySection({
   staff,
   payments,
   currentMonth,
+  months,
+  isCurrentMonth,
 }: {
   staff: SalaryStaffRow[];
   payments: SalaryPaymentRow[];
+  /** The month being viewed and paid — not necessarily the calendar month. */
   currentMonth: string;
+  /** Selectable pay months, YYYY-MM-01, newest first. */
+  months: string[];
+  isCurrentMonth: boolean;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<SalaryStaffRow | null>(null);
@@ -116,6 +122,11 @@ export function StaffSalarySection({
           <div>
             <h2 className="text-lg font-semibold">
               Salary Disbursement — {monthLabel(currentMonth)}
+              {!isCurrentMonth && (
+                <span className="ml-2 text-[10px] text-primary font-semibold uppercase tracking-wide align-middle">
+                  Back-dated
+                </span>
+              )}
             </h2>
             <p className="text-sm text-muted-foreground mt-0.5">
               {paidCount} of {staff.length} paid
@@ -124,6 +135,28 @@ export function StaffSalarySection({
               )}
             </p>
           </div>
+          <Select
+            value={currentMonth.slice(0, 7)}
+            onValueChange={(ym) =>
+              router.push(
+                ym === months[0].slice(0, 7)
+                  ? "/admin/staff"
+                  : `/admin/staff?salaryMonth=${ym}`,
+              )
+            }
+          >
+            <SelectTrigger className="h-9 w-full sm:w-52 shrink-0">
+              <SelectValue placeholder="Month" />
+            </SelectTrigger>
+            <SelectContent>
+              {months.map((m) => (
+                <SelectItem key={m} value={m.slice(0, 7)}>
+                  {monthLabel(m)}
+                  {m === months[0] ? " (current)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="overflow-x-auto">

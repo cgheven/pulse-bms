@@ -44,7 +44,22 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-export default function StaffPage() {
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Last 12 months as YYYY-MM-01, newest first — matches the per-staff panel. */
+function recentPayMonths(): string[] {
+  const now = new Date();
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1));
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+export default function StaffPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ salaryMonth?: string }>;
+}) {
   return (
     <div className="space-y-6 animate-fade-up">
       {/* Header: title + actions */}
@@ -67,7 +82,7 @@ export default function StaffPage() {
       </Suspense>
 
       <Suspense fallback={<TableSkeleton rows={4} />}>
-        <SalarySectionServer />
+        <SalarySectionServer searchParams={searchParams} />
       </Suspense>
 
       <p className="text-xs text-muted-foreground">
@@ -77,14 +92,13 @@ export default function StaffPage() {
   );
 }
 
-async function loadSalaryData() {
+async function loadSalaryData(selectedMonth: string) {
   await requireRole(["admin", "super_admin"]);
   const buildingId = await getActiveBuilding();
   if (!buildingId) return { noBuilding: true as const };
   const supabase = await createClient();
 
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const currentMonth = selectedMonth;
 
   const [{ data: staff }, { data: payments }, { data: building }] = await Promise.all([
     supabase
@@ -114,14 +128,30 @@ async function loadSalaryData() {
   };
 }
 
-async function SalarySectionServer() {
-  const data = await loadSalaryData();
+async function SalarySectionServer({
+  searchParams,
+}: {
+  searchParams: Promise<{ salaryMonth?: string }>;
+}) {
+  const sp = await searchParams;
+  const months = recentPayMonths();
+  // `?salaryMonth=YYYY-MM` picks which month is shown AND paid. Validated
+  // against the offered list so a hand-edited URL can't book a salary against
+  // an arbitrary (or future) month.
+  const raw = sp.salaryMonth;
+  const candidate = raw && MONTH_RE.test(raw) ? `${raw}-01` : null;
+  const selectedMonth =
+    candidate && months.includes(candidate) ? candidate : months[0];
+
+  const data = await loadSalaryData(selectedMonth);
   if (data.noBuilding) return null;
   return (
     <StaffSalarySection
       staff={data.staff}
       payments={data.payments}
       currentMonth={data.currentMonth}
+      months={months}
+      isCurrentMonth={selectedMonth === months[0]}
     />
   );
 }
