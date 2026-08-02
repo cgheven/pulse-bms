@@ -23,9 +23,20 @@ export function AddExpenseButton({
     const billAccountId = searchParams.get("bill_account_id");
     const isBill = searchParams.get("is_bill");
     if (!billAccountId && !isBill) return;
+
+    // /admin/expenses mounts this component TWICE — once as mode="bill" and
+    // once as mode="expense" — and each instance runs this effect on mount.
+    // Without this gate a single deep link opens BOTH dialogs: the user sees
+    // "Add expense" on top (it portals last) and "Add bill" behind it once
+    // they close it. Only the instance matching the link's intent claims it.
+    // A bare bill_account_id with no is_bill still means "bill".
+    const wantsBill =
+      isBill != null ? isBill === "1" || isBill === "true" : !!billAccountId;
+    if (wantsBill !== (mode === "bill")) return;
+
     setPrefill({
       bill_account_id: billAccountId || null,
-      is_bill: isBill === "1" || isBill === "true",
+      is_bill: wantsBill,
     });
     setOpen(true);
     const sp = new URLSearchParams(searchParams.toString());
