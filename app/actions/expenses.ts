@@ -12,7 +12,8 @@ export type ExpenseRecurrence = "monthly" | "quarterly" | "yearly" | null;
 export type ExpenseInput = {
   category: ExpenseCategory;
   subcategory?: string | null;
-  description: string;
+  /** Optional — stored as "" when omitted (the column is NOT NULL). */
+  description?: string;
   amount: number;
   expense_date: string;
   is_recurring?: boolean;
@@ -119,8 +120,12 @@ export async function createExpense(input: ExpenseInput) {
     .insert({
       building_id: buildingId,
       category: input.category,
-      subcategory: input.subcategory ?? null,
-      description: input.description,
+      // "" and NULL both meant "no subcategory" and split every group-by in
+      // two — normalised to NULL on write (see migration 20260805000001).
+      subcategory: input.subcategory?.trim() || null,
+      // bms_expenses.description is NOT NULL in the schema, so an omitted
+      // description is stored as "" rather than NULL. Lists render it as "—".
+      description: input.description?.trim() ?? "",
       amount: input.amount,
       expense_date: input.expense_date,
       is_recurring: input.is_recurring ?? false,
@@ -169,6 +174,11 @@ export async function updateExpense(id: string, input: Partial<ExpenseInput>) {
   }
   if (input.bank_account_id === "") {
     input.bank_account_id = null;
+  }
+  // Keep the create-path normalisation on edits too, or clearing the
+  // subcategory would reintroduce the "" bucket the migration removed.
+  if (typeof input.subcategory === "string" && input.subcategory.trim() === "") {
+    input.subcategory = null;
   }
 
   // Same units_consumed coercion + validation as createExpense. The

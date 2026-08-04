@@ -76,7 +76,9 @@ const SUBCATS_BY_CATEGORY: Record<ExpenseCategory, { value: string; label: strin
     { value: "generator_oil",        label: "Generator Oil" },
     { value: "internet",             label: "Internet / Wi-Fi" },
     { value: "gas",                  label: "Gas" },
-    { value: "water_supply",         label: "Water Supply / Tanker" },
+    { value: "water_tanker",         label: "Water Tanker" },
+    { value: "water_supply",         label: "Water Supply (KW&SB / line)" },
+    { value: "lineman",              label: "Lineman" },
   ],
   repairs: [
     { value: "bulbs",         label: "Bulbs / LEDs" },
@@ -404,7 +406,7 @@ export function ExpenseForm({
           )}
 
           <div className="sm:col-span-2">
-            <Label htmlFor="desc">Description</Label>
+            <Label htmlFor="desc">Description (optional)</Label>
             <Input
               id="desc"
               value={form.description}
@@ -412,7 +414,9 @@ export function ExpenseForm({
                 setForm({ ...form, description: e.target.value })
               }
               placeholder={
-                billMode ? "Auto-filled from bill account" : "What was this expense for?"
+                billMode
+                  ? "Auto-filled from bill account"
+                  : "Optional — category and subcategory already identify it"
               }
             />
           </div>
@@ -695,9 +699,12 @@ export function ExpenseForm({
           </Button>
           <Button
             onClick={submit}
+            // Description is deliberately NOT required — an expense is already
+            // identified by its category + subcategory, and forcing a sentence
+            // was pushing people to type the head into the description instead
+            // of tagging it (see the scattered "Water Tanker" rows).
             disabled={
               pending ||
-              !form.description.trim() ||
               !form.expense_date ||
               form.amount <= 0 ||
               !amountInput.trim()

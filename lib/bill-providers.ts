@@ -181,10 +181,28 @@ export const PROVIDER_CATEGORY_TO_EXPENSE: Record<
   other:        { category: "other",     subcategory: "" },
 };
 
+/**
+ * Provider-key overrides, for keys whose expense head is finer-grained than
+ * their provider category.
+ *
+ * "water" covers both KW&SB line supply and private tankers, which behave
+ * nothing alike — the tanker is the variable cost committees actually watch.
+ * Mapping both to `water_supply` is what mixed Rs. 547,000 of tanker spend in
+ * with line supply and Lineman wages on one head.
+ */
+const PROVIDER_KEY_TO_EXPENSE: Record<
+  string,
+  { category: "utilities" | "repairs" | "supplies" | "other"; subcategory: string }
+> = {
+  water_tanker: { category: "utilities", subcategory: "water_tanker" },
+};
+
 export function expenseCategoryForProvider(providerKey: string): {
   category: "utilities" | "repairs" | "supplies" | "other";
   subcategory: string;
 } {
+  const byKey = PROVIDER_KEY_TO_EXPENSE[providerKey];
+  if (byKey) return byKey;
   const cat = providerCategoryFor(providerKey);
   return PROVIDER_CATEGORY_TO_EXPENSE[cat];
 }

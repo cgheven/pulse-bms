@@ -8,7 +8,6 @@ import {
   formatDate,
   formatMonthLabel,
   getMonthBounds,
-  getMonthRange,
 } from "@/lib/utils";
 import {
   EXPENSE_CATEGORY_LABELS,
@@ -17,7 +16,11 @@ import {
 } from "@/lib/expense-constants";
 import { AddExpenseButton } from "@/components/admin/expenses/add-expense-button";
 import { ExpenseRowActions } from "@/components/admin/expenses/expense-row-actions";
-import { ExpenseMonthFilter } from "@/components/admin/expenses/expense-month-filter";
+import {
+  ExpenseFilters,
+  NO_SUBCATEGORY,
+  type SubOption,
+} from "@/components/admin/expenses/expense-filters";
 import {
   Tabs,
   TabsContent,
@@ -28,9 +31,33 @@ import { TableSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ category?: string; tab?: string; month?: string }>;
+type SearchParams = Promise<{
+  category?: string;
+  sub?: string;
+  tab?: string;
+  month?: string;
+  q?: string;
+}>;
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Rows rendered per list tab. Totals are computed separately, over everything. */
+const LIST_LIMIT = 500;
+/** PostgREST max_rows in this project — an unbounded select truncates here. */
+const PAGE_SIZE = 1000;
+
+/**
+ * Make a user search term safe to embed in a PostgREST `or=` filter.
+ *
+ * `or=` is parsed on commas and parentheses, and `*` / `%` are the `ilike`
+ * wildcards — an unescaped term could restructure the filter or match every
+ * row. Stripping those characters is enough because the remaining value is
+ * always the last segment of `column.op.value`, where dots are literal.
+ */
+function sanitizeSearch(raw: string | undefined): string {
+  if (typeof raw !== "string") return "";
+  return raw.trim().slice(0, 60).replace(/[,()*%"\\]/g, "").trim();
+}
 
 /**
  * Every month between the building's first and last recorded expense, newest
@@ -90,57 +117,259 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
   // `?month=YYYY-MM` narrows both lists and the summary. Validated against a
   // strict pattern so a junk value can't silently blank the page.
   const selectedMonth = sp.month && MONTH_RE.test(sp.month) ? sp.month : undefined;
-  // Summary falls back to the current month when nothing is picked.
-  const month = selectedMonth ? getMonthBounds(selectedMonth) : getMonthRange();
+  // No month picked means "everything", for the totals as well as the lists —
+  // the cards and the summary must agree with what the tables show.
+  const month = selectedMonth ? getMonthBounds(selectedMonth) : null;
+  const search = sanitizeSearch(sp.q);
+  // Category is whitelisted; subcategory is free text in the DB, so it is
+  // accepted as-is and only ever used through .eq()/.is(), never interpolated
+  // into an `or=` string.
+  const selectedCategory =
+    sp.category && sp.category in EXPENSE_FILTER_CATEGORIES ? sp.category : undefined;
+  const selectedSub = sp.sub?.trim() ? sp.sub.trim() : undefined;
+  // A purely numeric term is also matched against the amount, so typing an
+  // exact figure off a receipt finds the row.
+  const amountTerm = /^\d+(\.\d{1,2})?$/.test(search) ? search : null;
 
-  // Category + month filters are pushed to the DB so the .limit(500) cap is
-  // applied after filtering, not before (avoids silently missing older rows
-  // of a requested category/month).
-  let billsQuery = supabase
-    .from("bms_expenses")
-    .select("*")
-    .eq("building_id", buildingId)
-    .eq("is_bill", true);
+  // Bill accounts are needed *before* the bills query is built, because
+  // searching "Block A" or an account number has to resolve to bill_account_id
+  // — bms_expenses stores only the FK.
+  // Head options are resolved here too, not in the main batch: picking a head
+  // has to filter on EVERY slug sharing its label, so the group must be known
+  // before the queries are built.
+  const [{ data: billAccounts, error: baErr }, subOptions] = await Promise.all([
+    supabase
+      .from("bms_bill_accounts")
+      .select("id, nickname, account_number, provider")
+      .eq("building_id", buildingId),
+    fetchHeadOptions(),
+  ]);
+  if (baErr) console.error("[expenses] bill_accounts query failed:", baErr.message);
 
-  let expensesQuery = supabase
-    .from("bms_expenses")
-    .select("*")
-    .eq("building_id", buildingId)
-    .or("is_bill.eq.false,is_bill.is.null");
-  if (sp.category) {
-    expensesQuery = expensesQuery.eq("category", sp.category);
+  // Every raw slug the selected head covers. Falls back to the bare value if
+  // the head isn't in the option list (hand-edited URL).
+  const selectedSubValues =
+    selectedSub && selectedSub !== NO_SUBCATEGORY
+      ? (subOptions.find(
+          (o) => o.value === selectedSub || o.values.includes(selectedSub),
+        )?.values ?? [selectedSub])
+      : [];
+
+  const billAccountMap = new Map((billAccounts ?? []).map((b) => [b.id, b]));
+
+  const needle = search.toLowerCase();
+  const matchedAccountIds = search
+    ? (billAccounts ?? [])
+        .filter((a) =>
+          [a.nickname, a.account_number, a.provider].some((v) =>
+            v?.toLowerCase().includes(needle),
+          ),
+        )
+        .map((a) => a.id)
+    : [];
+
+  /** PostgREST `or=` clause for the search term, or null when not searching. */
+  function searchClause(isBill: boolean): string | null {
+    if (!search) return null;
+    const parts = [`description.ilike.*${search}*`, `vendor.ilike.*${search}*`];
+    if (isBill) {
+      if (matchedAccountIds.length > 0) {
+        parts.push(`bill_account_id.in.(${matchedAccountIds.join(",")})`);
+      }
+    } else {
+      parts.push(`category.ilike.*${search}*`, `subcategory.ilike.*${search}*`);
+    }
+    if (amountTerm) parts.push(`amount.eq.${amountTerm}`);
+    return parts.join(",");
   }
-  if (selectedMonth) {
-    billsQuery = billsQuery
-      .gte("expense_date", month.start)
-      .lte("expense_date", month.end);
-    expensesQuery = expensesQuery
-      .gte("expense_date", month.start)
-      .lte("expense_date", month.end);
+
+  const billsClause = searchClause(true);
+  const expensesClause = searchClause(false);
+
+  /**
+   * Category + subcategory, applied identically to bills and expenses.
+   *
+   * NO_SUBCATEGORY maps to `IS NULL` rather than an OR across NULL and "" —
+   * migration 20260805000001 collapsed the empty strings, which keeps this a
+   * single filter and leaves `or=` free for the search clause.
+   */
+  function applyHeadFilters<T extends {
+    eq: (c: string, v: string) => T;
+    is: (c: string, v: null) => T;
+    in: (c: string, v: string[]) => T;
+  }>(q: T): T {
+    let out = q;
+    if (selectedCategory) out = out.eq("category", selectedCategory);
+    if (selectedSub === NO_SUBCATEGORY) out = out.is("subcategory", null);
+    else if (selectedSubValues.length > 0) {
+      out = out.in("subcategory", selectedSubValues);
+    }
+    return out;
+  }
+
+  // Category, month and search are all pushed to the DB so the LIST_LIMIT cap
+  // is applied after filtering, not before (avoids silently missing older
+  // rows that match). Built as factories because each is run twice: once for
+  // the visible page of rows, once paged for the totals.
+  //
+  // The secondary sort on id keeps `.range()` paging stable — expense_date
+  // alone has ties, and Postgres may order ties differently per page.
+  const buildBills = <C extends string>(cols: C) => {
+    let q = supabase
+      .from("bms_expenses")
+      .select(cols)
+      .eq("building_id", buildingId)
+      .eq("is_bill", true);
+    q = applyHeadFilters(q);
+    if (month) {
+      q = q.gte("expense_date", month.start).lte("expense_date", month.end);
+    }
+    if (billsClause) q = q.or(billsClause);
+    return q
+      .order("expense_date", { ascending: false })
+      .order("id", { ascending: true });
+  };
+
+  const buildExpenses = <C extends string>(cols: C) => {
+    // `is_bill IS NOT TRUE` covers both false and NULL in one filter, leaving
+    // `or=` free for the search clause (repeated or= params are ANDed).
+    let q = supabase
+      .from("bms_expenses")
+      .select(cols)
+      .eq("building_id", buildingId)
+      .not("is_bill", "is", true);
+    q = applyHeadFilters(q);
+    if (month) {
+      q = q.gte("expense_date", month.start).lte("expense_date", month.end);
+    }
+    if (expensesClause) q = q.or(expensesClause);
+    return q
+      .order("expense_date", { ascending: false })
+      .order("id", { ascending: true });
+  };
+
+  type AggRow = { amount: number | string | null; category: string | null };
+  type AggResult = {
+    total: number;
+    count: number;
+    byCategory: Map<string, number>;
+    /** false when a page errored — the figure shown is a floor, not a total. */
+    exact: boolean;
+  };
+
+  /**
+   * Sum + count every matching row, paging past the 1000-row max_rows ceiling.
+   * Never use PostgREST aggregate syntax here — it is disabled on this project
+   * and fails silently as 0 (see CLAUDE.md → Database constraints).
+   */
+  async function pagedAggregate(
+    run: (
+      from: number,
+      to: number,
+    ) => PromiseLike<{ data: AggRow[] | null; error: { message: string } | null }>,
+    label: string,
+  ): Promise<AggResult> {
+    let total = 0;
+    let count = 0;
+    const byCategory = new Map<string, number>();
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await run(from, from + PAGE_SIZE - 1);
+      if (error) {
+        console.error(`[expenses] ${label} totals failed:`, error.message);
+        return { total, count, byCategory, exact: false };
+      }
+      const rows = data ?? [];
+      for (const r of rows) {
+        const amt = Number(r.amount ?? 0);
+        total += amt;
+        if (r.category) {
+          byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + amt);
+        }
+      }
+      count += rows.length;
+      if (rows.length < PAGE_SIZE) return { total, count, byCategory, exact: true };
+    }
+  }
+
+  /**
+   * Every (category, subcategory) pair this building has ever used, for the
+   * subcategory dropdown. Deliberately scoped to the building ONLY — not to
+   * the current month/search — so the option list doesn't shrink out from
+   * under you as you filter. Paged past max_rows; two small text columns.
+   */
+  async function fetchHeadOptions(): Promise<SubOption[]> {
+    const seen = new Map<string, SubOption>();
+    let anyUnset = false;
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("bms_expenses")
+        .select("category, subcategory")
+        .eq("building_id", buildingId)
+        .order("category", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) {
+        console.error("[expenses] head options failed:", error.message);
+        break;
+      }
+      const rows = data ?? [];
+      for (const r of rows) {
+        if (!r.subcategory) {
+          anyUnset = true;
+          continue;
+        }
+        const label = prettifyExpenseSubcategory(r.subcategory);
+        // Key on the LABEL, not the raw slug: corridor_electricity and
+        // electricity_corridor both render as "Corridor Electricity", and
+        // offering that twice in the dropdown is just confusing.
+        const key = `${r.category}::${label.toLowerCase()}`;
+        const existing = seen.get(key);
+        if (existing) {
+          if (!existing.values.includes(r.subcategory)) {
+            existing.values.push(r.subcategory);
+          }
+        } else {
+          seen.set(key, {
+            value: r.subcategory,
+            label,
+            values: [r.subcategory],
+            category: r.category,
+          });
+        }
+      }
+      if (rows.length < PAGE_SIZE) break;
+    }
+    const out = Array.from(seen.values()).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+    if (anyUnset) {
+      out.push({
+        value: NO_SUBCATEGORY,
+        label: "Not specified",
+        values: [NO_SUBCATEGORY],
+        category: "*",
+      });
+    }
+    return out;
   }
 
   const [
     { data: billsRaw, error: billsErr },
     { data: expensesRaw, error: expensesErr },
-    { data: billAccounts, error: baErr },
-    { data: thisMonth, error: tmErr },
+    billsTotals,
+    expensesTotals,
     { data: oldestRow },
     { data: newestRow },
   ] = await Promise.all([
-    billsQuery.order("expense_date", { ascending: false }).limit(500),
-    expensesQuery
-      .order("expense_date", { ascending: false })
-      .limit(500),
-    supabase
-      .from("bms_bill_accounts")
-      .select("id, nickname, account_number, provider")
-      .eq("building_id", buildingId),
-    supabase
-      .from("bms_expenses")
-      .select("category, amount, is_bill")
-      .eq("building_id", buildingId)
-      .gte("expense_date", month.start)
-      .lte("expense_date", month.end),
+    buildBills("*").limit(LIST_LIMIT),
+    buildExpenses("*").limit(LIST_LIMIT),
+    pagedAggregate(
+      (from, to) => buildBills("amount, category").range(from, to),
+      "bills",
+    ),
+    pagedAggregate(
+      (from, to) => buildExpenses("amount, category").range(from, to),
+      "expenses",
+    ),
     // Month options are derived from the first/last dated row rather than by
     // pulling every expense_date — two indexed single-row reads, and no risk
     // of the option list being truncated by a row cap.
@@ -166,30 +395,31 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
 
   if (billsErr) console.error("[expenses] bills query failed:", billsErr.message);
   if (expensesErr) console.error("[expenses] expenses query failed:", expensesErr.message);
-  if (baErr) console.error("[expenses] bill_accounts query failed:", baErr.message);
-  if (tmErr) console.error("[expenses] this-month query failed:", tmErr.message);
 
   const bills = billsRaw ?? [];
   const expenses = expensesRaw ?? [];
 
-  const billAccountMap = new Map(
-    (billAccounts ?? []).map((b) => [b.id, b]),
-  );
+  const billsTotal = billsTotals.total;
+  const expensesTotal = expensesTotals.total;
+  const groups = expensesTotals.byCategory;
 
-  // This-month summary — single pass over monthRows
-  const monthRows = thisMonth ?? [];
-  let billsTotal = 0;
-  let expensesTotal = 0;
-  const groups = new Map<string, number>();
-  for (const e of monthRows) {
-    const amt = Number(e.amount);
-    if (e.is_bill) {
-      billsTotal += amt;
-    } else {
-      expensesTotal += amt;
-      groups.set(e.category, (groups.get(e.category) ?? 0) + amt);
-    }
-  }
+  // What the figures on this screen cover, spelled out — the cards, the tab
+  // counts and the summary all move with the filters, so the scope has to be
+  // visible or the numbers look wrong.
+  const scopeLabel = [
+    selectedMonth ? formatMonthLabel(selectedMonth) : "All months",
+    search ? `matching “${search}”` : null,
+    selectedCategory
+      ? EXPENSE_CATEGORY_LABELS[selectedCategory] ?? selectedCategory
+      : null,
+    selectedSub
+      ? selectedSub === NO_SUBCATEGORY
+        ? "no subcategory"
+        : prettifyExpenseSubcategory(selectedSub)
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const expenseRowProps = (e: typeof expenses[0]) => ({
     id: e.id,
@@ -215,13 +445,14 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
     ? sp.tab!
     : "bills";
 
-  // Helper: build a category-filter URL that preserves the tab and month.
-  const filterHref = (cat?: string) => {
-    const params = new URLSearchParams({ tab: "expenses" });
-    if (cat) params.set("category", cat);
-    if (selectedMonth) params.set("month", selectedMonth);
-    return `/admin/expenses?${params.toString()}`;
-  };
+  /** "Showing the most recent 500 of 812" when the list cap bites. */
+  const truncationNote = (shown: number, agg: AggResult) =>
+    agg.exact && agg.count > shown ? (
+      <p className="text-xs text-muted-foreground px-1">
+        Showing the {shown} most recent of {agg.count}. Narrow by month or search
+        to see the rest — the totals above cover all {agg.count}.
+      </p>
+    ) : null;
 
   return (
     <>
@@ -233,35 +464,82 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
         </div>
       </div>
 
+      {/* Totals for whatever is currently filtered — visible on every tab, so
+          the spend figure doesn't require switching to the summary. Computed
+          over every matching row, not just the 500 rendered below. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-lg">
+          <div className="text-xs text-muted-foreground">Bills</div>
+          <div className="text-2xl font-bold mt-0.5 tabular-nums">
+            {formatCurrency(billsTotal)}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {billsTotals.count} {billsTotals.count === 1 ? "entry" : "entries"}
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-lg">
+          <div className="text-xs text-muted-foreground">Expenses</div>
+          <div className="text-2xl font-bold mt-0.5 tabular-nums">
+            {formatCurrency(expensesTotal)}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {expensesTotals.count}{" "}
+            {expensesTotals.count === 1 ? "entry" : "entries"}
+          </div>
+        </div>
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 shadow-lg col-span-2 sm:col-span-1">
+          <div className="text-xs text-muted-foreground">Total spend</div>
+          <div className="text-2xl font-bold mt-0.5 tabular-nums text-primary">
+            {formatCurrency(billsTotal + expensesTotal)}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">{scopeLabel}</div>
+        </div>
+      </div>
+
+      {(!billsTotals.exact || !expensesTotals.exact) && (
+        <p className="text-xs text-destructive">
+          A totals query failed — the figures above are incomplete. Check the
+          server logs.
+        </p>
+      )}
+
       {/* key forces Radix to remount on tab changes from URL navigation,
           because defaultValue is only consumed at initial mount and Next.js
           App Router reconciles client components in place without remounting. */}
       <Tabs key={activeTab} defaultValue={activeTab}>
-        {/* Tabs and the month filter share one row — the tab pill is only as
-            wide as its labels, so the leftover space carries the filter. */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        {/* Tabs and the filters share one row — the tab pill is only as wide as
+            its labels, so the leftover space carries search + month. */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <TabsList>
             <TabsTrigger value="bills">
               Bills
-              {bills.length > 0 && (
-                <span className="ml-1.5 text-xs text-muted-foreground">({bills.length})</span>
+              {billsTotals.count > 0 && (
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  ({billsTotals.count})
+                </span>
               )}
             </TabsTrigger>
             <TabsTrigger value="expenses">
               Expenses
-              {expenses.length > 0 && (
-                <span className="ml-1.5 text-xs text-muted-foreground">({expenses.length})</span>
+              {expensesTotals.count > 0 && (
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  ({expensesTotals.count})
+                </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="summary">
-              {selectedMonth ? formatMonthLabel(selectedMonth) : "This Month"}
-            </TabsTrigger>
+            <TabsTrigger value="summary">Summary</TabsTrigger>
           </TabsList>
-          <ExpenseMonthFilter
+          <ExpenseFilters
             months={monthOptions}
-            value={selectedMonth ?? "all"}
+            month={selectedMonth ?? "all"}
+            q={search}
+            category={selectedCategory ?? "all"}
+            categories={Object.entries(EXPENSE_FILTER_CATEGORIES).map(
+              ([value, label]) => ({ value, label }),
+            )}
+            sub={selectedSub ?? "all"}
+            subOptions={subOptions}
             tab={activeTab}
-            category={sp.category}
           />
         </div>
 
@@ -285,8 +563,8 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
                   {bills.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-3 py-12 text-center text-muted-foreground">
-                        {selectedMonth ? (
-                          <>No bills recorded in {formatMonthLabel(selectedMonth)}.</>
+                        {search || selectedMonth ? (
+                          <>No bills found — {scopeLabel}.</>
                         ) : (
                           <>
                             No bills recorded yet. Click{" "}
@@ -341,37 +619,11 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
               </table>
             </div>
           </div>
+          {truncationNote(bills.length, billsTotals)}
         </TabsContent>
 
         {/* ── Expenses tab ── */}
         <TabsContent value="expenses" className="space-y-3">
-          <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-sm text-muted-foreground mr-1">Filter:</span>
-            <Link
-              href={filterHref()}
-              className={`text-sm px-3 py-1 rounded-full border transition-colors ${
-                !sp.category
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-              }`}
-            >
-              All
-            </Link>
-            {Object.entries(EXPENSE_FILTER_CATEGORIES).map(([k, v]) => (
-              <Link
-                key={k}
-                href={filterHref(k)}
-                className={`text-sm px-3 py-1 rounded-full border transition-colors ${
-                  sp.category === k
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-                }`}
-              >
-                {v}
-              </Link>
-            ))}
-          </div>
-
           <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -389,8 +641,8 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
                   {expenses.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-3 py-12 text-center text-muted-foreground">
-                        {sp.category || selectedMonth
-                          ? "No expenses match these filters."
+                        {selectedCategory || selectedSub || selectedMonth || search
+                          ? `No expenses found — ${scopeLabel}.`
                           : <>No expenses recorded yet. Click <span className="font-medium text-foreground">Add Expense</span> to get started.</>}
                       </td>
                     </tr>
@@ -424,40 +676,34 @@ async function ExpensesContent({ searchParams }: { searchParams: SearchParams })
               </table>
             </div>
           </div>
+          {truncationNote(expenses.length, expensesTotals)}
         </TabsContent>
 
-        {/* ── This Month summary tab ── */}
+        {/* ── Summary tab ── */}
         <TabsContent value="summary">
+          {/* Headline totals already sit above the tabs — this tab breaks the
+              expense side down by category, over the same filtered scope. */}
+          <p className="text-sm text-muted-foreground mb-3">
+            Expenses by category — {scopeLabel}
+            {month && (
+              <>
+                {" "}
+                ({formatDate(month.start)} – {formatDate(month.end)})
+              </>
+            )}
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="card-soft">
-              <div className="text-muted-foreground text-sm">
-                {selectedMonth
-                  ? `Total — ${formatMonthLabel(selectedMonth)}`
-                  : "Total this month"}
-              </div>
-              <div className="text-3xl font-bold mt-1">
-                {formatCurrency(billsTotal + expensesTotal)}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {formatDate(month.start)} – {formatDate(month.end)}
-              </div>
-            </div>
-            <div className="card-soft">
-              <div className="text-muted-foreground text-sm">Bills</div>
-              <div className="text-2xl font-semibold mt-1">{formatCurrency(billsTotal)}</div>
-            </div>
-            <div className="card-soft">
-              <div className="text-muted-foreground text-sm">Expenses</div>
-              <div className="text-2xl font-semibold mt-1">{formatCurrency(expensesTotal)}</div>
-            </div>
-            {Object.entries(EXPENSE_FILTER_CATEGORIES).map(([k, v]) => (
-              <div key={k} className="card-soft">
-                <div className="text-muted-foreground text-sm">{v}</div>
-                <div className="text-2xl font-semibold mt-1">
-                  {formatCurrency(groups.get(k) ?? 0)}
+            {Object.entries(EXPENSE_FILTER_CATEGORIES)
+              // With a category filter on, the other cards would all read zero.
+              .filter(([k]) => !selectedCategory || k === selectedCategory)
+              .map(([k, v]) => (
+                <div key={k} className="card-soft">
+                  <div className="text-muted-foreground text-sm">{v}</div>
+                  <div className="text-2xl font-semibold mt-1">
+                    {formatCurrency(groups.get(k) ?? 0)}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
           <p className="text-xs text-muted-foreground mt-4">
             Staff salaries are tracked separately in{" "}
