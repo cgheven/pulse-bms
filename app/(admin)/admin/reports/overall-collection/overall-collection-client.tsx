@@ -33,7 +33,7 @@ type BankAccount = { id: string; name: string; type: "cash" | "bank" };
 
 const MODE_LABELS: Record<string, string> = {
   cash: "Cash",
-  bank: "Bank transfer",
+  bank: "Bank",
   online: "Online",
   cheque: "Cheque",
   credit_carryforward: "Credit carry-forward",

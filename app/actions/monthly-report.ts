@@ -79,7 +79,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const MODE_LABELS: Record<string, string> = {
   cash: "Cash",
-  bank: "Bank transfer",
+  bank: "Bank",
   online: "Online",
   cheque: "Cheque",
   credit_carryforward: "Credit",

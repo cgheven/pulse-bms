@@ -15,11 +15,11 @@ import { PAYMENT_MODE } from "@/types";
 
 // User-friendly labels for payment modes. The DB stores raw enums
 // (cash/bank/online/cheque/credit_carryforward); we render them as
-// "Cash" / "Bank transfer" / "Credit (carry-forward)" etc. so senior
+// "Cash" / "Bank" / "Credit (carry-forward)" etc. so senior
 // committee members instantly recognise what happened.
 const MODE_LABEL: Record<string, string> = {
   [PAYMENT_MODE.CASH]: "Cash",
-  [PAYMENT_MODE.BANK]: "Bank transfer",
+  [PAYMENT_MODE.BANK]: "Bank",
   [PAYMENT_MODE.ONLINE]: "Online",
   [PAYMENT_MODE.CHEQUE]: "Cheque",
   [PAYMENT_MODE.CREDIT_CARRYFORWARD]: "Credit (from earlier payment)",
@@ -142,9 +142,7 @@ export function PaymentsList({
           <SelectContent>
             <SelectItem value="all">All modes</SelectItem>
             <SelectItem value="cash">Cash</SelectItem>
-            <SelectItem value="bank">Bank transfer</SelectItem>
-            <SelectItem value="cheque">Cheque</SelectItem>
-            <SelectItem value="online">Online</SelectItem>
+            <SelectItem value="bank">Bank</SelectItem>
             <SelectItem value={PAYMENT_MODE.CREDIT_CARRYFORWARD}>Credit carry-forward</SelectItem>
           </SelectContent>
         </Select>

@@ -29,11 +29,16 @@ import {
 } from "@/app/actions/bank-accounts";
 import { friendlyErrorMessage } from "@/lib/toast-error";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { PK_BANKS, BANK_OTHER } from "@/lib/banks";
 
 type AccountRow = {
   id: string;
   name: string;
   type: "cash" | "bank";
+  bank_name: string | null;
+  account_title: string | null;
+  account_number: string | null;
+  iban: string | null;
   account_number_masked: string | null;
   opening_balance: number;
   opening_balance_date: string;
@@ -64,7 +69,7 @@ export function BankAccountsClient({
           <table className="w-full text-sm">
             <thead className="bg-secondary border-b border-border">
               <tr className="text-left">
-                <th className="px-3 py-3 font-semibold">Name</th>
+                <th className="px-3 py-3 font-semibold">Account</th>
                 <th className="px-3 py-3 font-semibold">Type</th>
                 <th className="px-3 py-3 font-semibold">Account # (last 4)</th>
                 <th className="px-3 py-3 font-semibold text-right">Opening</th>
@@ -90,14 +95,33 @@ export function BankAccountsClient({
                   key={a.id}
                   className="border-b border-border last:border-0 hover:bg-secondary/40"
                 >
-                  <td className="px-3 py-3 font-medium">{a.name}</td>
+                  <td className="px-3 py-3 font-medium">
+                    {a.type === "cash" ? "Cash" : (a.bank_name ?? a.name)}
+                  </td>
                   <td className="px-3 py-3">
                     <span className="px-2 py-0.5 rounded-full text-xs bg-secondary border border-border">
                       {a.type === "cash" ? "Cash" : "Bank"}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-muted-foreground font-mono text-xs">
-                    {a.account_number_masked ?? "—"}
+                  <td className="px-3 py-3 text-muted-foreground text-xs">
+                    {a.type === "cash" ? (
+                      "—"
+                    ) : (
+                      <>
+                        <div className="font-medium text-foreground">
+                          {a.bank_name ?? "—"}
+                        </div>
+                        <div className="font-mono">
+                          {a.account_number ??
+                            (a.account_number_masked
+                              ? `••••${a.account_number_masked}`
+                              : "—")}
+                        </div>
+                        {a.account_title && (
+                          <div className="opacity-80">{a.account_title}</div>
+                        )}
+                      </>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums">
                     {formatCurrency(a.opening_balance)}
@@ -179,10 +203,14 @@ function BankAccountForm({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // `name` is deliberately absent: the action derives it from type + bank so
+  // an account can never be called "Cash" while holding HBL details.
   const [form, setForm] = useState<BankAccountInput>({
-    name: account?.name ?? "",
     type: account?.type ?? "bank",
-    account_number_masked: account?.account_number_masked ?? "",
+    bank_name: account?.bank_name ?? "",
+    account_title: account?.account_title ?? "",
+    account_number: account?.account_number ?? "",
+    iban: account?.iban ?? "",
     opening_balance: account?.opening_balance ?? 0,
     opening_balance_date:
       account?.opening_balance_date ?? new Date().toISOString().slice(0, 10),
@@ -216,16 +244,6 @@ function BankAccountForm({
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="HBL Main, Meezan Reserve, Cash"
-            />
-          </div>
-
           <div>
             <Label>Type</Label>
             <Select
@@ -244,21 +262,91 @@ function BankAccountForm({
             </Select>
           </div>
 
-          <div>
-            <Label htmlFor="acct">Account # (last 4 only)</Label>
-            <Input
-              id="acct"
-              maxLength={4}
-              value={form.account_number_masked ?? ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  account_number_masked: e.target.value.replace(/\D/g, ""),
-                })
-              }
-              placeholder="1234"
-            />
-          </div>
+          {/* Bank details only apply to bank accounts — a cash drawer has
+              none, and the action nulls them out server-side if the type is
+              switched to cash. */}
+          {form.type === "bank" && (
+            <>
+              <div>
+                <Label>Bank</Label>
+                <Select
+                  value={
+                    form.bank_name && !PK_BANKS.includes(form.bank_name as typeof PK_BANKS[number])
+                      ? BANK_OTHER
+                      : form.bank_name || ""
+                  }
+                  onValueChange={(v) =>
+                    setForm({ ...form, bank_name: v === BANK_OTHER ? "" : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pick a bank" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PK_BANKS.map((b) => (
+                      <SelectItem key={b} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={BANK_OTHER}>Other…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {(form.bank_name === "" ||
+                  (form.bank_name &&
+                    !PK_BANKS.includes(
+                      form.bank_name as typeof PK_BANKS[number],
+                    ))) && (
+                  <Input
+                    className="mt-2"
+                    value={form.bank_name ?? ""}
+                    onChange={(e) =>
+                      setForm({ ...form, bank_name: e.target.value })
+                    }
+                    placeholder="Type the bank name"
+                  />
+                )}
+              </div>
+
+              <div className="col-span-2">
+                <Label htmlFor="acct">Account number</Label>
+                <Input
+                  id="acct"
+                  inputMode="numeric"
+                  value={form.account_number ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, account_number: e.target.value })
+                  }
+                  placeholder="Full account number, as printed on the cheque book"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Stored in full — residents are shown this so they know where
+                  to transfer.
+                </p>
+              </div>
+
+              <div className="col-span-2">
+                <Label htmlFor="title">Account title</Label>
+                <Input
+                  id="title"
+                  value={form.account_title ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, account_title: e.target.value })
+                  }
+                  placeholder="Name the account is held in"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <Label htmlFor="iban">IBAN (optional)</Label>
+                <Input
+                  id="iban"
+                  value={form.iban ?? ""}
+                  onChange={(e) => setForm({ ...form, iban: e.target.value })}
+                  placeholder="PK00XXXX0000000000000000"
+                />
+              </div>
+            </>
+          )}
 
           {/* Per-bank opening balance is intentionally NOT user-editable.
               Society-wide opening is managed once via Settings →
@@ -302,7 +390,9 @@ function BankAccountForm({
           </Button>
           <Button
             onClick={submit}
-            disabled={pending || !form.name.trim()}
+            disabled={
+              pending || (form.type === "bank" && !form.bank_name?.trim())
+            }
           >
             {pending ? "Saving..." : account ? "Save" : "Add account"}
           </Button>

@@ -19,7 +19,7 @@ import type { DateRange, ReportColumn } from "@/lib/reports/types";
 
 const MODE_LABEL: Record<string, string> = {
   [PAYMENT_MODE.CASH]: "Cash",
-  [PAYMENT_MODE.BANK]: "Bank transfer",
+  [PAYMENT_MODE.BANK]: "Bank",
   [PAYMENT_MODE.ONLINE]: "Online",
   [PAYMENT_MODE.CHEQUE]: "Cheque",
   [PAYMENT_MODE.CREDIT_CARRYFORWARD]: "Credit carry-forward",

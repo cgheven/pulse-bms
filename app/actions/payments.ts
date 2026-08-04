@@ -16,7 +16,12 @@ export type PaymentInput = {
   resident_id?: string | null;
   amount: number;
   payment_date?: string;
-  payment_mode?: "cash" | "bank_transfer" | "cheque" | "online" | "other";
+  /**
+   * Societies collect two ways only: cash, or into a bank account. The legacy
+   * values are still accepted so older callers / bookmarked payloads keep
+   * working — they all fold into `bank` or `cash` below.
+   */
+  payment_mode?: "cash" | "bank" | "bank_transfer" | "cheque" | "online" | "other";
   reference_no?: string | null;
   category?: "maintenance" | "entry_fee" | "fine" | "other" | "project";
   notes?: string | null;
@@ -224,12 +229,21 @@ export async function recordPayment(input: PaymentInput) {
     if (lockErr) throw new Error("Could not record payment. Please try again.");
   }
 
-  // Map TS "bank_transfer" → DB "bank" (legacy DB enum). The check constraint
-  // in the migration knows only `cash|bank|online|cheque|credit_carryforward`.
+  // Fold every legacy mode onto the two the DB now accepts. Migration
+  // 20260805000003 tightened the CHECK to cash|bank|credit_carryforward, so
+  // anything else reaching the insert would be rejected outright.
+  //   bank_transfer / online / cheque -> bank  (all mean "money hit the bank")
+  //   other                           -> cash  (safest fallback)
   const dbPaymentMode = (() => {
     const m = input.payment_mode || PAYMENT_MODE.CASH;
-    if (m === PAYMENT_MODE.BANK_TRANSFER) return PAYMENT_MODE.BANK;
-    if (m === PAYMENT_MODE.OTHER) return PAYMENT_MODE.CASH; // DB constraint doesn't include 'other'; cash is the safest fallback
+    if (
+      m === PAYMENT_MODE.BANK_TRANSFER ||
+      m === PAYMENT_MODE.ONLINE ||
+      m === PAYMENT_MODE.CHEQUE
+    ) {
+      return PAYMENT_MODE.BANK;
+    }
+    if (m === PAYMENT_MODE.OTHER) return PAYMENT_MODE.CASH;
     return m;
   })();
 

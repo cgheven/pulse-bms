@@ -32,6 +32,7 @@ import {
 } from "@/app/actions/expenses";
 import { friendlyErrorMessage } from "@/lib/toast-error";
 import { createClient } from "@/lib/supabase/client";
+import { bankAccountLabel } from "@/lib/banks";
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -41,7 +42,15 @@ import {
   type ProviderCategory,
 } from "@/lib/bill-providers";
 
-type BankAccountOption = { id: string; name: string; type: "cash" | "bank" };
+type BankAccountOption = {
+  id: string;
+  name: string;
+  type: "cash" | "bank";
+  bank_name: string | null;
+  account_title: string | null;
+  account_number: string | null;
+  account_number_masked: string | null;
+};
 
 // Light-weight subset of bms_bill_accounts the picker needs. Loaded
 // client-side when the dialog opens (only when is_bill is on).
@@ -212,7 +221,9 @@ export function ExpenseForm({
       const supabase = createClient();
       const { data } = await supabase
         .from("bms_bank_accounts")
-        .select("id, name, type")
+        .select(
+          "id, name, type, bank_name, account_title, account_number, account_number_masked",
+        )
         .eq("building_id", buildingId)
         .eq("is_active", true)
         .order("type", { ascending: false }) // 'cash' first
@@ -593,9 +604,11 @@ export function ExpenseForm({
                 <SelectValue placeholder="Pick bank or cash" />
               </SelectTrigger>
               <SelectContent>
+                {/* Same label as Record Payment's "Paid into" — one bank
+                    account must read identically wherever it is chosen. */}
                 {bankAccounts.map((b) => (
                   <SelectItem key={b.id} value={b.id}>
-                    {b.name} {b.type === "cash" ? "(Cash)" : "(Bank)"}
+                    {bankAccountLabel(b)}
                   </SelectItem>
                 ))}
               </SelectContent>

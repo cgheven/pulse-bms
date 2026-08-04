@@ -248,7 +248,7 @@ async function BankAccountsSection() {
   const { data: accounts } = await supabase
     .from("bms_bank_accounts")
     .select(
-      "id, name, type, account_number_masked, opening_balance, opening_balance_date, is_active, created_at",
+      "id, name, type, bank_name, account_title, account_number, iban, account_number_masked, opening_balance, opening_balance_date, is_active, created_at",
     )
     .eq("building_id", buildingId)
     .order("type", { ascending: false })
@@ -260,6 +260,10 @@ async function BankAccountsSection() {
         id: a.id,
         name: a.name,
         type: a.type as "cash" | "bank",
+        bank_name: a.bank_name,
+        account_title: a.account_title,
+        account_number: a.account_number,
+        iban: a.iban,
         account_number_masked: a.account_number_masked,
         opening_balance: Number(a.opening_balance ?? 0),
         opening_balance_date: a.opening_balance_date,

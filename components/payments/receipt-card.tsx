@@ -88,8 +88,8 @@ export type ReceiptCardProps = {
 
 const METHOD_LABEL: Record<string, string> = {
   cash: "Cash",
-  bank: "Bank Transfer",
-  bank_transfer: "Bank Transfer",
+  bank: "Bank",
+  bank_transfer: "Bank",
   online: "Online",
   cheque: "Cheque",
   credit_carryforward: "Credit (from previous payment)",

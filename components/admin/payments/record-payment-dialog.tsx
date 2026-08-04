@@ -30,6 +30,17 @@ import {
   paymentReferenceLabel,
   paymentReferencePlaceholder,
 } from "@/lib/payment-reference";
+import { bankAccountLabel } from "@/lib/banks";
+
+type BankAccountOption = {
+  id: string;
+  name: string;
+  type: "cash" | "bank";
+  bank_name: string | null;
+  account_title: string | null;
+  account_number: string | null;
+  account_number_masked: string | null;
+};
 
 export type FlatPickerOption = {
   id: string;
@@ -164,9 +175,10 @@ export function RecordPaymentDialog({
   const [payment_date, setPaymentDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
-  const [payment_mode, setPaymentMode] = useState<
-    "cash" | "bank_transfer" | "cheque" | "online" | "other"
-  >("cash");
+  // Societies collect two ways only: cash, or into a bank account.
+  // "transfer"/"online"/"cheque" were folded into `bank` — see migration
+  // 20260805000003, which also tightened the DB CHECK to match.
+  const [payment_mode, setPaymentMode] = useState<"cash" | "bank">("cash");
   const [reference_no, setRef] = useState("");
   const [notes, setNotes] = useState("");
   const [residentId, setResidentId] = useState<string>(
@@ -180,9 +192,7 @@ export function RecordPaymentDialog({
   // Bank account this payment is deposited into. Defaults to the
   // per-building "Cash" seed account once accounts load.
   const [bankAccountId, setBankAccountId] = useState<string>("");
-  const [bankAccounts, setBankAccounts] = useState<
-    Array<{ id: string; name: string; type: "cash" | "bank" }>
-  >([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccountOption[]>([]);
   // Receipt PDF is opt-in — chowkidars recording many small chunks shouldn't
   // get a download every time. Defaults to false; admin ticks to download.
   const [downloadPdf, setDownloadPdf] = useState(false);
@@ -329,17 +339,15 @@ export function RecordPaymentDialog({
       const supabase = createClient();
       const { data } = await supabase
         .from("bms_bank_accounts")
-        .select("id, name, type")
+        .select(
+          "id, name, type, bank_name, account_title, account_number, account_number_masked",
+        )
         .eq("building_id", buildingId)
         .eq("is_active", true)
         .order("type", { ascending: false })
         .order("name");
       if (cancelled) return;
-      const rows = (data ?? []) as Array<{
-        id: string;
-        name: string;
-        type: "cash" | "bank";
-      }>;
+      const rows = (data ?? []) as BankAccountOption[];
       setBankAccounts(rows);
       setBankAccountId((current) => {
         if (current) return current;
@@ -352,6 +360,31 @@ export function RecordPaymentDialog({
       cancelled = true;
     };
   }, [buildingId]);
+
+  // Accounts split by kind. "Paid into" only offers destinations that match
+  // how the money arrived — cash in hand cannot land in an HBL account.
+  const cashAccounts = useMemo(
+    () => bankAccounts.filter((b) => b.type === "cash"),
+    [bankAccounts],
+  );
+  const realBankAccounts = useMemo(
+    () => bankAccounts.filter((b) => b.type === "bank"),
+    [bankAccounts],
+  );
+  const destinations = payment_mode === "bank" ? realBankAccounts : cashAccounts;
+
+  // A building that has not configured a bank account yet still has to be
+  // able to record a bank payment — it just cannot say which account.
+  const noBankConfigured = payment_mode === "bank" && realBankAccounts.length === 0;
+
+  // Keep the destination consistent with the mode: switching Cash <-> Bank
+  // must not leave the previous kind of account selected.
+  useEffect(() => {
+    setBankAccountId((current) => {
+      if (current && destinations.some((d) => d.id === current)) return current;
+      return destinations[0]?.id ?? "";
+    });
+  }, [payment_mode, destinations]);
 
   const targetIsInvoice = useMemo(
     () => target !== "entry_fee" && target !== "other" && target !== "project",
@@ -631,7 +664,7 @@ export function RecordPaymentDialog({
             <Select
               value={payment_mode}
               onValueChange={(v) =>
-                setPaymentMode(v as "cash" | "bank_transfer" | "cheque" | "online" | "other")
+                setPaymentMode(v as "cash" | "bank")
               }
             >
               <SelectTrigger>
@@ -639,10 +672,7 @@ export function RecordPaymentDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="bank_transfer">Bank transfer</SelectItem>
-                <SelectItem value="cheque">Cheque</SelectItem>
-                <SelectItem value="online">Online</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                <SelectItem value="bank">Bank</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -655,30 +685,52 @@ export function RecordPaymentDialog({
               value={reference_no}
               onChange={(e) => setRef(e.target.value)}
               placeholder={paymentReferencePlaceholder(payment_mode)}
-              inputMode={
-                payment_mode === "bank_transfer" || payment_mode === "cheque"
-                  ? "numeric"
-                  : undefined
-              }
+              inputMode={payment_mode === "bank" ? "numeric" : undefined}
             />
           </div>
           <div className="col-span-2">
-            <Label>Paid into</Label>
-            <Select
-              value={bankAccountId}
-              onValueChange={setBankAccountId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pick bank or cash" />
-              </SelectTrigger>
-              <SelectContent>
-                {bankAccounts.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name} {b.type === "cash" ? "(Cash)" : "(Bank)"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>
+              Paid into{payment_mode === "bank" && !noBankConfigured ? " *" : ""}
+            </Label>
+            {noBankConfigured ? (
+              // No bank account set up yet: show a disabled "Bank" so the
+              // payment is still recordable, and point at where to fix it.
+              <>
+                <Select value="" disabled>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Bank" />
+                  </SelectTrigger>
+                  <SelectContent />
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  No bank account configured.{" "}
+                  <a
+                    href="/admin/settings#bank-accounts"
+                    className="text-primary hover:underline"
+                  >
+                    Add one in Settings
+                  </a>{" "}
+                  to record which account received the money.
+                </p>
+              </>
+            ) : (
+              <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      payment_mode === "bank" ? "Pick the bank account" : "Cash"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {destinations.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {bankAccountLabel(b)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="col-span-2">
             <Label>Notes</Label>
@@ -706,7 +758,16 @@ export function RecordPaymentDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={pending}>
+            {/* A bank payment with no destination is the exact problem this
+                screen had: "Bank" told you nothing about where the money
+                went. Blocked unless the building has no bank account yet. */}
+            <Button
+              type="submit"
+              disabled={
+                pending ||
+                (payment_mode === "bank" && !noBankConfigured && !bankAccountId)
+              }
+            >
               {pending
                 ? "Saving..."
                 : downloadPdf
