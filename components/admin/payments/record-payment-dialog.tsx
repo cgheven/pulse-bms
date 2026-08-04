@@ -554,15 +554,18 @@ export function RecordPaymentDialog({
                     Project: {presetProject.name}
                   </SelectItem>
                 )}
-                {invoices.map((inv) => {
-                  const remaining = Math.max(0, inv.amount - inv.paid_total);
-                  return (
-                    <SelectItem key={inv.id} value={inv.id}>
-                      {formatDate(inv.billing_month)} — {inv.invoice_number} (
-                      {formatCurrency(remaining)} due)
-                    </SelectItem>
-                  );
-                })}
+                {/* Billing month only. The invoice number and the outstanding
+                    amount used to be appended here, but the summary box
+                    directly below already shows total / paid / still due for
+                    whichever invoice is selected. Safe to drop the number too:
+                    bms_invoices has UNIQUE (building_id, flat_id,
+                    billing_month), so a flat can never have two invoices for
+                    the same month and the labels stay unambiguous. */}
+                {invoices.map((inv) => (
+                  <SelectItem key={inv.id} value={inv.id}>
+                    {formatDate(inv.billing_month)}
+                  </SelectItem>
+                ))}
                 <SelectItem value="entry_fee">Entry fee</SelectItem>
                 <SelectItem value="other">Other / miscellaneous</SelectItem>
               </SelectContent>
