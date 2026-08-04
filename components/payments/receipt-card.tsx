@@ -1,5 +1,6 @@
 import { amountInWords } from "@/lib/amount-in-words";
 import { formatCurrency, formatReceiptNo } from "@/lib/utils";
+import { paymentReferenceLabel } from "@/lib/payment-reference";
 
 /**
  * Receipt card — premium SaaS-grade redesign (Stripe / Razorpay style),
@@ -335,7 +336,10 @@ export function ReceiptCard({
             <SectionLabel>Payment Details</SectionLabel>
             <MetaRow label="Date" value={dateStr} />
             <MetaRow label="Method" value={methodLabel(payment.method)} />
-            <MetaRow label="Reference" value={payment.reference ?? "—"} />
+            <MetaRow
+              label={paymentReferenceLabel(payment.method)}
+              value={payment.reference ?? "—"}
+            />
           </div>
         </div>
 
@@ -379,17 +383,6 @@ export function ReceiptCard({
                   }}
                 >
                   Period: {period}
-                </div>
-              )}
-              {payment.reference && invoice && (
-                <div
-                  style={{
-                    fontSize: "9pt",
-                    color: "#4B5563",
-                    marginTop: "0.5mm",
-                  }}
-                >
-                  Note: {payment.reference}
                 </div>
               )}
             </div>

@@ -26,6 +26,10 @@ import { friendlyErrorMessage } from "@/lib/toast-error";
 import { recordPayment, type PaymentInput } from "@/app/actions/payments";
 import { formatCurrency, formatDate, formatReceiptNo } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import {
+  paymentReferenceLabel,
+  paymentReferencePlaceholder,
+} from "@/lib/payment-reference";
 
 export type FlatPickerOption = {
   id: string;
@@ -643,11 +647,19 @@ export function RecordPaymentDialog({
             </Select>
           </div>
           <div>
-            <Label>Reference #</Label>
+            <Label htmlFor="reference_no">
+              {paymentReferenceLabel(payment_mode)}
+            </Label>
             <Input
+              id="reference_no"
               value={reference_no}
               onChange={(e) => setRef(e.target.value)}
-              placeholder="Cheque or txn number"
+              placeholder={paymentReferencePlaceholder(payment_mode)}
+              inputMode={
+                payment_mode === "bank_transfer" || payment_mode === "cheque"
+                  ? "numeric"
+                  : undefined
+              }
             />
           </div>
           <div className="col-span-2">

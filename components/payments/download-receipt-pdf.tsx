@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { amountInWords } from "@/lib/amount-in-words";
 import { formatCurrency, formatReceiptNo } from "@/lib/utils";
 import type { ReceiptCardProps } from "@/components/payments/receipt-card";
+import { paymentReferenceLabel } from "@/lib/payment-reference";
 
 const METHOD_LABEL: Record<string, string> = {
   cash: "Cash",
@@ -207,7 +208,13 @@ export function DownloadReceiptPdfButton({
       // PAYMENT DETAILS body — label/value rows
       rightY = drawMetaRow(doc, "Date", longDate(receipt.payment.payment_date), rightColX, rightY);
       rightY = drawMetaRow(doc, "Method", methodLabel(receipt.payment.method), rightColX, rightY);
-      rightY = drawMetaRow(doc, "Reference", receipt.payment.reference ?? "—", rightColX, rightY);
+      rightY = drawMetaRow(
+        doc,
+        paymentReferenceLabel(receipt.payment.method),
+        receipt.payment.reference ?? "—",
+        rightColX,
+        rightY,
+      );
 
       cursor = Math.max(leftY, rightY) + 4;
 
@@ -250,18 +257,6 @@ export function DownloadReceiptPdfButton({
         doc.setFontSize(9);
         doc.setTextColor(MUTED.r, MUTED.g, MUTED.b);
         doc.text(`Period: ${period}`, margin, cursor);
-      }
-      if (receipt.payment.reference && receipt.invoice) {
-        cursor += 4;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(MUTED.r, MUTED.g, MUTED.b);
-        const noteLines = doc.splitTextToSize(
-          `Note: ${receipt.payment.reference}`,
-          contentW - 4,
-        );
-        doc.text(noteLines, margin, cursor);
-        cursor += 4 * (noteLines.length - 1);
       }
 
       cursor += 8;
