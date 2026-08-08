@@ -217,7 +217,7 @@ async function OtherIncomeTable() {
 
   return (
     <div className="space-y-3">
-      <PaymentsList payments={data.rows} />
+      <PaymentsList payments={data.rows} canDelete />
       <CrossLinkFooter />
     </div>
   );
@@ -254,7 +254,7 @@ async function loadOtherIncomeData() {
     supabase
       .from("bms_payments")
       .select(
-        "id, payment_date, flat_id, resident_id, amount, payment_mode, category, receipt_no, legacy_receipt_no, recorded_by, invoice_id, reference_no, received_by_name, received_by_position",
+        "id, payment_date, flat_id, resident_id, amount, payment_mode, category, receipt_no, legacy_receipt_no, recorded_by, invoice_id, reference_no, received_by_name, received_by_position, payment_group_id",
       )
       .eq("building_id", buildingId)
       .in("category", ["entry_fee", "fine", "other"])
@@ -318,6 +318,9 @@ async function loadOtherIncomeData() {
     category: p.category,
     receipt_no: p.receipt_no,
     legacy_receipt_no: (p as { legacy_receipt_no?: string | null }).legacy_receipt_no ?? null,
+    // Lets the list fold one collection's allocation rows into a single
+    // line instead of listing a six-month advance as six payments.
+    payment_group_id: (p as { payment_group_id?: string | null }).payment_group_id ?? null,
     recorded_by_name: p.recorded_by ? recMap.get(p.recorded_by) ?? null : null,
     reference_no: p.reference_no,
     invoice_id: p.invoice_id ?? null,

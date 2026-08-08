@@ -196,6 +196,14 @@ export function RecordPaymentDialog({
   // Receipt PDF is opt-in — chowkidars recording many small chunks shouldn't
   // get a download every time. Defaults to false; admin ticks to download.
   const [downloadPdf, setDownloadPdf] = useState(false);
+  // The flat's own billing terms, read from bms_flats so the "pay ahead"
+  // estimate matches what the server will actually do.
+  const [flatTerms, setFlatTerms] = useState<{
+    monthly_fee: number | null;
+    ownership_type: string | null;
+  }>({ monthly_fee: null, ownership_type: null });
+  // "YYYY-MM" of every month already invoiced for this flat, any status.
+  const [billedMonths, setBilledMonths] = useState<Set<string>>(new Set());
   const [invoices, setInvoices] = useState<PendingInv[]>(
     presetInvoice
       ? [
@@ -239,7 +247,7 @@ export function RecordPaymentDialog({
       const supabase = createClient();
       // All three reads are explicitly scoped by building_id — defence-in-depth
       // against any RLS regression. Mirrors the server-side loaders.
-      const [invQ, resQ] = await Promise.all([
+      const [invQ, resQ, flatQ, monthsQ] = await Promise.all([
         supabase
           .from("bms_invoices")
           .select("id, invoice_number, billing_month, amount, status")
@@ -254,6 +262,26 @@ export function RecordPaymentDialog({
           .eq("flat_id", flat_id)
           .eq("is_active", true)
           .order("is_primary", { ascending: false }),
+        // The server sizes months ahead from the FLAT's fee, falling back to
+        // the building default — not from the newest open invoice. Reading the
+        // same source here keeps the checkbox honest when the fee has changed
+        // since those invoices were cut, and tells us whether the flat is
+        // vacant, which the server refuses to bill ahead at all.
+        supabase
+          .from("bms_flats")
+          .select("monthly_fee, ownership_type")
+          .eq("building_id", buildingId)
+          .eq("id", flat_id)
+          .maybeSingle(),
+        // EVERY billing month, not just the open ones. The server walks
+        // forward from the invoice being paid and steps over months that
+        // already exist, so without the paid and waived ones the range shown
+        // to the recorder would name months that will never be created.
+        supabase
+          .from("bms_invoices")
+          .select("billing_month")
+          .eq("building_id", buildingId)
+          .eq("flat_id", flat_id),
       ]);
 
       // paid totals per invoice
@@ -280,6 +308,18 @@ export function RecordPaymentDialog({
         paid_total: paidMap.get(i.id) ?? 0,
       }));
       setInvoices(list);
+      setBilledMonths(
+        new Set(
+          (monthsQ.data ?? [])
+            .map((r) => String(r.billing_month).slice(0, 7))
+            .filter(Boolean),
+        ),
+      );
+      setFlatTerms({
+        monthly_fee:
+          flatQ.data?.monthly_fee != null ? Number(flatQ.data.monthly_fee) : null,
+        ownership_type: flatQ.data?.ownership_type ?? null,
+      });
       setResidents(resQ.data ?? []);
       // Always pre-select the primary resident of the chosen flat (residents
       // are ordered is_primary DESC server-side, so [0] is the primary). This
@@ -410,6 +450,64 @@ export function RecordPaymentDialog({
   const overflow =
     selectedInvoice && amountNum > stillDue ? amountNum - stillDue : 0;
 
+  // ── Paying months ahead ────────────────────────────────────────────
+  // Residents routinely hand over six months at once. The server settles
+  // every open month first (oldest first), so what is left over is what can
+  // buy months that have not been billed yet.
+  //
+  // The fee comes from the flat record, matching what the server uses. Sizing
+  // it from the newest open invoice instead looked equivalent and was not: if
+  // the fee has been raised since those invoices were cut, the checkbox
+  // promised more months, at the old rate, than the server would ever create.
+  const totalOpenDue = useMemo(
+    () => invoices.reduce((s, i) => s + Math.max(0, i.amount - i.paid_total), 0),
+    [invoices],
+  );
+  const isVacant = flatTerms.ownership_type === "vacant";
+  const monthlyFee = flatTerms.monthly_fee ?? 0;
+  const beyondOpen = Math.max(0, amountNum - totalOpenDue);
+  // The server refuses to bill a vacant flat ahead, so never offer it here —
+  // the whole surplus would silently become a credit instead.
+  const monthsAhead =
+    targetIsInvoice && monthlyFee > 0 && !isVacant
+      ? Math.min(24, Math.floor(beyondOpen / monthlyFee))
+      : 0;
+  const [billAhead, setBillAhead] = useState(true);
+  // Whatever cannot fill a whole month sits on the flat's account.
+  const heldOnAccount =
+    beyondOpen - (billAhead ? monthsAhead * monthlyFee : 0);
+
+  // Mirrors the server's walk exactly: start at the month being paid, step
+  // forward, skip any month already invoiced, and take the first N that are
+  // free. Anything less faithful names months that will not be created.
+  //
+  // Dates are built from explicit year/month numbers rather than parsed from
+  // the "YYYY-MM-01" string — `new Date("2026-08-01")` is parsed as UTC and
+  // then rendered in local time, which lands on July for anyone west of
+  // Greenwich.
+  const monthsAheadLabel = useMemo(() => {
+    if (monthsAhead <= 0 || !selectedInvoice) return null;
+
+    const [y, m] = selectedInvoice.billing_month.split("-").map(Number);
+    if (!y || !m) return null;
+
+    const picked: Date[] = [];
+    const cursor = new Date(y, m - 1, 1);
+    for (let scan = 0; scan < 120 && picked.length < monthsAhead; scan++) {
+      cursor.setMonth(cursor.getMonth() + 1);
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+      if (billedMonths.has(key)) continue;
+      picked.push(new Date(cursor));
+    }
+    if (picked.length === 0) return null;
+
+    const fmt = (d: Date) =>
+      d.toLocaleDateString("en-PK", { month: "long", year: "numeric" });
+    return picked.length === 1
+      ? fmt(picked[0])
+      : `${fmt(picked[0])} – ${fmt(picked[picked.length - 1])}`;
+  }, [monthsAhead, selectedInvoice, billedMonths]);
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!flat_id) {
@@ -453,6 +551,9 @@ export function RecordPaymentDialog({
           // more client-side follow-up UPDATE (which skipped the building
           // scope and silently dropped errors). Server validates cross-tenant.
           project_id: targetIsProject ? presetProject?.id ?? null : null,
+          // Only ever sent when the recorder ticked the box, and the server
+          // caps it at 24 regardless.
+          advance_months: billAhead ? monthsAhead : 0,
         };
         const row = await recordPayment(payload);
 
@@ -471,12 +572,28 @@ export function RecordPaymentDialog({
           );
         }
 
-        if (row.overflow > 0) {
+        // Say what the money actually bought. A recorder who has just taken
+        // Rs. 30,000 needs to see the months it covered, not a bare total.
+        if (row.months_created > 0 || row.residual_credit > 0) {
+          const parts: string[] = [];
+          if (row.allocations.length > 0) {
+            parts.push(
+              `${row.allocations.length} month${
+                row.allocations.length > 1 ? "s" : ""
+              } settled`,
+            );
+          }
+          if (row.months_created > 0) {
+            parts.push(`${row.months_created} billed ahead`);
+          }
+          if (row.residual_credit > 0) {
+            parts.push(
+              `${formatCurrency(row.residual_credit)} held on account`,
+            );
+          }
           toast({
-            title: `${formatCurrency(row.overflow)} carried forward`,
-            description: row.credit_id
-              ? "Saved as credit — will apply to the next invoice."
-              : "Applied to next month's invoice automatically.",
+            title: `${formatCurrency(row.amount)} allocated`,
+            description: parts.join(" · "),
           });
         }
 
@@ -644,9 +761,10 @@ export function RecordPaymentDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
-            {overflow > 0 && (
+            {overflow > 0 && monthsAhead === 0 && (
               <p className="text-xs text-[hsl(151_70%_55%)] mt-1">
-                {formatCurrency(overflow)} will apply to next invoice (or saved as credit).
+                {formatCurrency(overflow)} goes to the months already billed, then
+                sits on the flat&apos;s account.
               </p>
             )}
           </div>
@@ -658,6 +776,37 @@ export function RecordPaymentDialog({
               onChange={(e) => setPaymentDate(e.target.value)}
             />
           </div>
+
+          {monthsAhead > 0 && (
+            <div className="col-span-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={billAhead}
+                  onChange={(e) => setBillAhead(e.target.checked)}
+                  className="h-4 w-4 rounded border-input mt-1"
+                />
+                <span>
+                  <span className="font-medium">
+                    Also pay {monthsAhead} month{monthsAhead > 1 ? "s" : ""} ahead
+                  </span>
+                  {monthsAheadLabel && (
+                    <span className="block text-muted-foreground">
+                      {monthsAheadLabel} — billed now at{" "}
+                      {formatCurrency(monthlyFee)} a month and marked paid, so
+                      the flat is not chased for them.
+                    </span>
+                  )}
+                </span>
+              </label>
+              {heldOnAccount > 0 && (
+                <p className="text-xs text-muted-foreground mt-2 pl-7">
+                  {formatCurrency(heldOnAccount)} left over stays on the
+                  flat&apos;s account for the next bill.
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <Label>Payment mode</Label>

@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { getActiveBuilding } from "@/lib/building-context";
 import { revalidatePath } from "next/cache";
-import { PAYMENT_MODE } from "@/types";
 
 function firstOfMonth(yyyyMm: string): string {
   // yyyyMm: "2026-05"
@@ -97,125 +96,32 @@ export async function generateMonthlyInvoices(params: { month: string }) {
     if (error) throw new Error(error.message);
     inserted = data?.length ?? 0;
 
-    // Add to flats' outstanding_dues + auto-apply any open carry-forward credit.
-    // Pakistani resident pays Rs. 8k against a Rs. 5k bill → Rs. 3k credit was
-    // parked in bms_flat_credits. Next time we generate an invoice for that
-    // flat, we burn the credit immediately: it shows up as a real payment row
-    // (mode = 'credit_carryforward') with a back-link to the source receipt
-    // and the invoice flips to paid/partial as appropriate.
+    // Settle each new invoice against any advance the flat is holding, and
+    // restate what it owes.
+    //
+    // Both jobs belong to `bms_apply_flat_credits`, one transaction per
+    // invoice. This used to be done here in ~8 sequential round trips and it
+    // got two things wrong. It inserted a fresh `credit_carryforward` payment
+    // row for the money being consumed — but the cash had already been
+    // counted on the day the resident handed it over, so every report that
+    // sums bms_payments saw it twice. And it nudged outstanding_dues by hand,
+    // which is why 11 flats had drifted by the time this was written. The
+    // function re-attaches the advance row that already holds the money, and
+    // rebuilds dues from the invoices themselves.
     for (const row of data ?? []) {
-      const { data: flatRow } = await supabase
-        .from("bms_flats")
-        .select("outstanding_dues")
-        .eq("id", row.flat_id)
-        .eq("building_id", buildingId)
-        .single();
-      const newDues = Number(flatRow?.outstanding_dues ?? 0) + Number(row.amount);
-      await supabase
-        .from("bms_flats")
-        .update({ outstanding_dues: newDues })
-        .eq("id", row.flat_id)
-        .eq("building_id", buildingId);
-
-      // Pull open credits for this flat, oldest first (FIFO). created_at
-      // is selected so we can preserve it on a split-remainder row — that
-      // keeps the queue stable even when one credit is partially consumed.
-      const { data: openCredits } = await supabase
-        .from("bms_flat_credits")
-        .select("id, amount, source_payment_id, created_at")
-        .eq("building_id", buildingId)
-        .eq("flat_id", row.flat_id)
-        .is("applied_invoice_id", null)
-        .order("created_at", { ascending: true });
-
-      if (!openCredits || openCredits.length === 0) continue;
-
-      let remaining = Number(row.amount);
-      for (const c of openCredits) {
-        if (remaining <= 0) break;
-        const creditAmt = Number(c.amount);
-        const apply = Math.min(creditAmt, remaining);
-
-        // Record the credit as a real payment chunk so it appears in the
-        // payment history and on receipts. receipt_no is auto-allocated by
-        // the bms_payments_receipt_no_trg trigger.
-        const { error: payErr } = await supabase.from("bms_payments").insert({
-          building_id: buildingId,
-          invoice_id: row.id,
-          flat_id: row.flat_id,
-          amount: apply,
-          payment_date: new Date().toISOString().slice(0, 10),
-          payment_mode: PAYMENT_MODE.CREDIT_CARRYFORWARD,
-          reference_no: null,
-          category: "maintenance",
-          notes: "Credit applied from previous overpayment",
-          recorded_by: user.id,
-        });
-        if (payErr) throw new Error(payErr.message);
-
-        // Mark the credit consumed. If the credit was bigger than what we
-        // needed, split it: close the original by applying the full amount
-        // (so the audit trail is "this much went to this invoice") and open
-        // a new row for the remainder. The remainder row INHERITS the
-        // original credit's created_at so subsequent FIFO ordering is stable.
-        if (creditAmt > apply) {
-          await supabase
-            .from("bms_flat_credits")
-            .update({ applied_invoice_id: row.id, amount: apply })
-            .eq("id", c.id)
-            .eq("building_id", buildingId);
-          await supabase.from("bms_flat_credits").insert({
-            building_id: buildingId,
-            flat_id: row.flat_id,
-            amount: creditAmt - apply,
-            source_payment_id: c.source_payment_id,
-            notes: "Carry-forward remainder",
-            created_by: user.id,
-            created_at: c.created_at,
-          });
-        } else {
-          await supabase
-            .from("bms_flat_credits")
-            .update({ applied_invoice_id: row.id })
-            .eq("id", c.id)
-            .eq("building_id", buildingId);
-        }
-
-        remaining -= apply;
-        creditsAmount += apply;
-        creditsApplied += 1;
-
-        // NOTE: We intentionally DO NOT decrement outstanding_dues here.
-        // The dues math has already been done for this overpayment cycle:
-        //  - When the resident originally over-paid, recordPayment reduced
-        //    outstanding_dues by the FULL chunk (incl. the surplus parked
-        //    in bms_flat_credits).
-        //  - The new invoice we just generated INCREASED outstanding_dues
-        //    by the invoice amount.
-        //  - Subtracting again here would double-count the credit and push
-        //    outstanding_dues into a permanently negative state.
-        // Net effect: the original overpayment already accounted for this
-        // bill being paid; the credit ledger is the audit trail.
-      }
-
-      // Re-derive invoice status from payments now that credits flowed in.
-      const { data: paidRows } = await supabase
-        .from("bms_payments")
-        .select("amount")
-        .eq("building_id", buildingId)
-        .eq("invoice_id", row.id);
-      const paidTotal = (paidRows ?? []).reduce(
-        (s, r) => s + Number(r.amount ?? 0),
-        0,
+      const { data: applied, error: applyErr } = await supabase.rpc(
+        "bms_apply_flat_credits",
+        {
+          p_building_id: buildingId,
+          p_flat_id: row.flat_id,
+          p_invoice_id: row.id,
+        },
       );
-      let newStatus: "paid" | "partial" | "pending" = "pending";
-      if (paidTotal >= Number(row.amount)) newStatus = "paid";
-      else if (paidTotal > 0) newStatus = "partial";
-      await supabase
-        .from("bms_invoices")
-        .update({ status: newStatus })
-        .eq("id", row.id)
-        .eq("building_id", buildingId);
+      if (applyErr) throw new Error(applyErr.message);
+
+      const res = applied as { applied: number; count: number } | null;
+      creditsAmount += Number(res?.applied ?? 0);
+      creditsApplied += Number(res?.count ?? 0);
     }
   }
 
@@ -273,32 +179,14 @@ export async function waiveInvoice(id: string, reason?: string) {
     .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
-  // reduce outstanding dues for flat (scope by building_id — defence-in-depth)
-  if (inv.status !== "paid" && inv.status !== "waived") {
-    // Subtract only the UNPAID portion — partial payments already reduced dues
-    // when they were recorded, so subtracting the full invoice amount here
-    // would double-count the collected portion.
-    const { data: paidRows } = await supabase
-      .from("bms_payments")
-      .select("amount")
-      .eq("invoice_id", id)
-      .eq("building_id", buildingId);
-    const alreadyPaid = (paidRows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
-    const unpaidRemainder = Math.max(0, Number(inv.amount) - alreadyPaid);
-
-    const { data: flatRow } = await supabase
-      .from("bms_flats")
-      .select("outstanding_dues")
-      .eq("id", inv.flat_id)
-      .eq("building_id", buildingId)
-      .single();
-    const newDues = Math.max(0, Number(flatRow?.outstanding_dues ?? 0) - unpaidRemainder);
-    await supabase
-      .from("bms_flats")
-      .update({ outstanding_dues: newDues })
-      .eq("id", inv.flat_id)
-      .eq("building_id", buildingId);
-  }
+  // A waived invoice drops out of what the flat owes. Rebuilt from the
+  // remaining invoices rather than subtracted — the old subtraction had to
+  // reason about how much of this invoice had already been paid, and getting
+  // that wrong left the error in the cache forever.
+  await supabase.rpc("bms_recalc_flat_dues", {
+    p_building_id: buildingId,
+    p_flat_id: inv.flat_id,
+  });
 
   await writeAuditLog({
     actor_id: user.id,
@@ -351,20 +239,13 @@ export async function deleteInvoice(id: string) {
     .eq("building_id", buildingId);
   if (error) throw new Error(error.message);
 
-  if (inv.status !== "paid" && inv.status !== "waived") {
-    const { data: flatRow } = await supabase
-      .from("bms_flats")
-      .select("outstanding_dues")
-      .eq("id", inv.flat_id)
-      .eq("building_id", buildingId)
-      .single();
-    const newDues = Math.max(0, Number(flatRow?.outstanding_dues ?? 0) - Number(inv.amount));
-    await supabase
-      .from("bms_flats")
-      .update({ outstanding_dues: newDues })
-      .eq("id", inv.flat_id)
-      .eq("building_id", buildingId);
-  }
+  // The invoice is gone, so what the flat owes is whatever the remaining
+  // invoices say. Rebuilt rather than subtracted, for the same reason as
+  // waiveInvoice above.
+  await supabase.rpc("bms_recalc_flat_dues", {
+    p_building_id: buildingId,
+    p_flat_id: inv.flat_id,
+  });
 
   await writeAuditLog({
     actor_id: user.id,

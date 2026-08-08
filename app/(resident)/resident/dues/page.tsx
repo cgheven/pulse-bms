@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatMonthLabel } from "@/lib/utils";
+import { paidThroughFrom } from "@/lib/paid-through";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 import { AlertTriangle } from "lucide-react";
 
@@ -135,6 +136,10 @@ async function DuesContent({
     );
   }
 
+  // "Covered until when" — the question a resident who paid ahead actually
+  // asks. Computed from the invoices already loaded above.
+  const paidThrough = paidThroughFrom(invoices);
+
   const paidByInvoice = new Map<string, number>();
   for (const p of payments) {
     if (!p.invoice_id) continue;
@@ -215,14 +220,28 @@ async function DuesContent({
 
   return (
     <>
-      {openCredits > 0 && (
+      {(paidThrough || openCredits > 0) && (
         <div className="rounded-lg border border-[hsl(151_70%_55%/0.30)] bg-[hsl(151_70%_55%/0.06)] p-3 text-sm">
-          <span className="font-semibold text-[hsl(151_70%_55%)]">
-            {formatCurrency(openCredits)} credit
-          </span>
-          <span className="text-muted-foreground">
-            {" "}— will apply to your next bill automatically.
-          </span>
+          {paidThrough && (
+            <div>
+              <span className="font-semibold text-[hsl(151_70%_55%)]">
+                Paid through {formatMonthLabel(paidThrough.slice(0, 7))}
+              </span>
+              <span className="text-muted-foreground">
+                {" "}— every month up to here is settled.
+              </span>
+            </div>
+          )}
+          {openCredits > 0 && (
+            <div className={paidThrough ? "mt-1" : undefined}>
+              <span className="font-semibold text-[hsl(151_70%_55%)]">
+                {formatCurrency(openCredits)} in advance
+              </span>
+              <span className="text-muted-foreground">
+                {" "}— already paid, it comes off your next bill.
+              </span>
+            </div>
+          )}
         </div>
       )}
 

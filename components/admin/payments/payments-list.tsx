@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
+import { deletePayment } from "@/app/actions/payments";
 import {
   Select,
   SelectTrigger,
@@ -59,12 +65,85 @@ export type PaymentRow = {
    * "Treasurer"). Denormalized so it survives committee changes.
    */
   received_by_position: string | null;
+  /**
+   * Groups every allocation row produced by ONE physical collection. A
+   * resident paying six months at once produces six rows sharing this id;
+   * the list renders them as the single payment they actually were.
+   *
+   * Optional: callers that synthesise rows (project contributions) omit it
+   * and each row is treated as its own collection.
+   */
+  payment_group_id?: string | null;
 };
+
+/**
+ * "Jan 2026" — a billing month has no meaningful day, and rendering one
+ * ("01-Jan-2026") is noise in a column whose whole job is to say which month
+ * the money was for. Ranges especially: "01-Jan-2026 – 01-Feb-2027" reads
+ * like two dates rather than a span of months.
+ */
+function monthCell(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-PK", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(d);
+}
+
+/** One physical collection: the rows it produced, folded into a single line. */
+type Collection = {
+  /** The row the receipt belongs to — the one carrying receipt_no. */
+  anchor: PaymentRow;
+  rows: PaymentRow[];
+  total: number;
+  /** Billing months covered, oldest first. Excludes rows with no invoice. */
+  months: string[];
+};
+
+/**
+ * Fold allocation rows into collections.
+ *
+ * A Rs. 30,000 advance settles ten months and therefore writes ten rows —
+ * correct in the ledger, but listing them as ten payments of Rs. 3,000 reads
+ * as ten separate handovers, and nine of them show a blank receipt column
+ * because only the anchor carries a receipt number. One handover is one line.
+ *
+ * Order is preserved: a collection appears where its FIRST row appeared, so
+ * the caller's sort (usually payment_date desc) still holds.
+ */
+function foldIntoCollections(rows: PaymentRow[]): Collection[] {
+  const byGroup = new Map<string, Collection>();
+  const order: string[] = [];
+
+  for (const r of rows) {
+    const key = r.payment_group_id ?? r.id;
+    let c = byGroup.get(key);
+    if (!c) {
+      c = { anchor: r, rows: [], total: 0, months: [] };
+      byGroup.set(key, c);
+      order.push(key);
+    }
+    c.rows.push(r);
+    c.total += Number(r.amount ?? 0);
+    // The anchor is whichever row holds the receipt number; fall back to the
+    // first row so a group that somehow has none still renders.
+    if (r.receipt_no != null && c.anchor.receipt_no == null) c.anchor = r;
+    if (r.billing_month) c.months.push(r.billing_month);
+  }
+
+  for (const c of byGroup.values()) {
+    c.months.sort();
+  }
+  return order.map((k) => byGroup.get(k)!);
+}
 
 export function PaymentsList({
   payments,
   onFlatClick,
   receiptRoutePrefix = "/admin/payments",
+  canDelete = false,
 }: {
   payments: PaymentRow[];
   /**
@@ -80,7 +159,19 @@ export function PaymentsList({
    * union-scoped receipt route instead of the admin one.
    */
   receiptRoutePrefix?: string;
+  /**
+   * Show a per-row delete control. Off by default: the union collections view
+   * lists payments officers may record but not reverse, and the server action
+   * is admin/super_admin only — offering a button that always errors is worse
+   * than not offering one.
+   */
+  canDelete?: boolean;
 }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [pending, startTransition] = useTransition();
+  // The collection queued for reversal, or null when the dialog is closed.
+  const [confirming, setConfirming] = useState<Collection | null>(null);
   const [q, setQ] = useState("");
   const [monthFilter, setMonthFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
@@ -101,19 +192,27 @@ export function PaymentsList({
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return payments.filter((p) => {
-      if (monthFilter !== "all" && (p.billing_month ?? "").slice(0, 7) !== monthFilter) return false;
-      if (modeFilter !== "all" && p.payment_mode !== modeFilter) return false;
-      if (catFilter !== "all" && p.category !== catFilter) return false;
+    // Filters match a COLLECTION if any of its rows match. Filtering the raw
+    // rows first would split a six-month advance into fragments — picking
+    // "June" would show a lone Rs. 3,000 slice of a Rs. 30,000 receipt.
+    return foldIntoCollections(payments).filter((c) => {
+      if (
+        monthFilter !== "all" &&
+        !c.rows.some((p) => (p.billing_month ?? "").slice(0, 7) === monthFilter)
+      )
+        return false;
+      if (modeFilter !== "all" && !c.rows.some((p) => p.payment_mode === modeFilter))
+        return false;
+      if (catFilter !== "all" && !c.rows.some((p) => p.category === catFilter))
+        return false;
       if (s) {
-        const receiptStr = formatReceiptNo(p.receipt_no).toLowerCase();
-        if (
-          !p.flat_number.toLowerCase().includes(s) &&
-          !(p.resident_name ?? "").toLowerCase().includes(s) &&
-          !receiptStr.includes(s) &&
-          !(p.reference_no ?? "").toLowerCase().includes(s)
-        )
-          return false;
+        const receiptStr = formatReceiptNo(c.anchor.receipt_no).toLowerCase();
+        const hit =
+          c.anchor.flat_number.toLowerCase().includes(s) ||
+          (c.anchor.resident_name ?? "").toLowerCase().includes(s) ||
+          receiptStr.includes(s) ||
+          c.rows.some((p) => (p.reference_no ?? "").toLowerCase().includes(s));
+        if (!hit) return false;
       }
       return true;
     });
@@ -171,17 +270,20 @@ export function PaymentsList({
                 <th className="px-3 py-3 font-semibold">Received by</th>
                 <th className="px-3 py-3 font-semibold">Receipt #</th>
                 <th className="px-3 py-3" />
+                {canDelete && <th className="px-3 py-3" />}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
+                  <td colSpan={canDelete ? 9 : 8} className="px-3 py-12 text-center text-muted-foreground">
                     No payments match the filters.
                   </td>
                 </tr>
               )}
-              {filtered.map((p) => (
+              {filtered.map((c) => {
+                const p = c.anchor;
+                return (
                 <tr key={p.id} className="border-b border-border last:border-0 hover:bg-secondary/50">
                   <td className="px-3 py-3 whitespace-nowrap">
                     {onFlatClick ? (
@@ -208,12 +310,30 @@ export function PaymentsList({
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">{p.payment_date ? formatDate(p.payment_date) : "—"}</td>
                   <td className="px-3 py-3 text-muted-foreground tabular-nums">
-                    {p.billing_month ? formatDate(p.billing_month) : (p.category === "entry_fee" ? "Entry fee" : "—")}
+                    {c.months.length > 1 ? (
+                      <div>
+                        <div>
+                          {monthCell(c.months[0])} – {monthCell(c.months[c.months.length - 1])}
+                        </div>
+                        <div className="text-xs text-muted-foreground/70 mt-0.5">
+                          {c.months.length} months
+                          {c.rows.length > c.months.length && " + advance"}
+                        </div>
+                      </div>
+                    ) : c.months.length === 1 ? (
+                      monthCell(c.months[0])
+                    ) : p.category === "entry_fee" ? (
+                      "Entry fee"
+                    ) : c.rows.length > 0 ? (
+                      "Held on account"
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-3 py-3">
                     {MODE_LABEL[p.payment_mode ?? ""] ?? p.payment_mode ?? "—"}
                   </td>
-                  <td className="px-3 py-3 text-right font-semibold">{formatCurrency(Number(p.amount))}</td>
+                  <td className="px-3 py-3 text-right font-semibold">{formatCurrency(c.total)}</td>
                   <td className="px-3 py-3 whitespace-nowrap">
                     {p.received_by_name ? (
                       <div>
@@ -251,12 +371,80 @@ export function PaymentsList({
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </td>
+                  {canDelete && (
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(c)}
+                        disabled={pending}
+                        className="text-muted-foreground hover:text-destructive p-1 disabled:opacity-40"
+                        aria-label={`Reverse payment ${formatReceiptNo(p.receipt_no) || ""}`.trim()}
+                        title="Reverse this payment"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Reversing a collection is not the same as deleting a row. One
+          handover of six months' maintenance wrote six allocations and may
+          have billed months ahead; undoing it takes all of that back. The
+          dialog says so explicitly, because the operator clicked one line. */}
+      <ConfirmDialog
+        open={confirming !== null}
+        title="Reverse this payment?"
+        confirmLabel={pending ? "Reversing…" : "Reverse payment"}
+        loading={pending}
+        description={
+          confirming
+            ? [
+                `This removes ${formatCurrency(confirming.total)} received from Flat ${confirming.anchor.flat_number}`,
+                confirming.rows.length > 1
+                  ? ` — all ${confirming.rows.length} months it settled, including any it billed ahead.`
+                  : ".",
+                " The flat's balance is recalculated. This cannot be undone.",
+              ].join("")
+            : ""
+        }
+        onCancel={() => !pending && setConfirming(null)}
+        onConfirm={() => {
+          const target = confirming;
+          if (!target) return;
+          startTransition(async () => {
+            try {
+              const res = await deletePayment(target.anchor.id);
+              const removed = Array.isArray(res?.deleted_invoices)
+                ? res.deleted_invoices.length
+                : 0;
+              const reopened = Array.isArray(res?.reopened_invoices)
+                ? res.reopened_invoices.length
+                : 0;
+              const parts = [`${formatCurrency(target.total)} reversed`];
+              if (removed > 0) parts.push(`${removed} month${removed > 1 ? "s" : ""} un-billed`);
+              // A month funded by this advance goes back to unpaid — the
+              // operator needs to know before a resident asks why.
+              if (reopened > 0)
+                parts.push(`${reopened} month${reopened > 1 ? "s" : ""} now unpaid again`);
+              toast({ title: "Payment reversed", description: parts.join(" · ") });
+              setConfirming(null);
+              router.refresh();
+            } catch (err) {
+              toast({
+                title: "Could not reverse payment",
+                description: friendlyErrorMessage(err, "Please try again."),
+                variant: "destructive",
+              });
+            }
+          });
+        }}
+      />
     </div>
   );
 }

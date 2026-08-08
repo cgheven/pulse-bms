@@ -39,6 +39,7 @@ type Payment = {
   payment_mode: string | null;
   reference_no: string | null;
   receipt_no: number | null;
+  payment_group_id?: string | null;
   received_by_name: string | null;
   received_by_position: string | null;
 };
@@ -120,7 +121,7 @@ export function FlatHistoryModal({
           supabase
             .from("bms_payments")
             .select(
-              "id, payment_date, amount, payment_mode, reference_no, receipt_no, received_by_name, received_by_position, invoice_id",
+              "id, payment_date, amount, payment_mode, reference_no, receipt_no, received_by_name, received_by_position, invoice_id, payment_group_id",
             )
             .eq("building_id", buildingId)
             .eq("flat_id", flatId)
@@ -163,6 +164,8 @@ export function FlatHistoryModal({
             payment_mode: p.payment_mode,
             reference_no: p.reference_no,
             receipt_no: p.receipt_no,
+            // Folds a multi-month collection into one line in PaymentsList.
+            payment_group_id: (p as { payment_group_id?: string | null }).payment_group_id ?? null,
             received_by_name: p.received_by_name,
             received_by_position: p.received_by_position,
           })),

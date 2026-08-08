@@ -230,34 +230,52 @@ export function DownloadReceiptPdfButton({
       doc.line(margin, cursor, rightEdge, cursor);
       cursor += 4;
 
-      // Description body
-      const purpose = receipt.invoice
-        ? receipt.invoice.purpose
-        : receipt.payment.reference
-          ? "Miscellaneous"
-          : "Service charges";
-      const period = receipt.invoice?.period_label ?? null;
+      // Description body — one line per month the collection settled, so a
+      // six-month advance prints the six months rather than a single
+      // unexplained total. Mirrors the on-screen ReceiptCard exactly.
+      const lines =
+        receipt.lines && receipt.lines.length > 0
+          ? receipt.lines
+          : [
+              {
+                purpose: receipt.payment.reference
+                  ? "Miscellaneous"
+                  : "Service charges",
+                period: null,
+                amount: receipt.payment.amount,
+              },
+            ];
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.setTextColor(HEADING.r, HEADING.g, HEADING.b);
-      doc.text(purpose, margin, cursor);
+      lines.forEach((line, i) => {
+        if (i > 0) cursor += 5.5;
 
-      // Amount on the same baseline (right-aligned)
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(HEADING.r, HEADING.g, HEADING.b);
-      doc.text(formatCurrency(receipt.payment.amount), rightEdge, cursor, {
-        align: "right",
-      });
+        if (i === 0 || line.purpose !== lines[i - 1].purpose) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.setTextColor(HEADING.r, HEADING.g, HEADING.b);
+          doc.text(line.purpose, margin, cursor);
+        }
 
-      if (period) {
-        cursor += 4;
+        // Amount on the same baseline (right-aligned)
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(MUTED.r, MUTED.g, MUTED.b);
-        doc.text(`Period: ${period}`, margin, cursor);
-      }
+        doc.setFontSize(10);
+        doc.setTextColor(HEADING.r, HEADING.g, HEADING.b);
+        doc.text(formatCurrency(line.amount), rightEdge, cursor, {
+          align: "right",
+        });
+
+        if (line.period) {
+          cursor += 4;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(MUTED.r, MUTED.g, MUTED.b);
+          doc.text(
+            lines.length > 1 ? line.period : `Period: ${line.period}`,
+            margin,
+            cursor,
+          );
+        }
+      });
 
       cursor += 8;
 

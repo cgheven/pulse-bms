@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency, formatDate, formatLakh, formatPhone, formatReceiptNo } from "@/lib/utils";
+import { formatCurrency, formatDate, formatLakh, formatMonthLabel, formatPhone, formatReceiptNo } from "@/lib/utils";
+import { paidThroughMonth } from "@/lib/paid-through";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { FlatFormDialog } from "@/components/admin/flats/flat-form-dialog";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,11 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
     0,
   );
 
+  // Answers "is this flat covered, and until when?" — the question a
+  // resident who paid six months up front will actually ask. Outstanding
+  // dues of zero only means nothing is overdue today.
+  const paidThrough = await paidThroughMonth(supabase, buildingId, id);
+
   // Current month invoice for the at-a-glance status card
   const monthStart = new Date().toISOString().slice(0, 7) + "-01";
   const thisMonth = (invoices ?? []).find((i) => i.billing_month === monthStart);
@@ -144,8 +150,19 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {(openCredits > 0 || thisMonth) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {(openCredits > 0 || thisMonth || paidThrough) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {paidThrough && (
+            <div className="card-soft border-[hsl(151_70%_55%/0.30)]">
+              <div className="text-sm text-muted-foreground">Paid through</div>
+              <div className="mt-1 text-xl font-semibold text-[hsl(151_70%_55%)]">
+                {formatMonthLabel(paidThrough.slice(0, 7))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Every month up to here is settled.
+              </p>
+            </div>
+          )}
           {thisMonth && (
             <div className="card-soft">
               <div className="text-sm text-muted-foreground">This month</div>
@@ -161,12 +178,12 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
           )}
           {openCredits > 0 && (
             <div className="card-soft border-[hsl(151_70%_55%/0.30)]">
-              <div className="text-sm text-muted-foreground">Credit balance</div>
+              <div className="text-sm text-muted-foreground">Advance held</div>
               <div className="mt-1 text-xl font-semibold text-[hsl(151_70%_55%)]">
                 {formatCurrency(openCredits)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Will auto-apply to next invoice generation.
+                Paid already, waiting for the next bill to be raised.
               </p>
             </div>
           )}

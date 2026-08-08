@@ -69,14 +69,22 @@ export type ReceiptCardProps = {
   flat: { flat_number: string };
   resident: { name: string };
   /**
-   * The invoice this payment was applied to. Drives the description line.
-   * Null → standalone payment (entry fee / fine / project / other); we
-   * fall back to the category/reference for the purpose label.
+   * What the money bought, one line per month it settled.
+   *
+   * Usually a single line. A resident paying six months up front gets six,
+   * because "Rs. 30,000 — Maintenance" on its own tells them nothing about
+   * which months they have now covered, and that is the whole point of
+   * paying ahead.
+   *
+   * `period` is null for a payment with no billing month at all (an entry
+   * fee, a fine), and "Held on account" for money paid before a bill for it
+   * exists.
    */
-  invoice: {
-    period_label: string;
+  lines: {
     purpose: string;
-  } | null;
+    period: string | null;
+    amount: number;
+  }[];
   /**
    * When true, render a small "Legacy reference: …" line in the footer
    * area iff `payment.legacy_receipt_no` is present. Off by default —
@@ -115,15 +123,18 @@ export function ReceiptCard({
   payment,
   flat,
   resident,
-  invoice,
+  lines,
   showLegacyReference = false,
 }: ReceiptCardProps) {
   const receiptNo = formatReceiptNo(payment.receipt_no);
   const dateStr = formatLongDate(payment.payment_date);
   const words = amountInWords(payment.amount);
   const amountStr = formatCurrency(payment.amount);
-  const purpose = invoice?.purpose ?? "Maintenance";
-  const period = invoice?.period_label ?? null;
+  // Never render an empty description block, even if a caller passes none.
+  const rows =
+    lines && lines.length > 0
+      ? lines
+      : [{ purpose: "Maintenance", period: null, amount: payment.amount }];
   const signerName = payment.received_by_name ?? "";
   const signerRole = payment.received_by_position ?? "Authorized Signatory";
   const addrLine = [building.address, building.city].filter(Boolean).join(", ");
@@ -363,40 +374,53 @@ export function ReceiptCard({
             <span>Amount</span>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: "6mm",
-              fontSize: "10pt",
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, color: "#0F172A" }}>{purpose}</div>
-              {period && (
-                <div
-                  style={{
-                    fontSize: "9pt",
-                    color: "#4B5563",
-                    marginTop: "0.5mm",
-                  }}
-                >
-                  Period: {period}
-                </div>
-              )}
-            </div>
+          {rows.map((line, i) => (
             <div
+              key={`${line.period ?? "none"}-${i}`}
               style={{
-                fontVariantNumeric: "tabular-nums",
-                fontWeight: 500,
-                color: "#0F172A",
-                whiteSpace: "nowrap",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "6mm",
+                fontSize: "10pt",
+                // Months stack tightly so six of them still clear the
+                // signature block on A5.
+                marginTop: i === 0 ? 0 : "2mm",
               }}
             >
-              {amountStr}
+              <div style={{ flex: 1 }}>
+                {/* The purpose is the same on every line of a normal
+                    collection; repeating it six times is noise, so only
+                    the first line carries it. */}
+                {(i === 0 || line.purpose !== rows[i - 1].purpose) && (
+                  <div style={{ fontWeight: 600, color: "#0F172A" }}>
+                    {line.purpose}
+                  </div>
+                )}
+                {line.period && (
+                  <div
+                    style={{
+                      fontSize: "9pt",
+                      color: "#4B5563",
+                      marginTop: "0.5mm",
+                    }}
+                  >
+                    {rows.length > 1 ? line.period : `Period: ${line.period}`}
+                  </div>
+                )}
+              </div>
+              <div
+                style={{
+                  fontVariantNumeric: "tabular-nums",
+                  fontWeight: 500,
+                  color: "#0F172A",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {formatCurrency(line.amount)}
+              </div>
             </div>
-          </div>
+          ))}
         </div>
 
         {/* ── 5. Total band ─────────────────────────────────────────── */}

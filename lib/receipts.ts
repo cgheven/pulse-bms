@@ -14,6 +14,9 @@ import type { Role } from "@/types";
  * the cross-tenant scoping (`.eq("building_id", buildingId)` on every
  * read) but nothing more.
  */
+const GROUP_COLUMNS =
+  "id, building_id, invoice_id, flat_id, resident_id, amount, payment_date, payment_mode, reference_no, receipt_no, legacy_receipt_no, category, notes, payment_group_id, received_by_name, received_by_position";
+
 export async function loadReceiptData(
   paymentId: string,
   buildingId: string,
@@ -24,15 +27,40 @@ export async function loadReceiptData(
   // `legacy_receipt_no` is the pre-migration text receipt string (e.g.
   // "RCPT-DEMO-PROJ-018"). We surface it on admin + union receipts so
   // staff cross-referencing a paper book can still locate the row.
-  const { data: payment } = await supabase
+  const { data: seed } = await supabase
     .from("bms_payments")
-    .select(
-      "id, building_id, invoice_id, flat_id, resident_id, amount, payment_date, payment_mode, reference_no, receipt_no, legacy_receipt_no, category, received_by_name, received_by_position",
-    )
+    .select(GROUP_COLUMNS)
     .eq("id", paymentId)
     .eq("building_id", buildingId)
     .maybeSingle();
-  if (!payment || payment.receipt_no == null) return null;
+  if (!seed) return null;
+
+  // ── 1b. The rest of the collection ────────────────────────────
+  // One handover of cash can settle several months, and each month it
+  // settles is its own row. The receipt is for the handover, not for one
+  // row of it: we load the whole group, total it, and list the months.
+  //
+  // This is also why any row of the group resolves here. A resident given
+  // a link to a middle row must still see their receipt, not a 404 — only
+  // the anchor carries the receipt number.
+  const { data: groupRows } = await supabase
+    .from("bms_payments")
+    .select(GROUP_COLUMNS)
+    .eq("building_id", buildingId)
+    .eq("payment_group_id", seed.payment_group_id ?? seed.id)
+    .order("payment_date", { ascending: true });
+
+  const rows = (groupRows?.length ? groupRows : [seed]) as typeof seed[];
+
+  // The anchor holds the receipt number. Fall back defensively so a row
+  // written before payment groups existed still renders.
+  const payment =
+    rows.find((r) => r.id === (seed.payment_group_id ?? seed.id)) ??
+    rows.find((r) => r.receipt_no != null) ??
+    seed;
+  if (payment.receipt_no == null) return null;
+
+  const groupTotal = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
 
   // ── 2. Building (header block) ────────────────────────────────
   const { data: building } = await supabase
@@ -79,35 +107,93 @@ export async function loadReceiptData(
     if (res?.full_name) residentName = res.full_name;
   }
 
-  // ── 5. Invoice context (period label + purpose) ───────────────
-  let invoice: ReceiptCardProps["invoice"] = null;
-  if (payment.invoice_id) {
-    const { data: inv } = await supabase
+  // ── 5. One description line per month the money settled ───────
+  // A six-month advance prints six lines, so the resident can see exactly
+  // which months their Rs. 30,000 bought. A single payment prints one line
+  // and looks exactly as it always has.
+  const invoiceIds = rows
+    .map((r) => r.invoice_id)
+    .filter((id): id is string => Boolean(id));
+
+  const monthById = new Map<string, string>();
+  if (invoiceIds.length > 0) {
+    const { data: invs } = await supabase
       .from("bms_invoices")
-      .select("billing_month")
-      .eq("id", payment.invoice_id)
+      .select("id, billing_month")
       .eq("building_id", buildingId)
-      .maybeSingle();
-    if (inv?.billing_month) {
-      const periodLabel = new Date(inv.billing_month).toLocaleDateString("en-PK", {
-        month: "long",
-        year: "numeric",
-      });
-      invoice = {
-        period_label: periodLabel,
-        purpose: purposeLabel(payment.category),
-      };
+      .in("id", invoiceIds);
+    for (const inv of invs ?? []) {
+      if (inv.billing_month) monthById.set(inv.id, inv.billing_month);
     }
+  }
+
+  const monthLabel = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-PK", { month: "long", year: "numeric" });
+
+  const detailed = rows
+    .map((r) => {
+      const month = r.invoice_id ? monthById.get(r.invoice_id) ?? null : null;
+      return {
+        purpose: purposeLabel(r.category),
+        // A row with no invoice is money the resident has paid that no bill
+        // has been raised for yet — it sits on their account until one is.
+        period: month
+          ? monthLabel(month)
+          : r.invoice_id
+            ? null
+            : "Held on account",
+        amount: Number(r.amount ?? 0),
+        sortKey: month ?? "9999-99-99",
+      };
+    })
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+  // The receipt prints on A5, and the signature block has to stay on the
+  // page. Beyond eight lines a long advance is collapsed to its range —
+  // "August 2026 – July 2028 (24 months)" reads better than two dozen
+  // identical rows anyway. The per-month detail is still on the flat's
+  // ledger; the receipt is a summary of one handover.
+  const MAX_LINES = 8;
+  const plain = ({ purpose, period, amount }: (typeof detailed)[number]) => ({
+    purpose,
+    period,
+    amount,
+  });
+
+  let lines: ReceiptCardProps["lines"];
+  if (detailed.length <= MAX_LINES) {
+    lines = detailed.map(plain);
   } else {
-    invoice = {
-      period_label: payment.payment_date
-        ? new Date(payment.payment_date).toLocaleDateString("en-PK", {
-            month: "long",
-            year: "numeric",
-          })
-        : "—",
-      purpose: purposeLabel(payment.category),
-    };
+    // Only real months collapse into a range. The "Held on account" row has
+    // no billing month — it sorts last by construction, so folding it in
+    // made the range read "August 2026 – Held on account (25 months)". It
+    // stays its own line.
+    const months = detailed.filter((l) => l.sortKey !== "9999-99-99");
+    const rest = detailed.filter((l) => l.sortKey === "9999-99-99");
+
+    const grouped = new Map<
+      string,
+      { first: (typeof detailed)[number]; last: (typeof detailed)[number]; count: number; amount: number }
+    >();
+    for (const l of months) {
+      const g = grouped.get(l.purpose) ?? { first: l, last: l, count: 0, amount: 0 };
+      g.last = l;
+      g.count += 1;
+      g.amount += l.amount;
+      grouped.set(l.purpose, g);
+    }
+
+    lines = [
+      ...Array.from(grouped.entries()).map(([purpose, g]) => ({
+        purpose,
+        period:
+          g.count > 1 && g.first.period && g.last.period
+            ? `${g.first.period} – ${g.last.period} (${g.count} months)`
+            : g.first.period,
+        amount: g.amount,
+      })),
+      ...rest.map(plain),
+    ];
   }
 
   const data: ReceiptCardProps = {
@@ -125,7 +211,9 @@ export async function loadReceiptData(
       receipt_no: payment.receipt_no,
       legacy_receipt_no: (payment as { legacy_receipt_no?: string | null }).legacy_receipt_no ?? null,
       payment_date: payment.payment_date,
-      amount: Number(payment.amount ?? 0),
+      // The whole handover, not just the row that happens to hold the
+      // receipt number. This is the figure the resident put in your hand.
+      amount: groupTotal,
       method: payment.payment_mode ?? "cash",
       reference: payment.reference_no ?? null,
       received_by_name: payment.received_by_name ?? null,
@@ -133,7 +221,7 @@ export async function loadReceiptData(
     },
     flat: { flat_number: flatNumber },
     resident: { name: residentName },
-    invoice,
+    lines,
   };
 
   return {
