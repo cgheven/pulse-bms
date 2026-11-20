@@ -1,14 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition, useEffect } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { Plus, Star, Pencil, Trash2, Car } from "lucide-react";
+import { Plus, Search, Star, Pencil, Trash2, Car } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { VEHICLE_TYPE_LABELS, type VehicleType } from "@/types";
 import { deleteVehicle } from "@/app/actions/vehicles";
@@ -51,6 +58,8 @@ export function VehiclesTable({
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [q, setQ] = useState(initialQuery);
+  const [flatFilter, setFlatFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<VehicleFormValues | null>(null);
@@ -72,6 +81,35 @@ export function VehiclesTable({
     }, 300);
     return () => clearTimeout(t);
   }, [q, pathname, router, searchParams]);
+
+  // Flat + Type narrow the server's search result further, client-side. Flat
+  // options come from the vehicles on screen so the list never offers a flat
+  // with no vehicle; Type is the fixed set of vehicle types.
+  const flatOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(vehicles.map((v) => v.flat_number).filter((n): n is string => !!n)),
+      ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    [vehicles],
+  );
+
+  const displayed = useMemo(
+    () =>
+      vehicles.filter((v) => {
+        if (flatFilter !== "all" && v.flat_number !== flatFilter) return false;
+        if (typeFilter !== "all" && v.vehicle_type !== typeFilter) return false;
+        return true;
+      }),
+    [vehicles, flatFilter, typeFilter],
+  );
+
+  const hasFilters =
+    flatFilter !== "all" || typeFilter !== "all" || q.trim() !== "";
+  const clearFilters = () => {
+    setQ("");
+    setFlatFilter("all");
+    setTypeFilter("all");
+  };
 
   function handleDelete() {
     if (!deleteTarget) return;
@@ -95,16 +133,70 @@ export function VehiclesTable({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <Input
-          placeholder="Search by plate number..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="sm:max-w-md"
-        />
+    <div className="space-y-3">
+      {/* Toolbar — search, filters and the add action share one full-width row */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by plate number..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-10 pl-9"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          {flatOptions.length > 0 && (
+            <Select value={flatFilter} onValueChange={setFlatFilter}>
+              <SelectTrigger
+                className="h-10 flex-1 min-w-[7.5rem] lg:flex-none lg:w-[9rem]"
+                aria-label="Filter by flat"
+              >
+                <SelectValue placeholder="Flat" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All flats</SelectItem>
+                {flatOptions.map((fn) => (
+                  <SelectItem key={fn} value={fn}>
+                    {fn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger
+              className="h-10 flex-1 min-w-[7.5rem] lg:flex-none lg:w-[9rem]"
+              aria-label="Filter by type"
+            >
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {Object.entries(VEHICLE_TYPE_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-10 text-xs text-muted-foreground shrink-0"
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+
         <Button
-          className="btn-big shrink-0"
+          className="btn-big shrink-0 lg:ml-1"
           onClick={() => setAddOpen(true)}
           disabled={flats.length === 0}
         >
@@ -119,28 +211,34 @@ export function VehiclesTable({
         />
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Star className="w-3 h-3 text-warning fill-warning" />
-        <span>= Primary vehicle for the flat</span>
+      {/* Thin meta strip — legend on the left, live count on the right */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <Star className="w-3 h-3 text-warning fill-warning" />
+          = Primary vehicle for the flat
+        </span>
+        <span className="tabular-nums">
+          {displayed.length} of {vehicles.length}
+        </span>
       </div>
 
       <div className="card-soft p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-secondary border-b border-border">
-              <tr className="text-left">
-                <th className="px-4 py-3 font-semibold">Plate</th>
-                <th className="px-4 py-3 font-semibold">Type</th>
-                <th className="px-4 py-3 font-semibold">Make / Model</th>
-                <th className="px-4 py-3 font-semibold">Color</th>
-                <th className="px-4 py-3 font-semibold">Flat</th>
-                <th className="px-4 py-3 font-semibold">Owner</th>
-                <th className="px-4 py-3 font-semibold">Added</th>
-                <th className="px-4 py-3 font-semibold text-right">Actions</th>
+            <thead className="bg-secondary/60 border-b border-border">
+              <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-2.5">Plate</th>
+                <th className="px-4 py-2.5">Type</th>
+                <th className="px-4 py-2.5">Make / Model</th>
+                <th className="px-4 py-2.5">Color</th>
+                <th className="px-4 py-2.5">Flat</th>
+                <th className="px-4 py-2.5">Owner</th>
+                <th className="px-4 py-2.5">Added</th>
+                <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {vehicles.length === 0 && (
+              {displayed.length === 0 && (
                 <tr>
                   <td
                     colSpan={8}
@@ -151,7 +249,7 @@ export function VehiclesTable({
                   </td>
                 </tr>
               )}
-              {vehicles.map((v) => {
+              {displayed.map((v) => {
                 const makeModel =
                   [v.make, v.model].filter(Boolean).join(" ").trim() || "—";
                 return (
@@ -159,7 +257,7 @@ export function VehiclesTable({
                     key={v.id}
                     className="border-b border-border last:border-0 hover:bg-secondary/50"
                   >
-                    <td className="px-4 py-3 font-semibold tabular-nums tracking-wider">
+                    <td className="px-4 py-2.5 font-semibold tabular-nums tracking-wider whitespace-nowrap">
                       {v.plate_number}
                       {v.is_primary && (
                         <span
@@ -170,12 +268,12 @@ export function VehiclesTable({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 capitalize">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       {VEHICLE_TYPE_LABELS[v.vehicle_type]}
                     </td>
-                    <td className="px-4 py-3">{makeModel}</td>
-                    <td className="px-4 py-3">{v.color ?? "—"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-4 py-2.5">{makeModel}</td>
+                    <td className="px-4 py-2.5 capitalize">{v.color ?? "—"}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       {v.flat_number ? (
                         <Link
                           href={`/admin/flats/${v.flat_id}`}
@@ -187,7 +285,7 @@ export function VehiclesTable({
                         "—"
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       {v.resident_id && v.resident_name ? (
                         <Link
                           href={`/admin/residents/${v.resident_id}`}
@@ -199,10 +297,10 @@ export function VehiclesTable({
                         <span className="text-muted-foreground">Unassigned</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap tabular-nums">
                       {formatDate(v.created_at)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"

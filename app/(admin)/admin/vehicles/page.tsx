@@ -17,10 +17,10 @@ export default function VehiclesPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   return (
-    <div className="space-y-6 animate-fade-up">
+    <div className="space-y-4 animate-fade-up">
       <div>
         <h1>Vehicles</h1>
-        <p className="text-muted-foreground">
+        <p className="text-sm text-muted-foreground mt-0.5">
           All cars, bikes and EVs registered in this building.
         </p>
       </div>
