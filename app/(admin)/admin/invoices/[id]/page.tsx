@@ -23,7 +23,7 @@ export default async function InvoicePreviewPage({
 
   return (
     <div className="min-h-screen bg-secondary/30 py-8">
-      <div className="mx-auto max-w-[520px] px-4">
+      <div className="mx-auto max-w-[440px] px-4">
         <div className="no-print mb-4 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">Invoice {data.invoice.invoice_number}</h1>

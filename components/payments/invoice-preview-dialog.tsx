@@ -58,7 +58,7 @@ export function InvoicePreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         aria-describedby={undefined}
-        className="max-w-2xl max-h-[90vh] p-0 gap-0 flex flex-col"
+        className="max-w-lg max-h-[90vh] p-0 gap-0 flex flex-col"
       >
         <DialogHeader className="no-print shrink-0 space-y-0.5 border-b border-border px-5 py-4 pr-12 text-left">
           <DialogTitle className="text-lg">Invoice preview</DialogTitle>
@@ -78,7 +78,7 @@ export function InvoicePreviewDialog({
           {data && !loading && (
             <div
               id="print-area"
-              className="mx-auto w-full max-w-[460px] overflow-hidden rounded-md bg-white shadow-xl"
+              className="mx-auto w-full max-w-[400px] overflow-hidden rounded-md bg-white shadow-xl"
             >
               <InvoiceCard {...data} />
             </div>

@@ -43,7 +43,7 @@ export function InvoiceCard({ building, invoice, flat, resident }: InvoiceCardPr
     .filter(Boolean)
     .join(" · ");
 
-  const Rule = () => <div className="my-3 border-t border-black" />;
+  const Rule = () => <div className="my-2.5 border-t border-black" />;
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div className="flex items-baseline justify-between gap-4">
       <span>{label}</span>
@@ -53,7 +53,7 @@ export function InvoiceCard({ building, invoice, flat, resident }: InvoiceCardPr
 
   return (
     <div
-      className="w-full bg-white px-7 py-8 text-black"
+      className="w-full bg-white px-6 py-6 text-black"
       style={{
         fontFamily: "Arial, Helvetica, system-ui, sans-serif",
         fontSize: "14px",
@@ -62,21 +62,22 @@ export function InvoiceCard({ building, invoice, flat, resident }: InvoiceCardPr
         printColorAdjust: "exact",
       }}
     >
-      {/* Header */}
+      {/* Header — divs (not h1/h2) so they keep the document's Arial font
+          instead of the app's global serif heading face, matching HMS. */}
       <div className="text-center">
-        <h1 className="text-2xl font-bold uppercase leading-tight tracking-tight">
+        <div className="text-2xl font-bold uppercase leading-tight tracking-tight">
           {building.name}
-        </h1>
+        </div>
         {addrLine && <p className="mt-2">{addrLine}</p>}
         {building.phone && <p>Tel: {building.phone}</p>}
       </div>
 
       <Rule />
-      <h2 className="text-center text-xl font-bold tracking-wide">Maintenance Invoice</h2>
+      <div className="text-center text-xl font-bold tracking-wide">Maintenance Invoice</div>
       <Rule />
 
       {/* Meta */}
-      <div className="space-y-1.5">
+      <div>
         <Row label="Invoice #" value={invoice.invoice_number} />
         <Row label="Period" value={month} />
         <Row label="Due Date" value={dueStr} />
@@ -101,7 +102,7 @@ export function InvoiceCard({ building, invoice, flat, resident }: InvoiceCardPr
       {/* Breakdown */}
       <div>
         <p className="font-bold">Breakdown:</p>
-        <Row label={`Maintenance charge — ${month}`} value={formatCurrency(amount)} />
+        <Row label="Maintenance charge" value={formatCurrency(amount)} />
         {paid > 0 && <Row label="Received" value={`− ${formatCurrency(paid)}`} />}
       </div>
 
@@ -122,9 +123,15 @@ export function InvoiceCard({ building, invoice, flat, resident }: InvoiceCardPr
       <Rule />
 
       <p className="text-center">
-        {settled
-          ? "Thank you — this invoice has been settled."
-          : `Please clear the balance of ${formatCurrency(balance)} by ${dueStr}.`}
+        {settled ? (
+          "Thank you — this invoice has been settled."
+        ) : (
+          <>
+            This is a bill, not a receipt.
+            <br />
+            Please clear the amount due.
+          </>
+        )}
       </p>
 
       <Rule />
