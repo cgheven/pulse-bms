@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   MessageCircle,
   Receipt,
@@ -10,8 +9,6 @@ import {
   FileSpreadsheet,
   CalendarClock,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,7 +83,6 @@ export function DuesDefaultersPanel({
   buildingId,
   flatPickerOptions = [],
   month,
-  availableMonths,
 }: {
   defaulters: DefaulterRow[];
   buildingName: string;
@@ -94,12 +90,8 @@ export function DuesDefaultersPanel({
   flatPickerOptions?: FlatPickerOption[];
   /** Scoped month, "YYYY-MM". Omit for the all-months (legacy) view. */
   month?: string;
-  /** Months (newest first) the selector offers. Omit to hide the selector. */
-  availableMonths?: string[];
 }) {
-  const router = useRouter();
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
   const [filter, setFilter] = useState<Filter>("all");
   const [flatFilter, setFlatFilter] = useState("all");
   const [dueTodayOnly, setDueTodayOnly] = useState(false);
@@ -140,8 +132,6 @@ export function DuesDefaultersPanel({
       );
     });
   }, [defaulters, filter, flatFilter, dueTodayOnly, query, todayStr]);
-
-  const totalDue = filtered.reduce((s, d) => s + Math.max(0, d.amount_due), 0);
 
   // Exports reflect the rows currently on screen.
   const periodLabel = month ? formatMonthLabel(month) : "All months";
@@ -186,60 +176,8 @@ export function DuesDefaultersPanel({
       "to PDF",
     );
 
-  const changeMonth = (m: string) => {
-    startTransition(() => {
-      router.push(`/admin/maintenance?duesMonth=${m}`, { scroll: false });
-    });
-  };
-
-  // availableMonths is newest-first, so the older month is the next index and
-  // the newer month the previous one. Arrows disable at the ends.
-  const monthIdx = month && availableMonths ? availableMonths.indexOf(month) : -1;
-  const olderMonth =
-    monthIdx >= 0 && availableMonths && monthIdx < availableMonths.length - 1
-      ? availableMonths[monthIdx + 1]
-      : null;
-  const newerMonth =
-    monthIdx > 0 && availableMonths ? availableMonths[monthIdx - 1] : null;
-
   return (
-    <div className="card-soft space-y-4" aria-busy={isPending}>
-      {/* Header: headline numbers on the left, month navigator on the right */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          {!month && <h3 className="font-semibold">Maintenance dues</h3>}
-          <p className="text-sm text-muted-foreground">
-            {counts.all} {counts.all === 1 ? "invoice" : "invoices"}
-            {totalDue > 0 && <> · {formatCurrency(totalDue)} still due</>}
-          </p>
-        </div>
-        {month && availableMonths && availableMonths.length > 0 && (
-          <div className="inline-flex items-center rounded-lg border border-border bg-secondary/40 shrink-0 self-start">
-            <button
-              type="button"
-              onClick={() => olderMonth && changeMonth(olderMonth)}
-              disabled={!olderMonth}
-              aria-label="Previous month"
-              className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="px-2 min-w-[8.5rem] text-center text-sm font-medium tabular-nums">
-              {formatMonthLabel(month)}
-            </span>
-            <button
-              type="button"
-              onClick={() => newerMonth && changeMonth(newerMonth)}
-              disabled={!newerMonth}
-              aria-label="Next month"
-              className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </div>
-
+    <div className="space-y-3">
       {/* View switcher on the left, ledger link + exports on the right */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex items-center rounded-lg bg-muted p-1">
@@ -289,8 +227,10 @@ export function DuesDefaultersPanel({
         </div>
       </div>
 
-      {/* Filters: status chips + flat picker on the left, search on the right */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+      {/* Table card — filters + list, kept separate from the view bar above */}
+      <div className="card-soft space-y-4">
+        {/* Filters: status chips + flat picker on the left, search on the right */}
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
         <div className="inline-flex flex-wrap gap-1 rounded-md bg-muted p-1">
           <FilterChip active={filter === "all"} onClick={() => setFilter("all")} count={counts.all}>
             All
@@ -365,6 +305,7 @@ export function DuesDefaultersPanel({
           </table>
         </div>
       )}
+      </div>
 
       {recordRow && buildingId && (
         <RecordPaymentDialog

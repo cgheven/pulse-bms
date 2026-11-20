@@ -7,6 +7,7 @@ import {
   DuesDefaultersPanel,
   type DefaulterRow,
 } from "@/components/admin/payments/dues-defaulters-panel";
+import { MonthNavigator } from "@/components/admin/payments/month-navigator";
 import { Receipt, Wallet, Users, AlertCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { normalizePhone } from "@/lib/phone";
@@ -30,12 +31,18 @@ export default function MaintenancePage({
 }) {
   return (
     <div className="space-y-4 animate-fade-up">
-      <header>
-        <h1>Maintenance</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Bills, payments, and defaulters in one place.
-        </p>
-      </header>
+      {/* Title row — the month stepper sits here, next to the title (HMS). */}
+      <div className="flex items-start justify-between gap-3">
+        <header>
+          <h1>Maintenance</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Bills, payments, and defaulters in one place.
+          </p>
+        </header>
+        <Suspense fallback={<div className="h-9 w-44 rounded-lg bg-secondary/40 animate-pulse shrink-0" />}>
+          <MonthNavSection searchParams={searchParams} />
+        </Suspense>
+      </div>
 
       <Suspense fallback={<KpiRowSkeleton count={4} />}>
         <MaintenanceKpis />
@@ -48,6 +55,19 @@ export default function MaintenancePage({
   );
 }
 
+async function MonthNavSection({
+  searchParams,
+}: {
+  searchParams: Promise<{ duesMonth?: string }>;
+}) {
+  const { duesMonth } = await searchParams;
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return null;
+  const supabase = await createClient();
+  const { month, availableMonths } = await resolveMonthContext(supabase, buildingId, duesMonth);
+  return <MonthNavigator month={month} availableMonths={availableMonths} />;
+}
+
 async function DuesSection({
   searchParams,
 }: {
@@ -55,6 +75,25 @@ async function DuesSection({
 }) {
   const sp = await searchParams;
   return <DuesTab duesMonth={sp.duesMonth} />;
+}
+
+/** Resolve the selected month + the list of months the stepper offers. */
+async function resolveMonthContext(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  buildingId: string,
+  duesMonth?: string,
+) {
+  const currentYm = new Date().toISOString().slice(0, 7);
+  const month = duesMonth && DUES_MONTH_RE.test(duesMonth) ? duesMonth : currentYm;
+  const { data: earliestInv } = await supabase
+    .from("bms_invoices")
+    .select("billing_month")
+    .eq("building_id", buildingId)
+    .neq("status", "waived")
+    .order("billing_month", { ascending: true })
+    .limit(1);
+  const earliestYm = earliestInv?.[0]?.billing_month?.slice(0, 7) ?? currentYm;
+  return { currentYm, month, availableMonths: monthListDesc(earliestYm, currentYm, month) };
 }
 
 // Postgres-side approach would be cleaner, but we chunk `.in()` IDs into
@@ -273,7 +312,6 @@ async function DuesTab({ duesMonth }: { duesMonth?: string }) {
       buildingId={data.buildingId}
       flatPickerOptions={data.flatPickerOptions}
       month={data.month}
-      availableMonths={data.availableMonths}
     />
   );
 }
