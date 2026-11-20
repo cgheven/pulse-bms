@@ -507,7 +507,7 @@ function DefaulterRowCard({
                 title={`Send reminder to ${row.resident_name ?? "resident"}`}
               >
                 <MessageCircle className="h-3 w-3" />
-                WhatsApp
+                Remind
               </a>
             ) : (
               <span
@@ -526,7 +526,7 @@ function DefaulterRowCard({
               className="h-8 px-3 text-xs gap-1.5 shrink-0 text-emerald-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40"
             >
               <CheckCircle2 className="h-3 w-3" />
-              Record
+              Pay
             </Button>
           )}
         </div>
