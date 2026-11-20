@@ -109,6 +109,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       label: "Finance",
       items: [
         { href: "/admin/maintenance",  label: "Maintenance",  icon: Receipt },
+        { href: "/admin/payments",     label: "Payments",     icon: CreditCard },
         { href: "/admin/other-income", label: "Other Income", icon: Coins },
         { href: "/admin/projects",     label: "Projects",     icon: Sparkles },
         { href: "/admin/bill-accounts",label: "Bill Accounts",icon: Plug },
