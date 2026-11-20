@@ -18,7 +18,12 @@ export const dynamic = "force-dynamic";
  * single monthly flat list; this page is the transaction log for reconciliation
  * and correcting a mis-entered payment.
  */
-export default function PaymentsLedgerPage() {
+export default async function PaymentsLedgerPage() {
+  // The flat picker is a small, fast query — load it up front so the
+  // "Record Payment" button can sit on the title row. The heavy payments
+  // list still streams in its own Suspense boundary below.
+  const header = await loadFlatPicker();
+
   return (
     <div className="space-y-4 animate-fade-up">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -37,6 +42,13 @@ export default function PaymentsLedgerPage() {
             </p>
           </div>
         </div>
+        {header && header.flatPickerOptions.length > 0 && (
+          <RecordPaymentButton
+            flats={header.flatPickerOptions}
+            buildingName={header.buildingName}
+            buildingId={header.buildingId}
+          />
+        )}
       </div>
 
       <Suspense fallback={<TableSkeleton rows={8} />}>
@@ -57,15 +69,6 @@ async function PaymentsLedger() {
   }
   return (
     <div className="space-y-3">
-      {data.flatPickerOptions.length > 0 && (
-        <div className="flex justify-end">
-          <RecordPaymentButton
-            flats={data.flatPickerOptions}
-            buildingName={data.buildingName}
-            buildingId={data.buildingId}
-          />
-        </div>
-      )}
       <PaymentsList payments={data.rows} canDelete />
       <p className="text-sm text-muted-foreground">
         Looking for entry fees / fines? →{" "}
@@ -75,6 +78,37 @@ async function PaymentsLedger() {
       </p>
     </div>
   );
+}
+
+/**
+ * Lightweight loader for the "Record Payment" button on the title row —
+ * just the flat picker and building, so the header doesn't wait on the
+ * full (limit-500 + joins) payments query that streams below.
+ */
+async function loadFlatPicker() {
+  await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return null;
+  const supabase = await createClient();
+
+  const [{ data: flats }, { data: building }] = await Promise.all([
+    supabase
+      .from("bms_flats")
+      .select("id, flat_number, outstanding_dues")
+      .eq("building_id", buildingId)
+      .order("flat_number"),
+    supabase.from("bms_buildings").select("name").eq("id", buildingId).single(),
+  ]);
+
+  return {
+    buildingId,
+    buildingName: building?.name ?? "Building",
+    flatPickerOptions: (flats ?? []).map((f) => ({
+      id: f.id,
+      flat_number: f.flat_number,
+      outstanding_dues: Number(f.outstanding_dues ?? 0),
+    })),
+  };
 }
 
 async function loadPaymentsData() {
