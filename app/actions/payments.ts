@@ -4,8 +4,26 @@ import { requireRole, requireNotDemo } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/audit";
 import { getActiveBuilding } from "@/lib/building-context";
+import { loadReceiptData } from "@/lib/receipts";
 import { revalidatePath } from "next/cache";
 import { PAYMENT_MODE } from "@/types";
+import type { ReceiptCardProps } from "@/components/payments/receipt-card";
+
+/**
+ * Load everything the receipt preview dialog renders, scoped to the caller's
+ * building (a cross-tenant id returns null). Lazy — fetched when the dialog
+ * opens — so the payments list stays lean. Reuses the shared receipt loader,
+ * so the modal and the printable /receipt page show identical figures.
+ */
+export async function getReceiptDocument(
+  paymentId: string,
+): Promise<ReceiptCardProps | null> {
+  await requireRole(["admin", "super_admin", "union"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return null;
+  const result = await loadReceiptData(paymentId, buildingId);
+  return result?.data ?? null;
+}
 
 export type PaymentInput = {
   flat_id: string;

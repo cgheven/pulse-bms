@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
 import { deletePayment } from "@/app/actions/payments";
+import { ReceiptPreviewDialog } from "@/components/payments/receipt-preview-dialog";
 import {
   Select,
   SelectTrigger,
@@ -172,6 +173,12 @@ export function PaymentsList({
   const [pending, startTransition] = useTransition();
   // The collection queued for reversal, or null when the dialog is closed.
   const [confirming, setConfirming] = useState<Collection | null>(null);
+  // The receipt queued for in-place preview, or null when the dialog is closed.
+  const [preview, setPreview] = useState<{
+    id: string;
+    href: string;
+    subtitle: string;
+  } | null>(null);
   const [q, setQ] = useState("");
   const [monthFilter, setMonthFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
@@ -358,15 +365,20 @@ export function PaymentsList({
                   </td>
                   <td className="px-3 py-3 text-right">
                     {p.receipt_no != null ? (
-                      <Link
-                        href={`${receiptRoutePrefix}/${p.id}/receipt`}
-                        target="_blank"
-                        rel="noopener"
-                        className="text-primary hover:underline text-xs px-2 py-1 inline-block"
-                        aria-label="Open printable receipt"
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreview({
+                            id: p.id,
+                            href: `${receiptRoutePrefix}/${p.id}/receipt`,
+                            subtitle: `${p.resident_name ? `${p.resident_name} · ` : ""}Flat ${p.flat_number}`,
+                          })
+                        }
+                        className="text-primary hover:underline text-xs px-2 py-1 inline-block cursor-pointer"
+                        aria-label="Preview receipt"
                       >
                         Receipt
-                      </Link>
+                      </button>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -445,6 +457,19 @@ export function PaymentsList({
           });
         }}
       />
+
+      {/* In-place receipt preview — the clean paper document, same page.
+          Keyed by payment id so each row re-fetches its own receipt. */}
+      {preview && (
+        <ReceiptPreviewDialog
+          key={preview.id}
+          paymentId={preview.id}
+          receiptHref={preview.href}
+          subtitle={preview.subtitle}
+          open={preview !== null}
+          onOpenChange={(o) => !o && setPreview(null)}
+        />
+      )}
     </div>
   );
 }
