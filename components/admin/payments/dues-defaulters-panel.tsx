@@ -3,11 +3,31 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Receipt, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  MessageCircle,
+  Receipt,
+  FileText,
+  FileSpreadsheet,
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { friendlyErrorMessage } from "@/lib/toast-error";
 import { cn, formatCurrency, formatDate, formatMonthLabel } from "@/lib/utils";
 import { toIntlNoPlus } from "@/lib/phone";
+import type { ReportColumn } from "@/lib/reports/types";
+import { downloadReportXlsx } from "@/lib/reports/xlsx-export";
+import { downloadReportPdf } from "@/lib/reports/pdf-export";
 import {
   RecordPaymentDialog,
   type FlatPickerOption,
@@ -41,6 +61,24 @@ function statusOf(d: DefaulterRow): PayStatus {
   return "unpaid";
 }
 
+const STATUS_LABEL: Record<PayStatus, string> = {
+  paid: "Paid",
+  partial: "Partial",
+  unpaid: "Unpaid",
+};
+
+// Columns shared by the Excel and PDF exports — the same figures that are on
+// screen. Numeric columns stay numbers so Excel can sum them.
+const EXPORT_COLUMNS: ReportColumn<DefaulterRow>[] = [
+  { id: "flat", label: "Flat", defaultOn: true, accessor: (r) => r.flat_number, widthMm: 22 },
+  { id: "resident", label: "Resident", defaultOn: true, accessor: (r) => r.resident_name ?? "", widthMm: 45 },
+  { id: "due_date", label: "Due date", defaultOn: true, accessor: (r) => (r.due_date ? formatDate(r.due_date) : "—"), widthMm: 28 },
+  { id: "total", label: "Total", defaultOn: true, numeric: true, accessor: (r) => r.amount_total, widthMm: 26 },
+  { id: "received", label: "Received", defaultOn: true, numeric: true, accessor: (r) => r.amount_paid, widthMm: 26 },
+  { id: "due", label: "Due (balance)", defaultOn: true, numeric: true, accessor: (r) => Math.max(0, r.amount_due), widthMm: 30 },
+  { id: "status", label: "Status", defaultOn: true, accessor: (r) => STATUS_LABEL[statusOf(r)], widthMm: 22 },
+];
+
 export function DuesDefaultersPanel({
   defaulters,
   buildingName,
@@ -59,10 +97,15 @@ export function DuesDefaultersPanel({
   availableMonths?: string[];
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [filter, setFilter] = useState<Filter>("all");
+  const [flatFilter, setFlatFilter] = useState("all");
+  const [dueTodayOnly, setDueTodayOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [recordRow, setRecordRow] = useState<DefaulterRow | null>(null);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   const counts = useMemo(() => {
     const c = { all: defaulters.length, paid: 0, unpaid: 0, partial: 0 };
@@ -70,19 +113,77 @@ export function DuesDefaultersPanel({
     return c;
   }, [defaulters]);
 
+  const dueTodayCount = useMemo(
+    () => defaulters.filter((d) => d.due_date === todayStr && d.amount_due > 0).length,
+    [defaulters, todayStr],
+  );
+
+  const flatOptions = useMemo(
+    () =>
+      Array.from(new Set(defaulters.map((d) => d.flat_number).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true }),
+      ),
+    [defaulters],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return defaulters.filter((d) => {
       if (filter !== "all" && statusOf(d) !== filter) return false;
+      if (flatFilter !== "all" && d.flat_number !== flatFilter) return false;
+      if (dueTodayOnly && !(d.due_date === todayStr && d.amount_due > 0)) return false;
       if (!q) return true;
       return (
         d.flat_number.toLowerCase().includes(q) ||
         (d.resident_name ?? "").toLowerCase().includes(q)
       );
     });
-  }, [defaulters, filter, query]);
+  }, [defaulters, filter, flatFilter, dueTodayOnly, query, todayStr]);
 
   const totalDue = filtered.reduce((s, d) => s + Math.max(0, d.amount_due), 0);
+
+  // Exports reflect the rows currently on screen.
+  const periodLabel = month ? formatMonthLabel(month) : "All months";
+  const exportFilename = `maintenance-${month ?? "all"}`;
+  const runExport = async (fn: () => Promise<void>, what: string) => {
+    try {
+      await fn();
+    } catch (err) {
+      toast({
+        title: `Could not export ${what}`,
+        description: friendlyErrorMessage(err),
+        variant: "destructive",
+      });
+    }
+  };
+  const exportExcel = () =>
+    runExport(
+      () =>
+        downloadReportXlsx({
+          filename: exportFilename,
+          sheetName: "Maintenance",
+          columns: EXPORT_COLUMNS,
+          rows: filtered,
+          totalsRow: true,
+        }),
+      "to Excel",
+    );
+  const exportPdf = () =>
+    runExport(
+      () =>
+        downloadReportPdf({
+          meta: {
+            title: `Maintenance — ${periodLabel}`,
+            buildingName,
+            period: periodLabel,
+            filename: exportFilename,
+          },
+          columns: EXPORT_COLUMNS,
+          rows: filtered,
+          totalsRow: true,
+        }),
+      "to PDF",
+    );
 
   const changeMonth = (m: string) => {
     startTransition(() => {
@@ -138,7 +239,62 @@ export function DuesDefaultersPanel({
         )}
       </div>
 
-      {/* Status filters with live counts + search */}
+      {/* Action bar: quick views on the left, exports + ledger on the right */}
+      <div className="flex flex-wrap items-center gap-2 border-y border-border py-2">
+        <button
+          type="button"
+          onClick={() => setDueTodayOnly((v) => !v)}
+          className={cn(
+            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+            dueTodayOnly
+              ? "bg-primary/15 text-primary"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/5",
+          )}
+        >
+          <CalendarClock className="w-4 h-4" />
+          Due today
+          {dueTodayCount > 0 && (
+            <span className="inline-flex min-w-[1.25rem] justify-center rounded bg-destructive/15 px-1 text-[11px] font-semibold tabular-nums text-destructive">
+              {dueTodayCount}
+            </span>
+          )}
+        </button>
+
+        {month && (
+          <Link
+            href="/admin/payments"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            All payments
+          </Link>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportPdf}
+            disabled={filtered.length === 0}
+            className="h-9 gap-1.5"
+          >
+            <FileText className="w-4 h-4 text-destructive" />
+            PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportExcel}
+            disabled={filtered.length === 0}
+            className="h-9 gap-1.5"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-[hsl(151_70%_55%)]" />
+            Excel
+          </Button>
+        </div>
+      </div>
+
+      {/* Filters: status chips + flat picker on the left, search on the right */}
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
         <div className="inline-flex flex-wrap gap-1 rounded-md bg-muted p-1">
           <FilterChip active={filter === "all"} onClick={() => setFilter("all")} count={counts.all}>
@@ -154,19 +310,29 @@ export function DuesDefaultersPanel({
             Partial
           </FilterChip>
         </div>
+
+        {flatOptions.length > 0 && (
+          <Select value={flatFilter} onValueChange={setFlatFilter}>
+            <SelectTrigger className="h-9 w-full sm:w-36" aria-label="Filter by flat">
+              <SelectValue placeholder="All flats" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All flats</SelectItem>
+              {flatOptions.map((fn) => (
+                <SelectItem key={fn} value={fn}>
+                  {fn}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         <Input
           placeholder="Search by flat or resident"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="h-9 sm:max-w-xs sm:ml-auto"
         />
-        <Link
-          href="/admin/payments"
-          className="inline-flex items-center gap-1 text-sm text-primary hover:underline shrink-0 whitespace-nowrap"
-        >
-          <FileText className="w-3.5 h-3.5" />
-          All payments
-        </Link>
       </div>
 
       {defaulters.length === 0 ? (
