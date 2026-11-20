@@ -552,6 +552,7 @@ function DefaulterRowCard({
           </DropdownMenu>
           <InvoicePreviewDialog
             invoiceId={row.invoice_id}
+            subtitle={`${row.resident_name ?? row.flat_number} · ${String(row.billing_month).slice(0, 7)}`}
             open={previewOpen}
             onOpenChange={setPreviewOpen}
           />

@@ -53,11 +53,10 @@ export function InvoiceCard({ building, invoice, flat, resident }: InvoiceCardPr
 
   return (
     <div
-      className="mx-auto bg-white px-8 py-8 text-black"
+      className="w-full bg-white px-7 py-8 text-black"
       style={{
-        maxWidth: "640px",
         fontFamily: "Arial, Helvetica, system-ui, sans-serif",
-        fontSize: "15px",
+        fontSize: "14px",
         lineHeight: 1.5,
         WebkitPrintColorAdjust: "exact",
         printColorAdjust: "exact",

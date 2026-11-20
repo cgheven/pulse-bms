@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Printer, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { friendlyErrorMessage } from "@/lib/toast-error";
@@ -14,16 +15,20 @@ import { InvoiceCard, type InvoiceCardProps } from "@/components/payments/invoic
 import { getInvoiceDocument } from "@/app/actions/billing";
 
 /**
- * In-place invoice preview — opens the maintenance bill in a modal (not a new
- * page), loading the document lazily when first opened. Print button prints
- * just the invoice via the `#print-area` print system.
+ * In-place invoice preview — a dark, padded modal with the bill shown as a
+ * centred white document card (same shape as the printed page), matching the
+ * HMS preview. The document loads lazily when first opened; "Open in new tab"
+ * links to the full-page printable version.
  */
 export function InvoicePreviewDialog({
   invoiceId,
+  subtitle,
   open,
   onOpenChange,
 }: {
   invoiceId: string;
+  /** Shown under the title, e.g. "Musab Khan · 2026-11". */
+  subtitle?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -53,35 +58,46 @@ export function InvoicePreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         aria-describedby={undefined}
-        className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0"
+        className="max-w-2xl max-h-[90vh] p-0 gap-0 flex flex-col"
       >
-        <DialogHeader className="no-print flex-row items-center justify-between gap-2 border-b border-border px-4 py-3 space-y-0">
-          <DialogTitle className="text-base">Invoice preview</DialogTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 mr-8"
-            disabled={!data}
-            onClick={() => window.print()}
-          >
-            <Printer className="w-4 h-4" />
-            Print
-          </Button>
+        <DialogHeader className="no-print shrink-0 space-y-0.5 border-b border-border px-5 py-4 pr-12 text-left">
+          <DialogTitle className="text-lg">Invoice preview</DialogTitle>
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
         </DialogHeader>
 
-        {loading && (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <Loader2 className="w-5 h-5 animate-spin" />
-          </div>
-        )}
-        {error && !loading && (
-          <p className="py-16 text-center text-sm text-destructive">{error}</p>
-        )}
-        {data && !loading && (
-          <div id="print-area" className="bg-white">
-            <InvoiceCard {...data} />
-          </div>
-        )}
+        {/* Dark body; the document sits as a centred white card. */}
+        <div className="flex-1 overflow-y-auto bg-secondary/40 p-5">
+          {loading && (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+          )}
+          {error && !loading && (
+            <p className="py-16 text-center text-sm text-destructive">{error}</p>
+          )}
+          {data && !loading && (
+            <div
+              id="print-area"
+              className="mx-auto w-full max-w-[460px] overflow-hidden rounded-md bg-white shadow-xl"
+            >
+              <InvoiceCard {...data} />
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="no-print shrink-0 gap-2 border-t border-border px-5 py-3 sm:justify-end">
+          <Button variant="outline" asChild>
+            <a
+              href={`/admin/invoices/${invoiceId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open in new tab
+            </a>
+          </Button>
+          <Button onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
