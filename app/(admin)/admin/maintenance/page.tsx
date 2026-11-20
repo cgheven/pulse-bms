@@ -3,7 +3,6 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBuilding } from "@/lib/building-context";
 import { GenerateInvoicesButton } from "@/components/admin/billing/generate-invoices-button";
-import { RecordPaymentButton } from "@/components/admin/payments/record-payment-button";
 import {
   DuesDefaultersPanel,
   type DefaulterRow,
@@ -29,21 +28,14 @@ export default function MaintenancePage({
 }: {
   searchParams: Promise<{ duesMonth?: string }>;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const ym = today.slice(0, 7);
-  const defaultMonth = ym;
-
   return (
     <div className="space-y-4 animate-fade-up">
-      <Suspense
-        fallback={
-          <HeaderShell>
-            <div className="h-11 w-44 rounded-md bg-secondary/40 animate-pulse" />
-          </HeaderShell>
-        }
-      >
-        <MaintenanceHeader defaultMonth={defaultMonth} />
-      </Suspense>
+      <header>
+        <h1>Maintenance</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Bills, payments, and defaulters in one place.
+        </p>
+      </header>
 
       <Suspense fallback={<KpiRowSkeleton count={4} />}>
         <MaintenanceKpis />
@@ -63,38 +55,6 @@ async function DuesSection({
 }) {
   const sp = await searchParams;
   return <DuesTab duesMonth={sp.duesMonth} />;
-}
-
-function HeaderShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h1>Maintenance</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Bills, payments, and defaulters in one place.
-        </p>
-      </div>
-      <div className="shrink-0 flex flex-col sm:flex-row gap-2">{children}</div>
-    </div>
-  );
-}
-
-// --- Header (Generate Invoices + Record Payment) ----------------------------
-
-async function MaintenanceHeader({ defaultMonth }: { defaultMonth: string }) {
-  const header = await loadHeaderData();
-  return (
-    <HeaderShell>
-      <GenerateInvoicesButton defaultMonth={defaultMonth} />
-      {header?.flats ? (
-        <RecordPaymentButton
-          flats={header.flats}
-          buildingName={header.buildingName}
-          buildingId={header.buildingId}
-        />
-      ) : null}
-    </HeaderShell>
-  );
 }
 
 // Postgres-side approach would be cleaner, but we chunk `.in()` IDs into
@@ -314,6 +274,7 @@ async function DuesTab({ duesMonth }: { duesMonth?: string }) {
       flatPickerOptions={data.flatPickerOptions}
       month={data.month}
       availableMonths={data.availableMonths}
+      generateSlot={<GenerateInvoicesButton defaultMonth={data.month} />}
     />
   );
 }
@@ -471,37 +432,3 @@ function monthListDesc(earliestYm: string, currentYm: string, selected: string):
   return Array.from(set).sort().reverse();
 }
 
-// --- Shared helper for the header -------------------------------------------
-
-/**
- * Single fetch for header data — flat picker options + building name.
- * One `requireRole` call + one round-trip (two parallel queries) instead of
- * two separate helpers each doing their own auth check.
- */
-async function loadHeaderData() {
-  const { profile } = await requireRole(["admin", "super_admin"]);
-  const buildingId = await getActiveBuilding();
-  if (!buildingId) return null;
-  const supabase = await createClient();
-  const [{ data: flats }, { data: building }] = await Promise.all([
-    supabase
-      .from("bms_flats")
-      .select("id, flat_number, outstanding_dues")
-      .eq("building_id", buildingId)
-      .order("flat_number"),
-    supabase
-      .from("bms_buildings")
-      .select("name")
-      .eq("id", buildingId)
-      .single(),
-  ]);
-  return {
-    flats: (flats ?? []).map((f) => ({
-      id: f.id,
-      flat_number: f.flat_number,
-      outstanding_dues: Number(f.outstanding_dues ?? 0),
-    })),
-    buildingName: building?.name ?? "Building",
-    buildingId,
-  };
-}

@@ -9,6 +9,7 @@ import {
   FileText,
   FileSpreadsheet,
   CalendarClock,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -86,6 +87,7 @@ export function DuesDefaultersPanel({
   flatPickerOptions = [],
   month,
   availableMonths,
+  generateSlot,
 }: {
   defaulters: DefaulterRow[];
   buildingName: string;
@@ -95,6 +97,8 @@ export function DuesDefaultersPanel({
   month?: string;
   /** Months (newest first) the selector offers. Omit to hide the selector. */
   availableMonths?: string[];
+  /** Shown in the empty state so a month with no bills can be generated. */
+  generateSlot?: React.ReactNode;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -239,38 +243,32 @@ export function DuesDefaultersPanel({
         )}
       </div>
 
-      {/* Action bar: quick views on the left, exports + ledger on the right */}
-      <div className="flex flex-wrap items-center gap-2 border-y border-border py-2">
-        <button
-          type="button"
-          onClick={() => setDueTodayOnly((v) => !v)}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-            dueTodayOnly
-              ? "bg-primary/15 text-primary"
-              : "text-muted-foreground hover:text-foreground hover:bg-white/5",
-          )}
-        >
-          <CalendarClock className="w-4 h-4" />
-          Due today
-          {dueTodayCount > 0 && (
-            <span className="inline-flex min-w-[1.25rem] justify-center rounded bg-destructive/15 px-1 text-[11px] font-semibold tabular-nums text-destructive">
-              {dueTodayCount}
-            </span>
-          )}
-        </button>
-
-        {month && (
-          <Link
-            href="/admin/payments"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+      {/* View switcher on the left, ledger link + exports on the right */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center rounded-lg bg-muted p-1">
+          <ViewTab active={!dueTodayOnly} onClick={() => setDueTodayOnly(false)} icon={CalendarDays}>
+            Monthly
+          </ViewTab>
+          <ViewTab
+            active={dueTodayOnly}
+            onClick={() => setDueTodayOnly(true)}
+            icon={CalendarClock}
+            count={dueTodayCount}
           >
-            <FileText className="w-4 h-4" />
-            All payments
-          </Link>
-        )}
+            Due today
+          </ViewTab>
+        </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {month && (
+            <Link
+              href="/admin/payments"
+              className="inline-flex items-center gap-1.5 px-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">All payments</span>
+            </Link>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -336,9 +334,12 @@ export function DuesDefaultersPanel({
       </div>
 
       {defaulters.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">
-          No invoices for {month ? formatMonthLabel(month) : "this period"}.
-        </p>
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            No invoices for {month ? formatMonthLabel(month) : "this period"} yet.
+          </p>
+          {generateSlot}
+        </div>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
           No flats match this filter.
@@ -390,6 +391,44 @@ export function DuesDefaultersPanel({
         />
       )}
     </div>
+  );
+}
+
+function ViewTab({
+  active,
+  onClick,
+  icon: Icon,
+  count,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ComponentType<{ className?: string }>;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+        active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <Icon className="w-4 h-4" />
+      {children}
+      {count != null && count > 0 && (
+        <span
+          className={cn(
+            "inline-flex min-w-[1.25rem] justify-center rounded px-1 text-[11px] font-semibold tabular-nums",
+            active ? "bg-destructive/15 text-destructive" : "bg-background/60 text-muted-foreground",
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }
 
