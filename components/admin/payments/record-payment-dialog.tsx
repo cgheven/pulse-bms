@@ -634,11 +634,11 @@ export function RecordPaymentDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg gap-3 p-5 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record Payment</DialogTitle>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
+        <form onSubmit={onSubmit} className="grid grid-cols-2 gap-x-3 gap-y-2.5">
           <div className="col-span-2">
             <Label>Flat *</Label>
             <Select value={flat_id} onValueChange={setFlatId} disabled={!!presetInvoice}>
@@ -883,7 +883,12 @@ export function RecordPaymentDialog({
           </div>
           <div className="col-span-2">
             <Label>Notes</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <Textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="min-h-[56px]"
+            />
           </div>
 
           <div className="col-span-2">

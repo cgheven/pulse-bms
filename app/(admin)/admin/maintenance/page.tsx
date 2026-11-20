@@ -17,6 +17,7 @@ import {
 } from "@/components/admin/maintenance/maintenance-tab-panels";
 import { formatCurrency } from "@/lib/utils";
 import { normalizePhone } from "@/lib/phone";
+import { StatCard } from "@/components/ui/stat-card";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export default function MaintenancePage({
   const defaultMonth = ym;
 
   return (
-    <div className="space-y-6 animate-fade-up">
+    <div className="space-y-4 animate-fade-up">
       <Suspense
         fallback={
           <HeaderShell>
@@ -69,7 +70,7 @@ function HeaderShell({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h1>Maintenance</h1>
-        <p className="text-muted-foreground">
+        <p className="text-sm text-muted-foreground mt-0.5">
           Bills, payments, and defaulters in one place.
         </p>
       </div>
@@ -223,22 +224,22 @@ async function MaintenanceKpis() {
   const defaulterCount = defaulterFlats.size;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <Kpi label="This month total" value={formatCurrency(monthTotal)} />
-      <Kpi
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <StatCard label="This month total" value={formatCurrency(monthTotal)} />
+      <StatCard
         label="Collected (this month)"
         value={formatCurrency(collected)}
-        accent="success"
+        tone="success"
       />
-      <Kpi
+      <StatCard
         label="Defaulters (flats)"
         value={String(defaulterCount)}
-        accent={defaulterCount > 0 ? "destructive" : undefined}
+        tone={defaulterCount > 0 ? "danger" : "default"}
       />
-      <Kpi
+      <StatCard
         label="Total outstanding"
         value={formatCurrency(outstandingTotal)}
-        accent={outstandingTotal > 0 ? "destructive" : undefined}
+        tone={outstandingTotal > 0 ? "danger" : "default"}
       />
     </div>
   );
@@ -252,31 +253,6 @@ function nextMonthFirstDay(ym: string): string {
   return `${nextY.toString().padStart(4, "0")}-${nextM
     .toString()
     .padStart(2, "0")}-01`;
-}
-
-function Kpi({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: "success" | "warning" | "destructive";
-}) {
-  const accentCls =
-    accent === "success"
-      ? "text-[hsl(151_70%_28%)]"
-      : accent === "warning"
-      ? "text-[hsl(38_95%_35%)]"
-      : accent === "destructive"
-      ? "text-destructive"
-      : "";
-  return (
-    <div className="card-soft">
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className={`mt-1 text-2xl font-bold ${accentCls}`}>{value}</div>
-    </div>
-  );
 }
 
 // --- Tab switcher + content -------------------------------------------------
