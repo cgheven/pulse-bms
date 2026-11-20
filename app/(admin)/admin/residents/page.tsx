@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 // SYNC outer — renders shell instantly
 export default function ResidentsPage() {
   return (
-    <div className="space-y-6 animate-fade-up">
+    <div className="space-y-4 animate-fade-up">
       <div>
         <h1>Residents</h1>
-        <p className="text-muted-foreground">Owners and tenants.</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Owners and tenants.</p>
       </div>
       <Suspense fallback={<TableSkeleton rows={6} />}>
         <ResidentsContent />

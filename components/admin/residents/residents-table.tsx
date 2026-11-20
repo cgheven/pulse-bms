@@ -5,10 +5,17 @@ import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { Plus, Star, KeyRound, UserX, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Star, KeyRound, UserX, Pencil, Trash2 } from "lucide-react";
 import { cn, formatDate, formatPhone, formatCNIC } from "@/lib/utils";
 import {
   ResidentFormDialog,
@@ -48,6 +55,8 @@ export function ResidentsTable({
   const router = useRouter();
   const { toast } = useToast();
   const [q, setQ] = useState("");
+  const [flatFilter, setFlatFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
 
   // Login dialog state — adaptive between create and reset modes
@@ -67,17 +76,41 @@ export function ResidentsTable({
   const [revokeTarget, setRevokeTarget] = useState<ResidentRow | null>(null);
   const [revoking, startRevoke] = useTransition();
 
+  // Flats that actually have a resident, so the dropdown never offers an empty
+  // option. Sorted the way flat numbers read (A-1, A-2, A-10 → numeric-aware).
+  const flatOptions = useMemo(
+    () =>
+      Array.from(new Set(residents.map((r) => r.flat_number).filter(Boolean))).sort(
+        (a, b) => a.localeCompare(b, undefined, { numeric: true }),
+      ),
+    [residents],
+  );
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return residents;
-    return residents.filter(
-      (r) =>
-        r.full_name.toLowerCase().includes(s) ||
-        r.flat_number.toLowerCase().includes(s) ||
-        (r.phone ?? "").toLowerCase().includes(s) ||
-        (r.cnic ?? "").toLowerCase().includes(s),
-    );
-  }, [residents, q]);
+    return residents.filter((r) => {
+      if (
+        s &&
+        !(
+          r.full_name.toLowerCase().includes(s) ||
+          r.flat_number.toLowerCase().includes(s) ||
+          (r.phone ?? "").toLowerCase().includes(s) ||
+          (r.cnic ?? "").toLowerCase().includes(s)
+        )
+      )
+        return false;
+      if (flatFilter !== "all" && r.flat_number !== flatFilter) return false;
+      if (roleFilter !== "all" && r.relationship !== roleFilter) return false;
+      return true;
+    });
+  }, [residents, q, flatFilter, roleFilter]);
+
+  const hasFilters = flatFilter !== "all" || roleFilter !== "all" || q.trim() !== "";
+  const clearFilters = () => {
+    setQ("");
+    setFlatFilter("all");
+    setRoleFilter("all");
+  };
 
   function handleDelete() {
     if (!deleteTarget) return;
@@ -116,15 +149,68 @@ export function ResidentsTable({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <Input
-          placeholder="Search by name / flat / phone / CNIC..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="sm:max-w-md"
-        />
-        <Button className="btn-big shrink-0" onClick={() => setAddOpen(true)}>
+    <div className="space-y-3">
+      {/* Toolbar — search, filters and the add action share one full-width row */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name / flat / phone / CNIC..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-10 pl-9"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Select value={flatFilter} onValueChange={setFlatFilter}>
+            <SelectTrigger
+              className="h-10 flex-1 min-w-[7.5rem] lg:flex-none lg:w-[9rem]"
+              aria-label="Filter by flat"
+            >
+              <SelectValue placeholder="Flat" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All flats</SelectItem>
+              {flatOptions.map((fn) => (
+                <SelectItem key={fn} value={fn}>
+                  {fn}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger
+              className="h-10 flex-1 min-w-[7.5rem] lg:flex-none lg:w-[8.5rem]"
+              aria-label="Filter by role"
+            >
+              <SelectValue placeholder="Role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All roles</SelectItem>
+              <SelectItem value="owner">Owner</SelectItem>
+              <SelectItem value="tenant">Tenant</SelectItem>
+              <SelectItem value="family">Family</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-10 text-xs text-muted-foreground shrink-0"
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+
+        <Button
+          className="btn-big shrink-0 lg:ml-1"
+          onClick={() => setAddOpen(true)}
+        >
           <Plus className="w-5 h-5" />
           Add Resident
         </Button>
@@ -136,24 +222,30 @@ export function ResidentsTable({
         />
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Star className="w-3 h-3 text-warning fill-warning" />
-        <span>= Main contact for the flat</span>
+      {/* Thin meta strip — legend on the left, live count on the right */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <Star className="w-3 h-3 text-warning fill-warning" />
+          = Main contact for the flat
+        </span>
+        <span className="tabular-nums">
+          {filtered.length} of {residents.length}
+        </span>
       </div>
 
       <div className="card-soft p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-secondary border-b border-border">
-              <tr className="text-left">
-                <th className="px-4 py-3 font-semibold">Name</th>
-                <th className="px-4 py-3 font-semibold">Flat</th>
-                <th className="px-4 py-3 font-semibold">Role</th>
-                <th className="px-4 py-3 font-semibold">Phone</th>
-                <th className="px-4 py-3 font-semibold">CNIC</th>
-                <th className="px-4 py-3 font-semibold">Move-in</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold text-right">Actions</th>
+            <thead className="bg-secondary/60 border-b border-border">
+              <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-2.5">Name</th>
+                <th className="px-4 py-2.5">Flat</th>
+                <th className="px-4 py-2.5">Role</th>
+                <th className="px-4 py-2.5">Phone</th>
+                <th className="px-4 py-2.5">CNIC</th>
+                <th className="px-4 py-2.5">Move-in</th>
+                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -171,7 +263,7 @@ export function ResidentsTable({
                     key={r.id}
                     className="border-b border-border last:border-0 hover:bg-secondary/50"
                   >
-                    <td className="px-4 py-3 font-semibold">
+                    <td className="px-4 py-2.5 font-semibold whitespace-nowrap">
                       <Link
                         href={`/admin/residents/${r.id}`}
                         prefetch
@@ -188,7 +280,7 @@ export function ResidentsTable({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       <Link
                         href={`/admin/flats/${r.flat_id}`}
                         className="text-primary hover:underline tabular-nums"
@@ -196,13 +288,13 @@ export function ResidentsTable({
                         {r.flat_number}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 capitalize">{r.relationship}</td>
-                    <td className="px-4 py-3">{r.phone ? formatPhone(r.phone) : "—"}</td>
-                    <td className="px-4 py-3">{r.cnic ? formatCNIC(r.cnic) : "—"}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5 capitalize">{r.relationship}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap tabular-nums">{r.phone ? formatPhone(r.phone) : "—"}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap tabular-nums">{r.cnic ? formatCNIC(r.cnic) : "—"}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap tabular-nums">
                       {r.move_in_date ? formatDate(r.move_in_date) : "—"}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5">
                       {r.is_active ? (
                         <span className="status-paid inline-flex px-2 py-0.5 rounded-full text-xs font-medium">
                           Active
@@ -213,7 +305,7 @@ export function ResidentsTable({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         {/* Adaptive login action */}
                         <Button
