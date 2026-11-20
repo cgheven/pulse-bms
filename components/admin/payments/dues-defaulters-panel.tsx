@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   CalendarClock,
   CalendarDays,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -489,10 +490,10 @@ function DefaulterRowCard({
               href={`/admin/payments/${row.receipt_payment_id}/receipt`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-input hover:bg-accent transition"
+              className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               title="View / download receipt"
             >
-              <Receipt className="h-3.5 w-3.5" />
+              <Receipt className="h-3 w-3" />
               Receipt
             </Link>
           )}
@@ -502,24 +503,29 @@ function DefaulterRowCard({
                 href={waHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[hsl(151_70%_38%)] hover:bg-[hsl(151_70%_32%)] transition"
+                className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-[#25D366]/25 px-3 text-xs font-medium text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10 hover:border-[#25D366]/50 transition-colors"
                 title={`Send reminder to ${row.resident_name ?? "resident"}`}
               >
-                <MessageCircle className="h-3.5 w-3.5" />
+                <MessageCircle className="h-3 w-3" />
                 WhatsApp
               </a>
             ) : (
               <span
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground bg-muted"
+                className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground"
                 title="No phone number on file"
               >
-                <MessageCircle className="h-3.5 w-3.5" />
+                <MessageCircle className="h-3 w-3" />
                 No phone
               </span>
             ))}
           {onRecord && (
-            <Button variant="outline" size="sm" onClick={onRecord}>
-              <Receipt className="h-3.5 w-3.5" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRecord}
+              className="h-8 px-3 text-xs gap-1.5 shrink-0 text-emerald-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40"
+            >
+              <CheckCircle2 className="h-3 w-3" />
               Record
             </Button>
           )}
