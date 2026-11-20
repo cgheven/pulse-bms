@@ -3,16 +3,9 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Receipt, FileText } from "lucide-react";
+import { MessageCircle, Receipt, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import { cn, formatCurrency, formatDate, formatMonthLabel } from "@/lib/utils";
 import { toIntlNoPlus } from "@/lib/phone";
 import {
@@ -97,32 +90,51 @@ export function DuesDefaultersPanel({
     });
   };
 
+  // availableMonths is newest-first, so the older month is the next index and
+  // the newer month the previous one. Arrows disable at the ends.
+  const monthIdx = month && availableMonths ? availableMonths.indexOf(month) : -1;
+  const olderMonth =
+    monthIdx >= 0 && availableMonths && monthIdx < availableMonths.length - 1
+      ? availableMonths[monthIdx + 1]
+      : null;
+  const newerMonth =
+    monthIdx > 0 && availableMonths ? availableMonths[monthIdx - 1] : null;
+
   return (
     <div className="card-soft space-y-4" aria-busy={isPending}>
-      {/* Header: month + headline numbers, with the month navigator */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+      {/* Header: headline numbers on the left, month navigator on the right */}
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold">
-            {month ? `Maintenance — ${formatMonthLabel(month)}` : "Maintenance dues"}
-          </h3>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          {!month && <h3 className="font-semibold">Maintenance dues</h3>}
+          <p className="text-sm text-muted-foreground">
             {counts.all} {counts.all === 1 ? "invoice" : "invoices"}
             {totalDue > 0 && <> · {formatCurrency(totalDue)} still due</>}
           </p>
         </div>
         {month && availableMonths && availableMonths.length > 0 && (
-          <Select value={month} onValueChange={changeMonth}>
-            <SelectTrigger className="h-9 w-full sm:w-44 shrink-0" aria-label="Month">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {availableMonths.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {formatMonthLabel(m)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="inline-flex items-center rounded-lg border border-border bg-secondary/40 shrink-0 self-start">
+            <button
+              type="button"
+              onClick={() => olderMonth && changeMonth(olderMonth)}
+              disabled={!olderMonth}
+              aria-label="Previous month"
+              className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="px-2 min-w-[8.5rem] text-center text-sm font-medium tabular-nums">
+              {formatMonthLabel(month)}
+            </span>
+            <button
+              type="button"
+              onClick={() => newerMonth && changeMonth(newerMonth)}
+              disabled={!newerMonth}
+              aria-label="Next month"
+              className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         )}
       </div>
 

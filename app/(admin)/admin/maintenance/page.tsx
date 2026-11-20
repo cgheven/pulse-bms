@@ -8,6 +8,7 @@ import {
   DuesDefaultersPanel,
   type DefaulterRow,
 } from "@/components/admin/payments/dues-defaulters-panel";
+import { Receipt, Wallet, Users, AlertCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { normalizePhone } from "@/lib/phone";
 import { StatCard } from "@/components/ui/stat-card";
@@ -261,18 +262,21 @@ async function MaintenanceKpis() {
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <StatCard label="This month total" value={formatCurrency(monthTotal)} />
+      <StatCard icon={Receipt} label="This month total" value={formatCurrency(monthTotal)} />
       <StatCard
+        icon={Wallet}
         label="Collected (this month)"
         value={formatCurrency(collected)}
         tone="success"
       />
       <StatCard
+        icon={Users}
         label="Defaulters (flats)"
         value={String(defaulterCount)}
         tone={defaulterCount > 0 ? "danger" : "default"}
       />
       <StatCard
+        icon={AlertCircle}
         label="Total outstanding"
         value={formatCurrency(outstandingTotal)}
         tone={outstandingTotal > 0 ? "danger" : "default"}
