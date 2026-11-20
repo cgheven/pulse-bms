@@ -6,6 +6,80 @@ import { writeAuditLog } from "@/lib/audit";
 import { getActiveBuilding } from "@/lib/building-context";
 import { generateMaintenanceInvoices } from "@/lib/maintenance-invoices";
 import { revalidatePath } from "next/cache";
+import type { InvoiceCardProps } from "@/components/payments/invoice-card";
+
+/**
+ * Load everything the Preview Invoice dialog renders, scoped to the caller's
+ * building (a cross-tenant id returns null). Lazy — fetched when the dialog
+ * opens — so the maintenance list stays lean.
+ */
+export async function getInvoiceDocument(
+  invoiceId: string,
+): Promise<InvoiceCardProps | null> {
+  await requireRole(["admin", "super_admin"]);
+  const buildingId = await getActiveBuilding();
+  if (!buildingId) return null;
+  const supabase = await createClient();
+
+  const { data: invoice } = await supabase
+    .from("bms_invoices")
+    .select("id, invoice_number, billing_month, amount, due_date, flat_id")
+    .eq("id", invoiceId)
+    .eq("building_id", buildingId)
+    .single();
+  if (!invoice) return null;
+
+  const [{ data: building }, { data: flat }, { data: payments }] = await Promise.all([
+    supabase
+      .from("bms_buildings")
+      .select("name, address, city, public_whatsapp")
+      .eq("id", buildingId)
+      .single(),
+    supabase
+      .from("bms_flats")
+      .select("flat_number, floor, block")
+      .eq("id", invoice.flat_id)
+      .single(),
+    supabase.from("bms_payments").select("amount").eq("invoice_id", invoiceId),
+  ]);
+
+  const { data: resident } = await supabase
+    .from("bms_residents")
+    .select("full_name, phone")
+    .eq("flat_id", invoice.flat_id)
+    .eq("building_id", buildingId)
+    .eq("is_active", true)
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const paid = (payments ?? []).reduce((s, p) => s + Number(p.amount ?? 0), 0);
+
+  return {
+    building: {
+      name: building?.name ?? "Building",
+      address: building?.address ?? null,
+      city: building?.city ?? null,
+      phone: (building as { public_whatsapp?: string | null } | null)?.public_whatsapp ?? null,
+    },
+    invoice: {
+      invoice_number: invoice.invoice_number,
+      billing_month: invoice.billing_month,
+      due_date: invoice.due_date,
+      amount: Number(invoice.amount),
+      paid,
+    },
+    flat: {
+      flat_number: flat?.flat_number ?? "—",
+      floor: flat?.floor ?? null,
+      block: flat?.block ?? null,
+    },
+    resident: {
+      name: resident?.full_name ?? null,
+      phone: resident?.phone ?? null,
+    },
+  };
+}
 
 /**
  * Manual month generation (kept as a server action for completeness).

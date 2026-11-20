@@ -39,6 +39,7 @@ import {
   RecordPaymentDialog,
   type FlatPickerOption,
 } from "@/components/admin/payments/record-payment-dialog";
+import { InvoicePreviewDialog } from "@/components/payments/invoice-preview-dialog";
 
 export type DefaulterRow = {
   invoice_id: string;
@@ -421,6 +422,7 @@ function DefaulterRowCard({
   buildingName: string;
   onRecord?: () => void;
 }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
   const intl = toIntlNoPlus(row.resident_phone);
   const monthLabel = new Date(row.billing_month).toLocaleDateString("en-PK", {
     month: "long",
@@ -536,18 +538,23 @@ function DefaulterRowCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem asChild className="gap-2">
-                <a
-                  href={`/admin/invoices/${row.invoice_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <FileText className="h-4 w-4" />
-                  Preview Invoice
-                </a>
+              <DropdownMenuItem
+                className="gap-2"
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setPreviewOpen(true);
+                }}
+              >
+                <FileText className="h-4 w-4" />
+                Preview Invoice
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <InvoicePreviewDialog
+            invoiceId={row.invoice_id}
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+          />
         </div>
       </td>
     </tr>
