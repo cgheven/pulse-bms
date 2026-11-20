@@ -180,7 +180,7 @@ export function DuesDefaultersPanel({
     <div className="space-y-3">
       {/* View switcher on the left, ledger link + exports on the right */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex items-center rounded-lg bg-muted p-1">
+        <div className="inline-flex items-center gap-0.5 rounded-lg border border-sidebar-border bg-white/5 p-1">
           <ViewTab active={!dueTodayOnly} onClick={() => setDueTodayOnly(false)} icon={CalendarDays}>
             Monthly
           </ViewTab>
@@ -231,7 +231,7 @@ export function DuesDefaultersPanel({
       <div className="card-soft space-y-4">
         {/* Filters: status chips + flat picker on the left, search on the right */}
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-        <div className="inline-flex flex-wrap gap-1 rounded-md bg-muted p-1">
+        <div className="flex flex-wrap items-center gap-1">
           <FilterChip active={filter === "all"} onClick={() => setFilter("all")} count={counts.all}>
             All
           </FilterChip>
@@ -343,24 +343,20 @@ function ViewTab({
   count?: number;
   children: React.ReactNode;
 }) {
+  // Matches HMS TabsTrigger: text-xs, small icon, active lifts to a card chip.
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
         active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
       )}
     >
-      <Icon className="w-4 h-4" />
+      <Icon className="w-3.5 h-3.5" />
       {children}
       {count != null && count > 0 && (
-        <span
-          className={cn(
-            "inline-flex min-w-[1.25rem] justify-center rounded px-1 text-[11px] font-semibold tabular-nums",
-            active ? "bg-destructive/15 text-destructive" : "bg-background/60 text-muted-foreground",
-          )}
-        >
+        <span className="ml-1 rounded-full bg-amber/20 px-1.5 text-[10px] font-semibold leading-4 tabular-nums text-amber">
           {count}
         </span>
       )}
@@ -368,6 +364,8 @@ function ViewTab({
   );
 }
 
+// Matches HMS chipClass: borderless rounded-full pills, tinted only when
+// active, with a dimmed count — no segmented container, no colored badges.
 function FilterChip({
   active,
   onClick,
@@ -381,28 +379,26 @@ function FilterChip({
   tone?: PayStatus;
   children: React.ReactNode;
 }) {
-  const countTone = active
-    ? "bg-background/20"
-    : tone === "paid"
-      ? "bg-[hsl(151_70%_55%/0.15)] text-[hsl(151_70%_55%)]"
-      : tone === "partial"
-        ? "bg-info/15 text-info"
-        : tone === "unpaid"
-          ? "bg-destructive/15 text-destructive"
-          : "bg-background/60 text-muted-foreground";
+  const activeCls =
+    tone === "paid"
+      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+      : tone === "unpaid"
+        ? "bg-amber/15 border-amber/40 text-amber"
+        : tone === "partial"
+          ? "bg-blue-500/15 border-blue-500/40 text-blue-400"
+          : "bg-primary border-primary text-primary-foreground";
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition",
-        active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+        "h-7 px-3 rounded-full text-xs font-medium border transition-all",
+        active
+          ? activeCls
+          : "border-transparent text-muted-foreground hover:text-foreground hover:border-sidebar-border",
       )}
     >
-      {children}
-      <span className={cn("inline-flex min-w-[1.25rem] justify-center rounded px-1 text-[11px] tabular-nums", countTone)}>
-        {count}
-      </span>
+      {children} <span className="ml-1 opacity-60 tabular-nums">{count}</span>
     </button>
   );
 }
