@@ -5,7 +5,6 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBuilding } from "@/lib/building-context";
 import { ReportTabs } from "@/components/admin/reports/report-tabs";
-import { ReportSkeleton } from "@/components/admin/reports/report-skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { getCashTotals } from "@/lib/finance-totals";
 import { MonthlyReportButton } from "./monthly-report-button";
@@ -25,9 +24,60 @@ export default function SummaryPage() {
         <MonthlyReportButton />
       </div>
       <ReportTabs active="summary" />
-      <Suspense fallback={<ReportSkeleton />}>
+      <Suspense fallback={<SummarySkeleton />}>
         <SummaryData />
       </Suspense>
+    </div>
+  );
+}
+
+/**
+ * Dark skeleton that mirrors the summary's own layout (period line, 4 KPI
+ * cards, net-this-month bar, 2 insight cards). The shared ReportSkeleton
+ * renders a WHITE printed-document table — correct for the other report
+ * tabs (which show a white paper preview via ReportShell/ReportTable) but
+ * wrong here, where the real content is dark card-soft tiles. Using it as
+ * the fallback flashed a white half-screen before the cards streamed in.
+ */
+function SummarySkeleton() {
+  return (
+    <div className="space-y-4">
+      {/* Period line */}
+      <div className="flex items-center gap-2">
+        <div className="h-4 w-4 rounded bg-secondary/50 animate-pulse" />
+        <div className="h-4 w-28 rounded bg-secondary/40 animate-pulse" />
+      </div>
+
+      {/* 4 KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card-soft py-5">
+            <div className="h-3 w-20 rounded bg-secondary/50 animate-pulse" />
+            <div className="mt-2 h-7 w-24 rounded bg-secondary/60 animate-pulse" />
+            <div className="mt-2 h-3 w-16 rounded bg-secondary/40 animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      {/* Net this month */}
+      <div className="card-soft flex items-center justify-between py-4 px-5">
+        <div className="space-y-2">
+          <div className="h-4 w-28 rounded bg-secondary/50 animate-pulse" />
+          <div className="h-3 w-40 rounded bg-secondary/40 animate-pulse" />
+        </div>
+        <div className="h-7 w-28 rounded bg-secondary/60 animate-pulse" />
+      </div>
+
+      {/* 2 insight cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="card-soft py-5 space-y-3">
+            <div className="h-3 w-32 rounded bg-secondary/50 animate-pulse" />
+            <div className="h-7 w-28 rounded bg-secondary/60 animate-pulse" />
+            <div className="h-3 w-44 rounded bg-secondary/40 animate-pulse" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
