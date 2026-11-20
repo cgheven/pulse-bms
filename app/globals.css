@@ -63,19 +63,51 @@
     font-family: var(--font-sans), system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
-    /* Modern SaaS density — 14px base, matches Linear / Vercel / Notion */
-    font-size: 14px;
     line-height: 1.5;
   }
-  /* Tight, confident heading scale */
-  h1 { @apply text-2xl font-semibold tracking-tight; }      /* 24px */
-  h2 { @apply text-lg font-semibold tracking-tight; }        /* 18px */
-  h3 { @apply text-base font-semibold tracking-tight; }      /* 16px */
-  /* iOS focus-zoom prevention — inputs must be ≥16px */
+
+  /* Display headings use the serif face (DM Serif Display) for an editorial,
+     premium feel; everything else stays on DM Sans. Only 400 weight ships, so
+     headings are font-normal by design — never apply a bolder weight here. */
+  h1 { @apply font-serif text-[1.75rem] leading-tight tracking-tight font-normal; }  /* 28px */
+  h2 { @apply font-serif text-xl leading-snug tracking-tight font-normal; }          /* 20px */
+  h3 { @apply text-base font-semibold tracking-tight; }                              /* 16px */
+
+  /* iOS focus-zoom prevention — inputs must be ≥16px on small screens */
   input, select, textarea { font-size: 16px; }
   @media (min-width: 768px) {
     input, select, textarea { font-size: 14px; }
   }
+
+  /* Safari/WebKit renders the native date/time picker affordance as a solid
+     light box regardless of color-scheme: dark — inverting it is the standard
+     fix so it matches the dark theme instead of punching a bright white square
+     into every date field. */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(1.5);
+    cursor: pointer;
+    border-radius: 4px;
+  }
+
+  /* Scrollable regions advertise themselves: a thin, theme-matched bar on both
+     WebKit and Firefox instead of the browser default that fights the dark UI.
+     `.scrollbar-hide` (utilities layer) still opts nav/chip strips out. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+  }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.45);
+  }
+  *::-webkit-scrollbar-corner { background: transparent; }
 }
 
 @layer utilities {

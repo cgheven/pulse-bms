@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
-import { formatLakh, formatDate, cn } from "@/lib/utils";
+import { formatLakh, formatDate } from "@/lib/utils";
+import { StatCard } from "@/components/ui/stat-card";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 import { DashboardClientShell } from "@/components/super-admin/dashboard-client-shell";
 
@@ -283,25 +284,13 @@ function Kpi({
   href: string; danger?: boolean; success?: boolean;
 }) {
   return (
-    <Link href={href} className="card-hover rounded-lg border border-border bg-card p-4 block">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
-        <div className={cn(
-          "flex w-8 h-8 items-center justify-center rounded-md shrink-0",
-          danger  ? "bg-destructive/15 text-destructive" :
-          success ? "bg-success/15 text-success" :
-                    "bg-primary/10 text-primary"
-        )}>
-          <Icon className="w-4 h-4" />
-        </div>
-      </div>
-      <div className={cn(
-        "mt-1.5 text-2xl font-semibold tracking-tight tabular-nums",
-        danger ? "text-destructive" : "text-foreground"
-      )}>
-        {value}
-      </div>
-    </Link>
+    <StatCard
+      icon={Icon}
+      label={label}
+      value={value}
+      href={href}
+      tone={danger ? "danger" : success ? "success" : "default"}
+    />
   );
 }
 
@@ -312,25 +301,12 @@ function SalesTile({
   href: string; danger?: boolean; warn?: boolean; success?: boolean;
 }) {
   return (
-    <Link href={href} className="card-hover rounded-lg border border-border bg-card p-4 block">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
-        <div className={cn(
-          "flex w-8 h-8 items-center justify-center rounded-md shrink-0",
-          danger  ? "bg-destructive/15 text-destructive" :
-          warn    ? "bg-warning/15 text-warning" :
-          success ? "bg-success/15 text-success" :
-                    "bg-primary/10 text-primary"
-        )}>
-          <Icon className="w-4 h-4" />
-        </div>
-      </div>
-      <div className={cn(
-        "mt-1.5 text-3xl font-semibold tracking-tight tabular-nums",
-        danger ? "text-destructive" : "text-foreground"
-      )}>
-        {value}
-      </div>
-    </Link>
+    <StatCard
+      icon={Icon}
+      label={label}
+      value={value}
+      href={href}
+      tone={danger ? "danger" : warn ? "warning" : success ? "success" : "default"}
+    />
   );
 }

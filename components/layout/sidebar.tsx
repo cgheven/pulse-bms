@@ -259,7 +259,7 @@ const NavLink = memo(function NavLink({
       onClick={onClose}
       prefetch={true}
       className={cn(
-        "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group",
+        "relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 group",
         active
           ? "bg-sidebar-accent/10 text-primary"
           : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
@@ -302,32 +302,32 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 lg:z-auto",
+          "fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 lg:z-auto",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Brand */}
-        <div className="flex items-center justify-between px-4 h-16 border-b border-sidebar-border">
+        <div className="flex items-center justify-between px-4 h-14 border-b border-sidebar-border">
           <Link
             href={home}
             className="flex items-center gap-2.5 group"
             onClick={onClose}
           >
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 transition-all group-hover:bg-primary/15 overflow-hidden">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 transition-all group-hover:bg-primary/15 overflow-hidden">
               <Image
                 src="/logo.jpeg"
                 alt="Pulse BMS"
-                width={36}
-                height={36}
+                width={32}
+                height={32}
                 className="w-full h-full object-cover"
                 priority
               />
             </div>
             <div>
-              <p className="text-foreground font-bold text-base tracking-tight leading-none">
+              <p className="text-foreground font-bold text-sm tracking-tight leading-none">
                 Pulse
               </p>
-              <p className="text-primary/60 text-[10px] mt-1 font-semibold tracking-[0.15em] uppercase">
+              <p className="text-primary/60 text-[10px] mt-0.5 font-semibold tracking-[0.15em] uppercase">
                 Pulse of your Building
               </p>
             </div>
@@ -342,10 +342,10 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-2.5 space-y-4 scrollbar-hide">
+        <nav className="flex-1 overflow-y-auto overscroll-contain py-3 px-2.5 space-y-3">
           {groups.map((group) => (
             <div key={group.label}>
-              <p className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest px-3 mb-1.5">
+              <p className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest px-3 mb-1 mt-1">
                 {group.label}
               </p>
               <div className="space-y-0.5">

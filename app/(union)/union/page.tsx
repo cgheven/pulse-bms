@@ -4,6 +4,7 @@ import { Vote, CalendarDays, Rocket, FileText, AlertTriangle, Users2 } from "luc
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ProposeButton } from "@/components/union/propose-button";
+import { StatCard } from "@/components/ui/stat-card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleton";
 
@@ -134,26 +135,26 @@ async function UnionKpis({
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
-          icon={<Vote className="w-4 h-4" />}
+          icon={Vote}
           label="My pending votes"
           value={String(myPendingVotes)}
           href="/union/proposals"
           attention={myPendingVotes > 0}
         />
         <KpiCard
-          icon={<FileText className="w-4 h-4" />}
+          icon={FileText}
           label="Pending proposals"
           value={String(pendingCount ?? 0)}
           href="/union/proposals"
         />
         <KpiCard
-          icon={<CalendarDays className="w-4 h-4" />}
+          icon={CalendarDays}
           label="Meetings this month"
           value={String(meetingsCount ?? 0)}
           href="/union/meetings"
         />
         <KpiCard
-          icon={<Rocket className="w-4 h-4" />}
+          icon={Rocket}
           label="Executed (30 days)"
           value={String(executedCount ?? 0)}
           href="/union/proposals"
@@ -298,38 +299,19 @@ function KpiCard({
   href,
   attention,
 }: {
-  icon: React.ReactNode;
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   href: string;
   attention?: boolean;
 }) {
   return (
-    <Link
+    <StatCard
+      icon={icon}
+      label={label}
+      value={value}
       href={href}
-      className={`card-hover rounded-lg border bg-card p-4 block ${
-        attention ? "border-primary/40 glow-amber" : "border-border"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {label}
-        </span>
-        <div
-          className={`flex w-8 h-8 items-center justify-center rounded-md shrink-0 ${
-            attention ? "bg-primary/20 text-primary" : "bg-primary/10 text-primary"
-          }`}
-        >
-          {icon}
-        </div>
-      </div>
-      <div
-        className={`mt-1.5 text-2xl font-semibold tracking-tight tabular-nums ${
-          attention ? "text-primary" : "text-foreground"
-        }`}
-      >
-        {value}
-      </div>
-    </Link>
+      glow={attention}
+    />
   );
 }

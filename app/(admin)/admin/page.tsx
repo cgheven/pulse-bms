@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { AdminDashboardShell } from "@/components/admin/admin-dashboard-shell";
 import { requireRole } from "@/lib/auth";
 import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
@@ -12,13 +11,11 @@ import {
   formatMonthLabel,
   formatRelative,
 } from "@/lib/utils";
-import { DashboardMonthFilter } from "@/components/admin/dashboard-month-filter";
+import { StatCard } from "@/components/ui/stat-card";
 import { getCashTotals, cashBalanceFrom } from "@/lib/finance-totals";
 import { KpiRowSkeleton, TableSkeleton } from "@/components/layout/table-skeleton";
 import {
   ArrowRight,
-  ArrowUpRight,
-  ArrowDownRight,
   AlertTriangle,
   CheckCircle2,
   CreditCard,
@@ -39,7 +36,6 @@ import {
 export const dynamic = "force-dynamic";
 
 const ACTIVITY_DAYS = 7;
-const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** First day of a month, N months offset from "YYYY-MM", as YYYY-MM-DD. */
 function monthStartIso(ym: string, offset = 0): string {
@@ -50,64 +46,7 @@ function monthStartIso(ym: string, offset = 0): string {
   return new Date(Date.UTC(y, m - 1 + offset, 1)).toISOString().slice(0, 10);
 }
 
-/**
- * Selectable months: earliest recorded activity → current month, newest first.
- * Capped at 60 so an odd imported date can't produce an endless dropdown.
- */
-function buildMonthOptions(earliest: string, current: string, selected: string): string[] {
-  const set = new Set<string>([current, selected]);
-  let cursor = earliest <= current ? earliest : current;
-  for (let i = 0; i < 60 && cursor <= current; i++) {
-    set.add(cursor);
-    cursor = monthStartIso(cursor, 1).slice(0, 7);
-  }
-  return Array.from(set).sort().reverse();
-}
-
-/**
- * Oldest month with any financial record, so the picker only offers months the
- * building actually existed for. Three indexed single-row reads, not a scan.
- */
-async function earliestActivityMonth(
-  buildingId: string,
-  fallbackYm: string,
-): Promise<string> {
-  const supabase = await createClient();
-  const [{ data: inv }, { data: pay }, { data: exp }] = await Promise.all([
-    supabase
-      .from("bms_invoices")
-      .select("billing_month")
-      .eq("building_id", buildingId)
-      .order("billing_month", { ascending: true })
-      .limit(1),
-    supabase
-      .from("bms_payments")
-      .select("payment_date")
-      .eq("building_id", buildingId)
-      .order("payment_date", { ascending: true })
-      .limit(1),
-    supabase
-      .from("bms_expenses")
-      .select("expense_date")
-      .eq("building_id", buildingId)
-      .order("expense_date", { ascending: true })
-      .limit(1),
-  ]);
-  const candidates = [
-    inv?.[0]?.billing_month,
-    pay?.[0]?.payment_date,
-    exp?.[0]?.expense_date,
-  ]
-    .filter(Boolean)
-    .map((d) => String(d).slice(0, 7));
-  return candidates.length ? candidates.sort()[0] : fallbackYm;
-}
-
-export default async function AdminDashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ month?: string }>;
-}) {
+export default async function AdminDashboardPage() {
   const { profile } = await requireRole(["admin", "super_admin"]);
   void profile;
   const buildingId = await getActiveBuilding();
@@ -119,21 +58,18 @@ export default async function AdminDashboardPage({
       </div>
     );
   }
-  const sp = await searchParams;
   // Use PKT (UTC+5) for month boundaries so the dashboard shows the correct
   // month during the first 5 hours of each calendar day in Pakistan.
   const pkNow = new Date(Date.now() + 5 * 60 * 60 * 1000);
   const todayIso = pkNow.toISOString().slice(0, 10);
   const currentYm = todayIso.slice(0, 7);
 
-  // `?month=YYYY-MM` re-scopes the whole dashboard. Validated so a junk value
-  // silently falls back to the current month rather than blanking every tile.
-  const ym = sp.month && MONTH_RE.test(sp.month) ? sp.month : currentYm;
-  const isCurrentMonth = ym === currentYm;
+  // The dashboard always shows the live current month.
+  const ym = currentYm;
 
   const monthStart = monthStartIso(ym);
   const nextMonthStart = monthStartIso(ym, 1);
-  // Inclusive last day of the selected month — the as-of point for cash held.
+  // Inclusive last day of the month — the as-of point for cash held.
   const monthEnd = new Date(new Date(`${nextMonthStart}T00:00:00Z`).getTime() - 86400_000)
     .toISOString()
     .slice(0, 10);
@@ -142,10 +78,8 @@ export default async function AdminDashboardPage({
   const sevenDaysAgo = new Date(pkNow.getTime() - ACTIVITY_DAYS * 86400_000)
     .toISOString();
 
-  // Recent activity stays a live 7-day feed on the current month; on a past
-  // month it becomes that month's activity so the feed can't contradict the
-  // numbers above it.
-  const feedSince = isCurrentMonth ? sevenDaysAgo : `${monthStart}T00:00:00.000Z`;
+  // Recent activity is a live 7-day feed.
+  const feedSince = sevenDaysAgo;
   const feedUntil = `${nextMonthStart}T00:00:00.000Z`;
 
   const monthLabel = formatMonthLabel(ym);
@@ -154,79 +88,56 @@ export default async function AdminDashboardPage({
     month: "long",
   });
 
-  const monthOptions = buildMonthOptions(
-    await earliestActivityMonth(buildingId, currentYm),
-    currentYm,
-    ym,
-  );
-
   return (
-    <div className="space-y-5 animate-fade-up max-w-5xl">
-      <AdminDashboardShell
-        header={
-          <header>
-            <h1>Admin Dashboard</h1>
-            <p className="text-muted-foreground mt-1">
-              Sunrise · {monthLabel}
-              {isCurrentMonth ? ` · Today is ${todayLabel}` : " · past month"}
-            </p>
-          </header>
-        }
-        monthFilter={
-          <DashboardMonthFilter
-            months={monthOptions}
-            value={ym}
-            currentMonth={currentYm}
-          />
-        }
-        governanceTile={
-          <Suspense fallback={<KpiRowSkeleton count={1} />}>
-            <GovernanceTile buildingId={buildingId} />
-          </Suspense>
-        }
-      >
-        <Suspense fallback={<FinancialCardsSkeleton />}>
-          <FinancialCards
-            buildingId={buildingId}
-            monthStart={monthStart}
-            nextMonthStart={nextMonthStart}
-            monthEnd={monthEnd}
-            prevMonthStart={prevMonthStart}
-            sixMonthsAgo={sixMonthsAgo}
-            monthLabel={monthLabel}
-            isCurrentMonth={isCurrentMonth}
-          />
-        </Suspense>
+    <div className="space-y-4 animate-fade-up max-w-6xl">
+      <header>
+        <h1>Admin Dashboard</h1>
+        <p className="text-muted-foreground mt-1">
+          Sunrise · {monthLabel} · Today is {todayLabel}
+        </p>
+      </header>
 
-        <Suspense fallback={<KpiRowSkeleton count={2} />}>
-          <StatusTiles
-            buildingId={buildingId}
-            monthStart={monthStart}
-            prevMonthStart={prevMonthStart}
-            todayIso={todayIso}
-          />
-        </Suspense>
+      <Suspense fallback={<FinancialCardsSkeleton />}>
+        <FinancialCards
+          buildingId={buildingId}
+          monthStart={monthStart}
+          nextMonthStart={nextMonthStart}
+          monthEnd={monthEnd}
+          prevMonthStart={prevMonthStart}
+          sixMonthsAgo={sixMonthsAgo}
+          monthLabel={monthLabel}
+          isCurrentMonth
+        />
+      </Suspense>
 
-        <Suspense fallback={<ActionCenterSkeleton />}>
-          <ActionCenter
-            buildingId={buildingId}
-            monthStart={monthStart}
-            todayIso={todayIso}
-          />
-        </Suspense>
+      <Suspense fallback={<KpiRowSkeleton count={2} />}>
+        <StatusTiles
+          buildingId={buildingId}
+          monthStart={monthStart}
+          prevMonthStart={prevMonthStart}
+          todayIso={todayIso}
+        />
+      </Suspense>
 
-        <Suspense fallback={<TableSkeleton rows={6} />}>
-          <ActivityFeed
-            buildingId={buildingId}
-            sinceIso={feedSince}
-            untilIso={feedUntil}
-            monthScoped={!isCurrentMonth}
-            rangeLabel={isCurrentMonth ? `Last ${ACTIVITY_DAYS} days` : monthLabel}
-          />
-        </Suspense>
+      <Suspense fallback={<ActionCenterSkeleton />}>
+        <ActionCenter
+          buildingId={buildingId}
+          monthStart={monthStart}
+          todayIso={todayIso}
+        />
+      </Suspense>
 
-        <ActionFooter />
-      </AdminDashboardShell>
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <ActivityFeed
+          buildingId={buildingId}
+          sinceIso={feedSince}
+          untilIso={feedUntil}
+          monthScoped={false}
+          rangeLabel={`Last ${ACTIVITY_DAYS} days`}
+        />
+      </Suspense>
+
+      <ActionFooter />
     </div>
   );
 }
@@ -660,186 +571,89 @@ async function FinancialCards({
   const paidOverflow = paidFlatNumbers.length > 5 ? ` +${paidFlatNumbers.length - 5} more` : "";
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {/* Card 1 · Cash available (hero) */}
-      <Link
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* Card 1 · Cash available (hero) — full width on mobile, leads the row */}
+      <StatCard
+        className="col-span-2 lg:col-span-1"
+        hero
         href="/admin/reports"
-        className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/8 via-card to-card p-4 sm:p-5 glow-amber block transition-colors hover:border-primary/50 hover:bg-primary/5 group"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <Wallet className="w-3.5 h-3.5 text-primary" />
-            Cash available
-          </div>
-          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-        </div>
-        <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-foreground">
-          {formatCurrency(fundBalance)}
-        </div>
-        <div className="mt-3">
-          <p className="text-[11px] text-muted-foreground">
-            {isCurrentMonth
-              ? "Total cash held"
-              : `Closing balance · end of ${monthLabel}`}
-          </p>
-        </div>
-      </Link>
+        icon={Wallet}
+        label="Cash available"
+        value={formatCurrency(fundBalance)}
+        sub={
+          isCurrentMonth
+            ? "Total cash held"
+            : `Closing balance · end of ${monthLabel}`
+        }
+      />
 
       {/* Card 2 · Maintenance collection */}
-      <Link
+      <StatCard
         href="/admin/maintenance?tab=dues"
-        className="rounded-xl border border-border bg-card p-4 sm:p-5 block transition-colors hover:border-[hsl(151_70%_55%/0.4)] hover:bg-secondary/30 group"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <CreditCard className="w-3.5 h-3.5 text-[hsl(151_70%_55%)]" />
-            Maintenance collection
-          </div>
-          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[hsl(151_70%_55%)]" />
-        </div>
-        <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-[hsl(151_70%_55%)]">
-          {formatCurrency(collected)}
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
-          <p className="text-[11px] text-muted-foreground">
-            <span className="tabular-nums">{paidCount} of {totalInvCount}</span> paid
-          </p>
-          {collectionDelta != null && collectionDelta !== 0 && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-0.5 text-[11px] tabular-nums font-medium",
-                collectionDelta >= 0
-                  ? "text-[hsl(151_70%_55%)]"
-                  : "text-destructive",
-              )}
-            >
-              {collectionDelta >= 0 ? (
-                <ArrowUpRight className="w-3 h-3" />
-              ) : (
-                <ArrowDownRight className="w-3 h-3" />
-              )}
-              {collectionDelta >= 0 ? "+" : ""}
-              {collectionDelta}pp
-            </span>
-          )}
-        </div>
-      </Link>
+        icon={CreditCard}
+        tone="success"
+        label="Maintenance collection"
+        value={formatCurrency(collected)}
+        sub={`${paidCount} of ${totalInvCount} paid`}
+        trend={collectionDelta != null ? { value: collectionDelta, suffix: "pp" } : undefined}
+      />
 
       {/* Card 3 · Paid this month */}
-      <Link
+      <StatCard
         href="/admin/maintenance?tab=payments"
-        className="rounded-xl border border-border bg-card p-4 sm:p-5 block transition-colors hover:border-[hsl(151_70%_55%/0.4)] hover:bg-secondary/30 group"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(151_70%_55%)]" />
-            {isCurrentMonth ? "Paid this month" : `Paid · ${monthLabel}`}
-          </div>
-          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[hsl(151_70%_55%)]" />
-        </div>
-        <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-[hsl(151_70%_55%)]">
-          {paidCount === 0 ? "None yet" : `${paidCount} flat${paidCount === 1 ? "" : "s"}`}
-        </div>
-        <div className="mt-3">
-          <p className="text-[11px] text-muted-foreground line-clamp-1">
-            {paidFlatNumbers.length === 0
-              ? "No payments recorded this month"
-              : `${paidSample}${paidOverflow}`}
-          </p>
-        </div>
-      </Link>
+        icon={CheckCircle2}
+        tone="success"
+        label={isCurrentMonth ? "Paid this month" : `Paid · ${monthLabel}`}
+        value={paidCount === 0 ? "0 flats" : `${paidCount} flat${paidCount === 1 ? "" : "s"}`}
+        sub={
+          paidFlatNumbers.length === 0
+            ? "No payments recorded this month"
+            : `${paidSample}${paidOverflow}`
+        }
+      />
 
       {/* Card 4 · Expenses — clickable, navigates to full expenses ledger */}
-      <Link
+      <StatCard
         href="/admin/expenses"
-        className="rounded-xl border border-border bg-card p-4 sm:p-5 block transition-colors hover:border-destructive/40 hover:bg-secondary/30 group"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <TrendingDown className="w-3.5 h-3.5 text-destructive" />
-            Expenses
-          </div>
-          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-destructive" />
-        </div>
-        <div className="mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-destructive">
-          {formatCurrency(outflow)}
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
-          <p className="text-[11px] text-muted-foreground">
-            Operations <span className="tabular-nums">{formatLakh(expenses)}</span> ·{" "}
-            Salary <span className="tabular-nums">{formatLakh(salaries)}</span>
-          </p>
-          {expenseDeltaPct != null && expenseDeltaPct !== 0 && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-0.5 text-[11px] tabular-nums font-medium",
-                // For expenses, going DOWN is good (success), going UP is bad (danger)
-                expenseDeltaPct < 0
-                  ? "text-[hsl(151_70%_55%)]"
-                  : "text-destructive",
-              )}
-            >
-              {expenseDeltaPct < 0 ? (
-                <ArrowDownRight className="w-3 h-3" />
-              ) : (
-                <ArrowUpRight className="w-3 h-3" />
-              )}
-              {expenseDeltaPct >= 0 ? "+" : ""}
-              {expenseDeltaPct}% vs last month
-            </span>
-          )}
-        </div>
-      </Link>
+        icon={TrendingDown}
+        tone="danger"
+        label="Expenses"
+        value={formatCurrency(outflow)}
+        sub={`Ops ${formatLakh(expenses)} · Salary ${formatLakh(salaries)}`}
+        trend={
+          expenseDeltaPct != null
+            ? { value: expenseDeltaPct, suffix: "%", goodWhenUp: false }
+            : undefined
+        }
+      />
 
-      {/* Card 5 · Remaining (this month) — spans full width */}
-      <Link
+      {/* Card 5 · Remaining (this month) */}
+      <StatCard
         href="/admin/reports"
-        className={cn(
-          "rounded-xl border bg-card p-4 sm:p-5 block transition-colors group sm:col-span-2",
-          net >= 0
-            ? "border-[hsl(151_70%_55%/0.25)] hover:border-[hsl(151_70%_55%/0.5)] hover:bg-secondary/30"
-            : "border-destructive/30 hover:border-destructive/50 hover:bg-secondary/30",
-        )}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <Scale className="w-3.5 h-3.5 text-foreground" />
-            Remaining · {monthLabel}
-          </div>
-          <ArrowRight className={cn(
-            "w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5",
-            net >= 0 ? "group-hover:text-[hsl(151_70%_55%)]" : "group-hover:text-destructive",
-          )} />
-        </div>
-        <div
-          className={cn(
-            "mt-1.5 text-xl sm:text-2xl font-bold tracking-tight tabular-nums",
-            net >= 0 ? "text-[hsl(151_70%_55%)]" : "text-destructive",
-          )}
-        >
-          {net >= 0 ? "+" : "−"}
-          {formatCurrency(Math.abs(net))}
-        </div>
-        <div className="mt-3">
-          <p className="text-[11px] text-muted-foreground">
-            {net >= 0
-              ? "Surplus · collection > spend this month"
-              : "Deficit · spending more than collecting"}
-          </p>
-        </div>
-      </Link>
+        icon={Scale}
+        tone={net >= 0 ? "success" : "danger"}
+        label={`Remaining · ${monthLabel}`}
+        value={`${net > 0 ? "+" : net < 0 ? "−" : ""}${formatCurrency(Math.abs(net))}`}
+        sub={net > 0 ? "Surplus this month" : net < 0 ? "Deficit this month" : "Even this month"}
+      />
     </div>
   );
 }
 
 function FinancialCardsSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5">
-          <div className="h-3 w-28 rounded bg-secondary/50 animate-pulse" />
-          <div className="mt-2 h-8 w-40 rounded bg-secondary/60 animate-pulse" />
-          <div className="mt-3 h-3 w-32 rounded bg-secondary/40 animate-pulse" />
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 animate-fade-in">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "rounded-xl border border-border bg-card p-4",
+            i === 0 && "col-span-2 lg:col-span-1",
+          )}
+        >
+          <div className="h-3 w-20 rounded bg-secondary/50 animate-pulse" />
+          <div className="mt-2 h-7 w-28 rounded bg-secondary/60 animate-pulse" />
+          <div className="mt-2 h-3 w-24 rounded bg-secondary/40 animate-pulse" />
         </div>
       ))}
     </div>
@@ -949,152 +763,42 @@ async function StatusTiles({
   void todayIso;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <StatusTile
+    <div className="grid grid-cols-2 gap-3">
+      <StatCard
+        icon={ShieldAlert}
+        tone={defaulterFlats.length === 0 ? "success" : "danger"}
         label={`Defaulters · ${cutoff}+ months`}
-        primary={
+        value={
           defaulterFlats.length === 0
             ? "None"
             : `${defaulterFlats.length} ${defaulterFlats.length === 1 ? "flat" : "flats"}`
         }
-        secondary={
+        sub={
           defaulterFlats.length === 0
             ? "No long-term arrears"
             : `${defaulterFlats.slice(0, 4).join(" · ")}${defaulterFlats.length > 4 ? " …" : ""} · ${formatLakh(totalDefaulterOwed)} owed`
         }
-        tone={defaulterFlats.length === 0 ? "ok" : "risk"}
         href="/admin/maintenance?tab=dues"
       />
-      <StatusTile
-        label="Complaints"
-        primary={
+      <StatCard
+        icon={MessageSquareWarning}
+        tone={
           openComplaints.length === 0
-            ? "Clear"
-            : `${openComplaints.length} open`
+            ? "success"
+            : urgentOpen > 0
+              ? "danger"
+              : "warning"
         }
-        secondary={
+        label="Complaints"
+        value={openComplaints.length === 0 ? "Clear" : `${openComplaints.length} open`}
+        sub={
           openComplaints.length === 0
             ? "No issues reported"
             : `${urgentOpen} urgent${avgResolveDays !== null ? ` · avg resolve ${avgResolveDays}d` : ""}`
         }
-        tone={
-          openComplaints.length === 0
-            ? "ok"
-            : urgentOpen > 0
-              ? "risk"
-              : "warning"
-        }
         href="/admin/facility"
       />
     </div>
-  );
-}
-
-/* ═══════════════  3b. Governance tile (opt-in via settings)  ═══════════════ */
-
-async function GovernanceTile({ buildingId }: { buildingId: string }) {
-  const supabase = await createClient();
-  const { data: proposalsPending } = await supabase
-    .from("bms_proposals")
-    .select("id")
-    .eq("building_id", buildingId)
-    .eq("status", "pending");
-
-  const count = (proposalsPending ?? []).length;
-
-  return (
-    <StatusTile
-      label="Governance"
-      primary={count === 0 ? "Quiet" : `${count} pending vote${count === 1 ? "" : "s"}`}
-      secondary={count === 0 ? "No open proposals" : "Awaiting union votes"}
-      tone={count === 0 ? "ok" : "warning"}
-      href="/admin/union"
-    />
-  );
-}
-
-function StatusTile({
-  label,
-  primary,
-  secondary,
-  delta,
-  deltaLabel,
-  tone,
-  href,
-}: {
-  label: string;
-  primary: string;
-  secondary: string;
-  delta?: number | null;
-  deltaLabel?: string;
-  tone: "ok" | "warning" | "risk";
-  /** When set, the whole tile becomes a deep-link card with hover affordance. */
-  href?: string;
-}) {
-  const accent =
-    tone === "ok"
-      ? "text-[hsl(151_70%_55%)]"
-      : tone === "warning"
-        ? "text-primary"
-        : "text-destructive";
-  const borderL =
-    tone === "ok"
-      ? "border-l-[hsl(151_70%_55%)]"
-      : tone === "warning"
-        ? "border-l-primary"
-        : "border-l-destructive";
-  const wrapperCls = cn(
-    "rounded-lg border border-border border-l-2 bg-card p-4 transition-colors",
-    borderL,
-    href && "hover:border-primary/40 hover:bg-secondary/30 cursor-pointer group block",
-  );
-
-  const body = (
-    <>
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {label}
-        </div>
-        {href && (
-          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-        )}
-      </div>
-      <div
-        className={cn(
-          "mt-1 text-xl sm:text-2xl font-semibold tracking-tight tabular-nums truncate",
-          accent,
-        )}
-      >
-        {primary}
-      </div>
-      <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
-        {secondary}
-      </div>
-      {delta != null && (
-        <div
-          className={cn(
-            "mt-1 inline-flex items-center gap-0.5 text-[11px] tabular-nums font-medium",
-            delta >= 0 ? "text-[hsl(151_70%_55%)]" : "text-destructive",
-          )}
-        >
-          {delta >= 0 ? (
-            <ArrowUpRight className="w-3 h-3" />
-          ) : (
-            <ArrowDownRight className="w-3 h-3" />
-          )}
-          {delta >= 0 ? "+" : ""}
-          {delta}pp {deltaLabel}
-        </div>
-      )}
-    </>
-  );
-
-  return href ? (
-    <Link href={href} className={wrapperCls}>
-      {body}
-    </Link>
-  ) : (
-    <div className={wrapperCls}>{body}</div>
   );
 }
 

@@ -210,14 +210,14 @@ async function DuesHero({
 
   if (hasDues) {
     return (
-      <div className="rounded-xl border border-destructive/30 bg-gradient-to-br from-destructive/10 via-card to-card p-5 sm:p-6 shadow-[0_0_30px_-12px_hsl(0_70%_50%/0.35)]">
+      <div className="rounded-xl border border-destructive/30 bg-gradient-to-br from-destructive/10 via-card to-card p-4 sm:p-5 shadow-[0_0_30px_-12px_hsl(0_70%_50%/0.35)]">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <AlertTriangle className="w-4 h-4 text-destructive" />
-              {formatCurrency(totalOutstanding)} still due
+              Still due
             </div>
-            <div className="mt-1.5 text-4xl sm:text-5xl font-bold tracking-tight tabular-nums text-destructive">
+            <div className="mt-1.5 text-3xl sm:text-4xl font-bold tracking-tight tabular-nums text-destructive">
               {formatCurrency(totalOutstanding)}
             </div>
             {levyOutstanding > 0 && (
@@ -333,7 +333,7 @@ async function BillAndNotices({
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div className="card-soft card-hover">
+      <div className="rounded-xl border border-border bg-card p-4 card-hover">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             {new Date(monthStart).toLocaleDateString("en-PK", {
@@ -371,7 +371,7 @@ async function BillAndNotices({
         )}
       </div>
 
-      <div className="card-soft card-hover">
+      <div className="rounded-xl border border-border bg-card p-4 card-hover">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1.5">
             <Megaphone className="w-3.5 h-3.5" />
