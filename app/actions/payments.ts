@@ -282,6 +282,7 @@ export async function deletePayment(id: string) {
  */
 function revalidateAfterPaymentChange() {
   revalidatePath("/admin/maintenance");
+  revalidatePath("/admin/payments");
   revalidatePath("/admin/other-income");
   revalidatePath("/admin");
   revalidatePath("/admin/flats");

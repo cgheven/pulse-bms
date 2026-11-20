@@ -230,7 +230,7 @@ function CrossLinkFooter() {
     <p className="text-sm text-muted-foreground">
       Maintenance payments →{" "}
       <Link
-        href="/admin/maintenance?tab=payments"
+        href="/admin/payments"
         className="text-primary hover:underline"
       >
         /admin/maintenance

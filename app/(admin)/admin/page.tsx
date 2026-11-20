@@ -240,7 +240,7 @@ async function ActionCenter({
       tone: overdueCount > 0 ? "danger" : "warning",
       title: `${unpaidSorted.length} ${unpaidSorted.length === 1 ? "flat" : "flats"} unpaid · ${formatCurrency(unpaidTotal)} pending`,
       body: `${sample}${moreSuffix}${overdueCount > 0 ? ` · ${overdueCount} overdue` : ""}`,
-      href: "/admin/maintenance?tab=dues",
+      href: "/admin/maintenance",
       cta: "Send reminder",
     });
   }
@@ -589,7 +589,7 @@ async function FinancialCards({
 
       {/* Card 2 · Maintenance collection */}
       <StatCard
-        href="/admin/maintenance?tab=dues"
+        href="/admin/maintenance"
         icon={CreditCard}
         tone="success"
         label="Maintenance collection"
@@ -600,7 +600,7 @@ async function FinancialCards({
 
       {/* Card 3 · Paid this month */}
       <StatCard
-        href="/admin/maintenance?tab=payments"
+        href="/admin/payments"
         icon={CheckCircle2}
         tone="success"
         label={isCurrentMonth ? "Paid this month" : `Paid · ${monthLabel}`}
@@ -778,7 +778,7 @@ async function StatusTiles({
             ? "No long-term arrears"
             : `${defaulterFlats.slice(0, 4).join(" · ")}${defaulterFlats.length > 4 ? " …" : ""} · ${formatLakh(totalDefaulterOwed)} owed`
         }
-        href="/admin/maintenance?tab=dues"
+        href="/admin/maintenance"
       />
       <StatCard
         icon={MessageSquareWarning}
@@ -1153,13 +1153,13 @@ function ActionFooter() {
         sub="P&L · ledger · CSV / PDF download"
       />
       <ActionLink
-        href="/admin/maintenance?tab=invoices"
+        href="/admin/maintenance"
         icon={<FileText className="w-4 h-4" />}
         title="Maintenance"
         sub="Generate · waive · review invoices"
       />
       <ActionLink
-        href="/admin/maintenance?tab=payments"
+        href="/admin/payments"
         icon={<Receipt className="w-4 h-4" />}
         title="Record payment"
         sub="Mark a flat as paid"

@@ -376,6 +376,7 @@ async function loadDefaultersData() {
         amount_paid: paid,
         amount_due: due,
         days_late: daysLate,
+        receipt_payment_id: null,
       };
     })
     .filter((r) => r.amount_due > 0)

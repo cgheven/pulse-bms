@@ -1,20 +1,13 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBuilding } from "@/lib/building-context";
 import { GenerateInvoicesButton } from "@/components/admin/billing/generate-invoices-button";
-import { InvoicesList, type InvoiceRow } from "@/components/admin/billing/invoices-list";
-import { PaymentsList, type PaymentRow } from "@/components/admin/payments/payments-list";
 import { RecordPaymentButton } from "@/components/admin/payments/record-payment-button";
 import {
   DuesDefaultersPanel,
   type DefaulterRow,
 } from "@/components/admin/payments/dues-defaulters-panel";
-import {
-  MaintenanceTabPanels,
-  type MaintenanceTab,
-} from "@/components/admin/maintenance/maintenance-tab-panels";
 import { formatCurrency } from "@/lib/utils";
 import { normalizePhone } from "@/lib/phone";
 import { StatCard } from "@/components/ui/stat-card";
@@ -23,22 +16,17 @@ import { TableSkeleton, KpiRowSkeleton } from "@/components/layout/table-skeleto
 export const dynamic = "force-dynamic";
 
 /**
- * /admin/maintenance — single home for maintenance billing.
+ * /admin/maintenance — the single home for maintenance billing.
  *
- * Replaces the old `/admin/billing` and `/admin/payments` pages with a
- * three-tab layout: Dues (default) · Payments · Invoices. The tab is
- * driven by `?tab=...` in the URL so deep links and back-button work
- * naturally. Header buttons (Generate Invoices + Record Payment) are
- * always visible regardless of the active tab — both flows are common
- * regardless of which list you're looking at.
- *
- * KPI strip pulls a small set of cross-cutting numbers so admins don't
- * have to flip tabs to see "how am I doing this month".
+ * One screen, no tabs: a KPI strip plus the monthly flat list (who's Paid /
+ * Unpaid / Partial for the selected month, with Record / Remind / Receipt per
+ * row). The full payment transaction ledger lives behind the list's
+ * "All payments →" link (/admin/payments) for reconciliation and undo.
  */
 export default function MaintenancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; duesMonth?: string }>;
+  searchParams: Promise<{ duesMonth?: string }>;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const ym = today.slice(0, 7);
@@ -60,9 +48,20 @@ export default function MaintenancePage({
         <MaintenanceKpis />
       </Suspense>
 
-      <TabsAndContent searchParams={searchParams} />
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <DuesSection searchParams={searchParams} />
+      </Suspense>
     </div>
   );
+}
+
+async function DuesSection({
+  searchParams,
+}: {
+  searchParams: Promise<{ duesMonth?: string }>;
+}) {
+  const sp = await searchParams;
+  return <DuesTab duesMonth={sp.duesMonth} />;
 }
 
 function HeaderShell({ children }: { children: React.ReactNode }) {
@@ -133,6 +132,43 @@ async function sumPaymentsByInvoice(
     }
   }
   return paidByInv;
+}
+
+/**
+ * The payment id to open a receipt for, per invoice. Prefers a payment that
+ * actually carries a receipt number (the "anchor" of a collection), falling
+ * back to any payment against the invoice. Lets the monthly list link a paid
+ * or partially-paid flat straight to its receipt.
+ */
+async function anchorPaymentByInvoice(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  buildingId: string,
+  invoiceIds: string[],
+): Promise<Map<string, string>> {
+  const anchor = new Map<string, string>();
+  const hasReceipt = new Set<string>();
+  if (invoiceIds.length === 0) return anchor;
+  for (const ids of chunk(invoiceIds, IN_CHUNK_SIZE)) {
+    const { data: pays } = await supabase
+      .from("bms_payments")
+      .select("id, invoice_id, receipt_no, payment_date")
+      .eq("building_id", buildingId)
+      .in("invoice_id", ids)
+      .order("payment_date", { ascending: false });
+    for (const p of pays ?? []) {
+      if (!p.invoice_id) continue;
+      const withReceipt = p.receipt_no != null;
+      // Keep the first receipt-bearing payment we see (newest, since ordered
+      // desc); otherwise seed with any payment until a better one turns up.
+      if (withReceipt && !hasReceipt.has(p.invoice_id)) {
+        anchor.set(p.invoice_id, p.id);
+        hasReceipt.add(p.invoice_id);
+      } else if (!anchor.has(p.invoice_id)) {
+        anchor.set(p.invoice_id, p.id);
+      }
+    }
+  }
+  return anchor;
 }
 
 // --- KPI strip --------------------------------------------------------------
@@ -255,48 +291,7 @@ function nextMonthFirstDay(ym: string): string {
     .padStart(2, "0")}-01`;
 }
 
-// --- Tab switcher + content -------------------------------------------------
-
-async function TabsAndContent({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string; duesMonth?: string }>;
-}) {
-  const sp = await searchParams;
-  const tab = normalizeTab(sp.tab);
-  const duesMonth = sp.duesMonth;
-
-  // Render all three tab bodies on initial load — Suspense streams them in
-  // parallel. The client `MaintenanceTabPanels` toggles visibility via CSS so
-  // subsequent tab clicks are instant (no round-trip, no refetch).
-  return (
-    <MaintenanceTabPanels
-      initialTab={tab}
-      dues={
-        <Suspense fallback={<TableSkeleton rows={6} />}>
-          <DuesTab duesMonth={duesMonth} />
-        </Suspense>
-      }
-      payments={
-        <Suspense fallback={<TableSkeleton rows={6} />}>
-          <PaymentsTab />
-        </Suspense>
-      }
-      invoices={
-        <Suspense fallback={<TableSkeleton rows={6} />}>
-          <InvoicesTab />
-        </Suspense>
-      }
-    />
-  );
-}
-
-function normalizeTab(raw: string | undefined): MaintenanceTab {
-  if (raw === "payments" || raw === "invoices") return raw;
-  return "dues";
-}
-
-// --- Tab 1: Dues ------------------------------------------------------------
+// --- The monthly maintenance list -------------------------------------------
 
 async function DuesTab({ duesMonth }: { duesMonth?: string }) {
   const data = await loadDefaultersData(duesMonth);
@@ -379,9 +374,10 @@ async function loadDefaultersData(duesMonth?: string) {
 
   // Payments lookup chunked (see sumPaymentsByInvoice); other lookups
   // parallelized as before. Building name was already loaded above.
-  const [paidByInvoice, { data: flats }, { data: primaries }] =
+  const [paidByInvoice, anchorByInvoice, { data: flats }, { data: primaries }] =
     await Promise.all([
       sumPaymentsByInvoice(supabase, buildingId, invIds),
+      anchorPaymentByInvoice(supabase, buildingId, invIds),
       supabase
         .from("bms_flats")
         .select("id, flat_number, outstanding_dues")
@@ -431,6 +427,7 @@ async function loadDefaultersData(duesMonth?: string) {
         amount_paid: paid,
         amount_due: due,
         days_late: daysLate,
+        receipt_payment_id: paid > 0 ? anchorByInvoice.get(inv.id) ?? null : null,
       };
     })
     // All statuses now — unpaid and partial first (actionable), paid last;
@@ -468,218 +465,6 @@ function monthListDesc(earliestYm: string, currentYm: string, selected: string):
     cursor = nextMonthFirstDay(cursor).slice(0, 7);
   }
   return Array.from(set).sort().reverse();
-}
-
-// --- Tab 2: Payments --------------------------------------------------------
-
-async function PaymentsTab() {
-  const data = await loadPaymentsData();
-  if (data.noBuilding) {
-    return (
-      <div className="card-soft">
-        <p className="text-muted-foreground mt-2">No building assigned.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      <PaymentsList payments={data.rows} canDelete />
-      {/* Discoverability: maintenance-only filter is a recent split — many
-          admins will still hunt for entry fees / fines here. Small link, not a
-          prominent button, so it doesn't compete with the table. */}
-      <p className="text-sm text-muted-foreground">
-        Looking for entry fees / fines? →{" "}
-        <Link
-          href="/admin/other-income"
-          className="text-primary hover:underline"
-        >
-          Other Income
-        </Link>
-      </p>
-    </div>
-  );
-}
-
-async function loadPaymentsData() {
-  const { profile } = await requireRole(["admin", "super_admin"]);
-  const buildingId = await getActiveBuilding();
-  if (!buildingId) {
-    return { noBuilding: true as const };
-  }
-  const supabase = await createClient();
-
-  const [{ data: payments }, { data: flats }, { data: building }] = await Promise.all([
-    // Maintenance page = maintenance payments only. Entry fees / fines /
-    // "other" live on /admin/other-income so this tab stays focused on the
-    // monthly maintenance flow.
-    supabase
-      .from("bms_payments")
-      .select(
-        "id, payment_date, flat_id, resident_id, amount, payment_mode, category, receipt_no, legacy_receipt_no, recorded_by, invoice_id, reference_no, received_by_name, received_by_position, payment_group_id",
-      )
-      .eq("building_id", buildingId)
-      .eq("category", "maintenance")
-      .order("payment_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(500),
-    supabase
-      .from("bms_flats")
-      .select("id, flat_number, outstanding_dues")
-      .eq("building_id", buildingId)
-      .order("flat_number"),
-    supabase
-      .from("bms_buildings")
-      .select("name")
-      .eq("id", buildingId)
-      .single(),
-  ]);
-
-  const residentIds = Array.from(
-    new Set((payments ?? []).map((p) => p.resident_id).filter(Boolean) as string[]),
-  );
-  const invoiceIds = Array.from(
-    new Set((payments ?? []).map((p) => p.invoice_id).filter(Boolean) as string[]),
-  );
-  const recorderIds = Array.from(
-    new Set((payments ?? []).map((p) => p.recorded_by).filter(Boolean) as string[]),
-  );
-
-  const [{ data: residents }, { data: invoices }, { data: recorders }] = await Promise.all([
-    residentIds.length
-      ? supabase.from("bms_residents").select("id, full_name").in("id", residentIds)
-      : Promise.resolve({ data: [] }),
-    invoiceIds.length
-      ? supabase
-          .from("bms_invoices")
-          .select("id, invoice_number, billing_month")
-          .in("id", invoiceIds)
-      : Promise.resolve({ data: [] }),
-    recorderIds.length
-      ? supabase.from("bms_profiles").select("id, full_name, email").in("id", recorderIds)
-      : Promise.resolve({ data: [] }),
-  ]);
-
-  const flatMap = new Map((flats ?? []).map((f) => [f.id, f.flat_number]));
-  const resMap = new Map((residents ?? []).map((r) => [r.id, r.full_name]));
-  const invMap = new Map(
-    (invoices ?? []).map((i) => [i.id, { number: i.invoice_number, month: i.billing_month }]),
-  );
-  const recMap = new Map(
-    (recorders ?? []).map((p) => [p.id, p.full_name ?? p.email ?? ""]),
-  );
-
-  const rows: PaymentRow[] = (payments ?? []).map((p) => ({
-    id: p.id,
-    payment_date: p.payment_date,
-    flat_id: p.flat_id ?? "",
-    flat_number: p.flat_id ? flatMap.get(p.flat_id) ?? "—" : "—",
-    resident_name: p.resident_id ? resMap.get(p.resident_id) ?? null : null,
-    amount: Number(p.amount),
-    payment_mode: p.payment_mode,
-    category: p.category,
-    receipt_no: p.receipt_no,
-    legacy_receipt_no: (p as { legacy_receipt_no?: string | null }).legacy_receipt_no ?? null,
-    // Lets the list fold one collection's allocation rows into a single
-    // line instead of listing a six-month advance as six payments.
-    payment_group_id: (p as { payment_group_id?: string | null }).payment_group_id ?? null,
-    recorded_by_name: p.recorded_by ? recMap.get(p.recorded_by) ?? null : null,
-    reference_no: p.reference_no,
-    invoice_id: p.invoice_id ?? null,
-    invoice_number: p.invoice_id ? invMap.get(p.invoice_id)?.number ?? null : null,
-    billing_month: p.invoice_id ? invMap.get(p.invoice_id)?.month ?? null : null,
-    received_by_name: p.received_by_name ?? null,
-    received_by_position: p.received_by_position ?? null,
-  }));
-
-  return {
-    noBuilding: false as const,
-    rows,
-    buildingName: building?.name ?? "Building",
-    buildingId,
-  };
-}
-
-// --- Tab 3: Invoices --------------------------------------------------------
-
-async function InvoicesTab() {
-  const { profile } = await requireRole(["admin", "super_admin"]);
-  const buildingId = await getActiveBuilding();
-  if (!buildingId) {
-    return (
-      <div className="card-soft">
-        <p className="text-muted-foreground mt-2">No building assigned.</p>
-      </div>
-    );
-  }
-  const supabase = await createClient();
-
-  const [{ data: invoices }, { data: flats }, { data: building }] = await Promise.all([
-    supabase
-      .from("bms_invoices")
-      .select("id, invoice_number, flat_id, billing_month, amount, status, due_date")
-      .eq("building_id", buildingId)
-      .order("billing_month", { ascending: false })
-      .order("invoice_number", { ascending: false })
-      .limit(500),
-    supabase
-      .from("bms_flats")
-      .select("id, flat_number, outstanding_dues")
-      .eq("building_id", buildingId)
-      .order("flat_number"),
-    supabase
-      .from("bms_buildings")
-      .select("name")
-      .eq("id", buildingId)
-      .single(),
-  ]);
-
-  const invIds = (invoices ?? []).map((i) => i.id);
-  // Chunked + building_id-scoped for defence-in-depth (same pattern as KPI
-  // defaulters and Dues panel).
-  const paidMap = await sumPaymentsByInvoice(
-    supabase,
-    buildingId,
-    invIds,
-  );
-
-  const flatMap = new Map((flats ?? []).map((f) => [f.id, f.flat_number]));
-
-  const { data: primaries } = await supabase
-    .from("bms_residents")
-    .select("id, flat_id, full_name")
-    .eq("building_id", buildingId)
-    .eq("is_active", true)
-    .eq("is_primary", true);
-  const primaryByFlat = new Map(
-    (primaries ?? []).map((r) => [r.flat_id, { id: r.id, name: r.full_name }]),
-  );
-
-  const rows: InvoiceRow[] = (invoices ?? []).map((inv) => ({
-    id: inv.id,
-    invoice_number: inv.invoice_number,
-    flat_id: inv.flat_id,
-    flat_number: flatMap.get(inv.flat_id) ?? "—",
-    resident_id: primaryByFlat.get(inv.flat_id)?.id ?? null,
-    resident_name: primaryByFlat.get(inv.flat_id)?.name ?? null,
-    billing_month: inv.billing_month,
-    amount: Number(inv.amount),
-    status: inv.status ?? "pending",
-    due_date: inv.due_date,
-    paid_total: paidMap.get(inv.id) ?? 0,
-  }));
-
-  return (
-    <InvoicesList
-      invoices={rows}
-      buildingName={building?.name ?? "Building"}
-      buildingId={buildingId}
-      flatPickerOptions={(flats ?? []).map((f) => ({
-        id: f.id,
-        flat_number: f.flat_number,
-        outstanding_dues: Number(f.outstanding_dues ?? 0),
-      }))}
-    />
-  );
 }
 
 // --- Shared helper for the header -------------------------------------------

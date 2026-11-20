@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Receipt } from "lucide-react";
+import { MessageCircle, Receipt, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,6 +34,8 @@ export type DefaulterRow = {
   amount_paid: number;
   amount_due: number;
   days_late: number;
+  /** Payment id to open a receipt for (null when nothing has been paid). */
+  receipt_payment_id: string | null;
 };
 
 type PayStatus = "paid" | "partial" | "unpaid";
@@ -90,7 +93,7 @@ export function DuesDefaultersPanel({
 
   const changeMonth = (m: string) => {
     startTransition(() => {
-      router.push(`/admin/maintenance?tab=dues&duesMonth=${m}`, { scroll: false });
+      router.push(`/admin/maintenance?duesMonth=${m}`, { scroll: false });
     });
   };
 
@@ -145,6 +148,13 @@ export function DuesDefaultersPanel({
           onChange={(e) => setQuery(e.target.value)}
           className="h-9 sm:max-w-xs sm:ml-auto"
         />
+        <Link
+          href="/admin/payments"
+          className="inline-flex items-center gap-1 text-sm text-primary hover:underline shrink-0 whitespace-nowrap"
+        >
+          <FileText className="w-3.5 h-3.5" />
+          All payments
+        </Link>
       </div>
 
       {defaulters.length === 0 ? (
@@ -325,6 +335,18 @@ function DefaulterRowCard({
       </td>
       <td className="px-4 sm:px-2 py-2.5 align-top">
         <div className="flex flex-col sm:flex-row gap-1.5 justify-end">
+          {row.amount_paid > 0 && row.receipt_payment_id && (
+            <Link
+              href={`/admin/payments/${row.receipt_payment_id}/receipt`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-input hover:bg-accent transition"
+              title="View / download receipt"
+            >
+              <Receipt className="h-3.5 w-3.5" />
+              Receipt
+            </Link>
+          )}
           {hasDue &&
             (intl ? (
               <a
