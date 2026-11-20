@@ -87,7 +87,6 @@ export function DuesDefaultersPanel({
   flatPickerOptions = [],
   month,
   availableMonths,
-  generateSlot,
 }: {
   defaulters: DefaulterRow[];
   buildingName: string;
@@ -97,8 +96,6 @@ export function DuesDefaultersPanel({
   month?: string;
   /** Months (newest first) the selector offers. Omit to hide the selector. */
   availableMonths?: string[];
-  /** Shown in the empty state so a month with no bills can be generated. */
-  generateSlot?: React.ReactNode;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -334,12 +331,10 @@ export function DuesDefaultersPanel({
       </div>
 
       {defaulters.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <p className="text-sm text-muted-foreground">
-            No invoices for {month ? formatMonthLabel(month) : "this period"} yet.
-          </p>
-          {generateSlot}
-        </div>
+        <p className="text-sm text-muted-foreground py-10 text-center">
+          No bills for {month ? formatMonthLabel(month) : "this period"}
+          {month ? " — occupied flats are billed automatically each month." : "."}
+        </p>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
           No flats match this filter.

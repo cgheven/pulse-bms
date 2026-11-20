@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBuilding } from "@/lib/building-context";
-import { GenerateInvoicesButton } from "@/components/admin/billing/generate-invoices-button";
+import { generateMaintenanceInvoices } from "@/lib/maintenance-invoices";
 import {
   DuesDefaultersPanel,
   type DefaulterRow,
@@ -274,7 +274,6 @@ async function DuesTab({ duesMonth }: { duesMonth?: string }) {
       flatPickerOptions={data.flatPickerOptions}
       month={data.month}
       availableMonths={data.availableMonths}
-      generateSlot={<GenerateInvoicesButton defaultMonth={data.month} />}
     />
   );
 }
@@ -321,7 +320,30 @@ async function loadDefaultersData(duesMonth?: string) {
   const earliestYm = earliestInv?.[0]?.billing_month?.slice(0, 7) ?? currentYm;
   const availableMonths = monthListDesc(earliestYm, currentYm, month);
 
-  const invRows = invoices ?? [];
+  let invRows = invoices ?? [];
+
+  // Auto-generate the current month's bills the first time an admin opens an
+  // empty current month — no manual "Generate" step. Idempotent and
+  // best-effort: a concurrent request may win the insert race (unique
+  // constraint), which is fine; we just re-read whatever now exists. Past
+  // months are never auto-generated.
+  if (month === currentYm && invRows.length === 0) {
+    try {
+      await generateMaintenanceInvoices(supabase, buildingId, month);
+    } catch (err) {
+      console.error("[maintenance] auto-generate invoices failed:", err);
+    }
+    const { data: regenerated } = await supabase
+      .from("bms_invoices")
+      .select("id, invoice_number, flat_id, billing_month, amount, due_date, status")
+      .eq("building_id", buildingId)
+      .neq("status", "waived")
+      .gte("billing_month", monthStart)
+      .lt("billing_month", monthEnd)
+      .order("flat_id", { ascending: true });
+    invRows = regenerated ?? invRows;
+  }
+
   if (invRows.length === 0) {
     return {
       noBuilding: false as const,
