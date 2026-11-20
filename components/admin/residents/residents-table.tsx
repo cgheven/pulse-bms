@@ -13,10 +13,30 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { Plus, Search, Star, KeyRound, UserX, Pencil, Trash2 } from "lucide-react";
-import { cn, formatDate, formatPhone, formatCNIC } from "@/lib/utils";
+import {
+  Plus,
+  Search,
+  Star,
+  KeyRound,
+  UserX,
+  Pencil,
+  Trash2,
+  Download,
+  FileSpreadsheet,
+  FileText,
+} from "lucide-react";
+import { cn, capitalize, formatDate, formatPhone, formatCNIC } from "@/lib/utils";
+import type { ReportColumn } from "@/lib/reports/types";
+import { downloadReportXlsx } from "@/lib/reports/xlsx-export";
+import { downloadReportPdf } from "@/lib/reports/pdf-export";
 import {
   ResidentFormDialog,
   type FlatOption,
@@ -40,6 +60,19 @@ export type ResidentRow = {
   entry_fee_paid: number;
   profile_id: string | null;
 };
+
+// Column set shared by the Excel and PDF exporters so both stay identical to
+// what's on screen.
+const EXPORT_COLUMNS: ReportColumn<ResidentRow>[] = [
+  { id: "name", label: "Name", defaultOn: true, accessor: (r) => r.full_name, widthMm: 45 },
+  { id: "flat", label: "Flat", defaultOn: true, accessor: (r) => r.flat_number, widthMm: 20 },
+  { id: "role", label: "Role", defaultOn: true, accessor: (r) => capitalize(r.relationship), widthMm: 22 },
+  { id: "phone", label: "Phone", defaultOn: true, accessor: (r) => (r.phone ? formatPhone(r.phone) : ""), widthMm: 40 },
+  { id: "email", label: "Email", defaultOn: true, accessor: (r) => r.email ?? "", widthMm: 50 },
+  { id: "cnic", label: "CNIC", defaultOn: true, accessor: (r) => (r.cnic ? formatCNIC(r.cnic) : ""), widthMm: 42 },
+  { id: "movein", label: "Move-in", defaultOn: true, accessor: (r) => (r.move_in_date ? formatDate(r.move_in_date) : ""), widthMm: 28 },
+  { id: "status", label: "Status", defaultOn: true, accessor: (r) => (r.is_active ? "Active" : "Inactive"), widthMm: 24 },
+];
 
 export function ResidentsTable({
   residents,
@@ -110,6 +143,56 @@ export function ResidentsTable({
     setQ("");
     setFlatFilter("all");
     setRoleFilter("all");
+  };
+
+  // Exports always reflect the filtered view on screen, not the full table.
+  const exportFilename = `residents-${new Date().toISOString().slice(0, 10)}`;
+  const activeFiltersLine = () => {
+    const parts: string[] = [];
+    if (flatFilter !== "all") parts.push(`Flat: ${flatFilter}`);
+    if (roleFilter !== "all") parts.push(`Role: ${capitalize(roleFilter)}`);
+    if (q.trim()) parts.push(`Search: "${q.trim()}"`);
+    return parts.length ? parts.join("  ·  ") : undefined;
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      await downloadReportXlsx({
+        filename: exportFilename,
+        sheetName: "Residents",
+        columns: EXPORT_COLUMNS,
+        rows: filtered,
+      });
+    } catch (err) {
+      toast({
+        title: "Could not export to Excel",
+        description: friendlyErrorMessage(err),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      await downloadReportPdf({
+        meta: {
+          title: "Residents",
+          buildingName,
+          period: `As of ${formatDate(new Date())}`,
+          filtersLine: activeFiltersLine(),
+          filename: exportFilename,
+        },
+        columns: EXPORT_COLUMNS,
+        rows: filtered,
+        totalsRow: false,
+      });
+    } catch (err) {
+      toast({
+        title: "Could not export to PDF",
+        description: friendlyErrorMessage(err),
+        variant: "destructive",
+      });
+    }
   };
 
   function handleDelete() {
@@ -207,13 +290,38 @@ export function ResidentsTable({
           )}
         </div>
 
-        <Button
-          className="btn-big shrink-0 lg:ml-1"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus className="w-5 h-5" />
-          Add Resident
-        </Button>
+        <div className="flex items-center gap-2 lg:ml-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-10 flex-1 gap-2 lg:flex-none"
+                disabled={filtered.length === 0}
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={handleExportExcel} className="gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-[hsl(151_70%_55%)]" />
+                Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPdf} className="gap-2">
+                <FileText className="w-4 h-4 text-destructive" />
+                PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            className="btn-big flex-1 shrink-0 lg:flex-none"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="w-5 h-5" />
+            Add Resident
+          </Button>
+        </div>
         <ResidentFormDialog
           open={addOpen}
           onOpenChange={setAddOpen}
