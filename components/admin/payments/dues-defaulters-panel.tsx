@@ -10,9 +10,17 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
+  Phone,
+  MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectTrigger,
@@ -22,7 +30,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { cn, formatCurrency, formatDate, formatMonthLabel } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, formatMonthLabel, formatPhone } from "@/lib/utils";
 import { toIntlNoPlus } from "@/lib/phone";
 import type { ReportColumn } from "@/lib/reports/types";
 import { downloadReportXlsx } from "@/lib/reports/xlsx-export";
@@ -286,10 +294,10 @@ export function DuesDefaultersPanel({
             <thead>
               <tr className="text-left border-b border-border text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 sm:px-2 py-2">Flat</th>
+                <th className="px-4 sm:px-2 py-2">Resident</th>
+                <th className="px-4 sm:px-2 py-2">Phone</th>
                 <th className="px-4 sm:px-2 py-2 text-right">Total</th>
                 <th className="px-4 sm:px-2 py-2 text-right hidden sm:table-cell">Received</th>
-                <th className="px-4 sm:px-2 py-2 text-right">Still due</th>
-                <th className="px-4 sm:px-2 py-2">Status</th>
                 <th className="px-4 sm:px-2 py-2 text-right">Actions</th>
               </tr>
             </thead>
@@ -404,23 +412,6 @@ function FilterChip({
   );
 }
 
-function StatusBadge({ row }: { row: DefaulterRow }) {
-  const s = statusOf(row);
-  if (s === "paid") {
-    return <span className="status-paid inline-flex px-2 py-0.5 rounded-full text-xs font-medium">Paid</span>;
-  }
-  if (s === "partial") {
-    return <span className="status-info inline-flex px-2 py-0.5 rounded-full text-xs font-medium">Partial</span>;
-  }
-  return row.days_late > 0 ? (
-    <span className="status-overdue inline-flex px-2 py-0.5 rounded-full text-xs font-medium">
-      {row.days_late}d late
-    </span>
-  ) : (
-    <span className="status-pending inline-flex px-2 py-0.5 rounded-full text-xs font-medium">Pending</span>
-  );
-}
-
 function DefaulterRowCard({
   row,
   buildingName,
@@ -461,27 +452,31 @@ function DefaulterRowCard({
 
   return (
     <tr className="border-b border-border last:border-0 hover:bg-secondary/40">
+      <td className="px-4 sm:px-2 py-2.5 align-top font-semibold whitespace-nowrap">
+        {row.flat_number}
+      </td>
       <td className="px-4 sm:px-2 py-2.5 align-top">
-        <div className="font-semibold">{row.flat_number}</div>
-        <div className="text-xs text-muted-foreground">
-          {row.resident_name ?? "No resident"}
-        </div>
+        {row.resident_name ?? <span className="text-muted-foreground">No resident</span>}
+      </td>
+      <td className="px-4 sm:px-2 py-2.5 align-top whitespace-nowrap">
+        {row.resident_phone ? (
+          <a
+            href={`tel:${row.resident_phone.replace(/[^\d+]/g, "")}`}
+            className="inline-flex items-center gap-1.5 text-primary hover:underline tabular-nums"
+            title={`Call ${row.resident_name ?? "resident"}`}
+          >
+            <Phone className="h-3 w-3 shrink-0" />
+            {formatPhone(row.resident_phone)}
+          </a>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
       </td>
       <td className="px-4 sm:px-2 py-2.5 align-top text-right tabular-nums">
         {formatCurrency(row.amount_total)}
       </td>
       <td className="px-4 sm:px-2 py-2.5 align-top text-right tabular-nums hidden sm:table-cell text-muted-foreground">
         {row.amount_paid > 0 ? formatCurrency(row.amount_paid) : "—"}
-      </td>
-      <td className="px-4 sm:px-2 py-2.5 align-top text-right tabular-nums">
-        {hasDue ? (
-          <span className="font-semibold text-destructive">{formatCurrency(row.amount_due)}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </td>
-      <td className="px-4 sm:px-2 py-2.5 align-top">
-        <StatusBadge row={row} />
       </td>
       <td className="px-4 sm:px-2 py-2.5 align-top">
         <div className="flex flex-col sm:flex-row gap-1.5 justify-end">
@@ -529,6 +524,30 @@ function DefaulterRowCard({
               Pay
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-foreground"
+                title="More"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem asChild className="gap-2">
+                <a
+                  href={`/admin/invoices/${row.invoice_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FileText className="h-4 w-4" />
+                  Preview Invoice
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </td>
     </tr>
