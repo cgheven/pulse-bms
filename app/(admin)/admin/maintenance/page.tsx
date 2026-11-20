@@ -38,7 +38,7 @@ export const dynamic = "force-dynamic";
 export default function MaintenancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; duesMonth?: string }>;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const ym = today.slice(0, 7);
@@ -260,10 +260,11 @@ function nextMonthFirstDay(ym: string): string {
 async function TabsAndContent({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; duesMonth?: string }>;
 }) {
   const sp = await searchParams;
   const tab = normalizeTab(sp.tab);
+  const duesMonth = sp.duesMonth;
 
   // Render all three tab bodies on initial load — Suspense streams them in
   // parallel. The client `MaintenanceTabPanels` toggles visibility via CSS so
@@ -273,7 +274,7 @@ async function TabsAndContent({
       initialTab={tab}
       dues={
         <Suspense fallback={<TableSkeleton rows={6} />}>
-          <DuesTab />
+          <DuesTab duesMonth={duesMonth} />
         </Suspense>
       }
       payments={
@@ -297,8 +298,8 @@ function normalizeTab(raw: string | undefined): MaintenanceTab {
 
 // --- Tab 1: Dues ------------------------------------------------------------
 
-async function DuesTab() {
-  const data = await loadDefaultersData();
+async function DuesTab({ duesMonth }: { duesMonth?: string }) {
+  const data = await loadDefaultersData(duesMonth);
   if (data.noBuilding) {
     return (
       <div className="card-soft">
@@ -312,32 +313,64 @@ async function DuesTab() {
       buildingName={data.buildingName}
       buildingId={data.buildingId}
       flatPickerOptions={data.flatPickerOptions}
+      month={data.month}
+      availableMonths={data.availableMonths}
     />
   );
 }
 
-async function loadDefaultersData() {
+const DUES_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+async function loadDefaultersData(duesMonth?: string) {
   const { profile } = await requireRole(["admin", "super_admin"]);
+  void profile;
   const buildingId = await getActiveBuilding();
   if (!buildingId) return { noBuilding: true as const };
   const supabase = await createClient();
 
-  const { data: invoices } = await supabase
-    .from("bms_invoices")
-    .select("id, invoice_number, flat_id, billing_month, amount, due_date, status")
-    .eq("building_id", buildingId)
-    .neq("status", "paid")
-    .neq("status", "waived")
-    .order("billing_month", { ascending: true });
+  const currentYm = new Date().toISOString().slice(0, 7);
+  // Scope to one month, so the query is bounded by the flat count no matter
+  // how much history the building has (avoids PostgREST's 1000-row cap).
+  const month = duesMonth && DUES_MONTH_RE.test(duesMonth) ? duesMonth : currentYm;
+  const monthStart = `${month}-01`;
+  const monthEnd = nextMonthFirstDay(month);
+
+  // Building name + the earliest invoice month (for the month selector) load
+  // regardless of whether the chosen month has invoices.
+  const [{ data: building }, { data: earliestInv }, { data: invoices }] =
+    await Promise.all([
+      supabase.from("bms_buildings").select("name").eq("id", buildingId).single(),
+      supabase
+        .from("bms_invoices")
+        .select("billing_month")
+        .eq("building_id", buildingId)
+        .neq("status", "waived")
+        .order("billing_month", { ascending: true })
+        .limit(1),
+      supabase
+        .from("bms_invoices")
+        .select("id, invoice_number, flat_id, billing_month, amount, due_date, status")
+        .eq("building_id", buildingId)
+        .neq("status", "waived")
+        .gte("billing_month", monthStart)
+        .lt("billing_month", monthEnd)
+        .order("flat_id", { ascending: true }),
+    ]);
+
+  const buildingName = building?.name ?? "Building";
+  const earliestYm = earliestInv?.[0]?.billing_month?.slice(0, 7) ?? currentYm;
+  const availableMonths = monthListDesc(earliestYm, currentYm, month);
 
   const invRows = invoices ?? [];
   if (invRows.length === 0) {
     return {
       noBuilding: false as const,
       rows: [] as DefaulterRow[],
-      buildingName: "",
+      buildingName,
       buildingId,
       flatPickerOptions: [] as { id: string; flat_number: string; outstanding_dues: number }[],
+      month,
+      availableMonths,
     };
   }
 
@@ -345,8 +378,8 @@ async function loadDefaultersData() {
   const flatIds = Array.from(new Set(invRows.map((i) => i.flat_id)));
 
   // Payments lookup chunked (see sumPaymentsByInvoice); other lookups
-  // parallelized as before.
-  const [paidByInvoice, { data: flats }, { data: primaries }, { data: building }] =
+  // parallelized as before. Building name was already loaded above.
+  const [paidByInvoice, { data: flats }, { data: primaries }] =
     await Promise.all([
       sumPaymentsByInvoice(supabase, buildingId, invIds),
       supabase
@@ -361,11 +394,6 @@ async function loadDefaultersData() {
         .eq("is_active", true)
         .eq("is_primary", true)
         .in("flat_id", flatIds),
-      supabase
-        .from("bms_buildings")
-        .select("name")
-        .eq("id", buildingId)
-        .single(),
     ]);
 
   const flatMap = new Map((flats ?? []).map((f) => [f.id, f.flat_number]));
@@ -405,23 +433,41 @@ async function loadDefaultersData() {
         days_late: daysLate,
       };
     })
-    .filter((r) => r.amount_due > 0)
+    // All statuses now — unpaid and partial first (actionable), paid last;
+    // within a group, biggest balance first, then flat number.
     .sort((a, b) => {
-      if (b.days_late !== a.days_late) return b.days_late - a.days_late;
-      return b.amount_due - a.amount_due;
+      const ao = a.amount_due <= 0 ? 1 : 0;
+      const bo = b.amount_due <= 0 ? 1 : 0;
+      if (ao !== bo) return ao - bo;
+      if (b.amount_due !== a.amount_due) return b.amount_due - a.amount_due;
+      return a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true });
     });
 
   return {
     noBuilding: false as const,
     rows,
-    buildingName: building?.name ?? "Building",
+    buildingName,
     buildingId,
     flatPickerOptions: (flats ?? []).map((f) => ({
       id: f.id,
       flat_number: f.flat_number,
       outstanding_dues: Number(f.outstanding_dues ?? 0),
     })),
+    month,
+    availableMonths,
   };
+}
+
+/** Month list from `earliest` to `current`, newest first, always including the
+ *  currently-selected month. Capped so an odd imported date can't blow it up. */
+function monthListDesc(earliestYm: string, currentYm: string, selected: string): string[] {
+  const set = new Set<string>([currentYm, selected]);
+  let cursor = earliestYm <= currentYm ? earliestYm : currentYm;
+  for (let i = 0; i < 60 && cursor <= currentYm; i++) {
+    set.add(cursor);
+    cursor = nextMonthFirstDay(cursor).slice(0, 7);
+  }
+  return Array.from(set).sort().reverse();
 }
 
 // --- Tab 2: Payments --------------------------------------------------------

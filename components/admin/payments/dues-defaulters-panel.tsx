@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MessageCircle, Receipt, AlertCircle } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { MessageCircle, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,7 +12,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { formatCurrency, formatDate, formatMonthLabel } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, formatMonthLabel } from "@/lib/utils";
 import { toIntlNoPlus } from "@/lib/phone";
 import {
   RecordPaymentDialog,
@@ -34,150 +35,137 @@ export type DefaulterRow = {
   days_late: number;
 };
 
-type Filter = "not_paid" | "overdue" | "all";
+type PayStatus = "paid" | "partial" | "unpaid";
+type Filter = "all" | PayStatus;
+
+/** The single source of truth for a row's payment state. */
+function statusOf(d: DefaulterRow): PayStatus {
+  if (d.amount_due <= 0) return "paid";
+  if (d.amount_paid > 0) return "partial";
+  return "unpaid";
+}
 
 export function DuesDefaultersPanel({
   defaulters,
   buildingName,
   buildingId,
   flatPickerOptions = [],
+  month,
+  availableMonths,
 }: {
   defaulters: DefaulterRow[];
   buildingName: string;
   buildingId?: string;
   flatPickerOptions?: FlatPickerOption[];
+  /** Scoped month, "YYYY-MM". Omit for the all-months (legacy) view. */
+  month?: string;
+  /** Months (newest first) the selector offers. Omit to hide the selector. */
+  availableMonths?: string[];
 }) {
-  const [filter, setFilter] = useState<Filter>("not_paid");
-  const [month, setMonth] = useState<string>("all");
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [recordRow, setRecordRow] = useState<DefaulterRow | null>(null);
 
-  // Months that actually carry dues, newest first — no empty options.
-  const months = useMemo(() => {
-    const s = new Set<string>();
-    for (const d of defaulters) s.add(d.billing_month.slice(0, 7));
-    return Array.from(s).sort().reverse();
+  const counts = useMemo(() => {
+    const c = { all: defaulters.length, paid: 0, unpaid: 0, partial: 0 };
+    for (const d of defaulters) c[statusOf(d)] += 1;
+    return c;
   }, [defaulters]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return defaulters.filter((d) => {
-      if (filter === "overdue" && d.days_late <= 0) return false;
-      if (filter === "not_paid" && d.amount_due <= 0) return false;
-      if (month !== "all" && d.billing_month.slice(0, 7) !== month) return false;
+      if (filter !== "all" && statusOf(d) !== filter) return false;
       if (!q) return true;
       return (
         d.flat_number.toLowerCase().includes(q) ||
         (d.resident_name ?? "").toLowerCase().includes(q)
       );
     });
-  }, [defaulters, filter, month, query]);
+  }, [defaulters, filter, query]);
 
-  const totalDue = filtered.reduce((s, d) => s + d.amount_due, 0);
+  const totalDue = filtered.reduce((s, d) => s + Math.max(0, d.amount_due), 0);
 
-  if (defaulters.length === 0) {
-    return (
-      <div className="card-soft">
-        <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-full bg-[hsl(151_70%_28%/0.1)] flex items-center justify-center shrink-0">
-            <Receipt className="h-5 w-5 text-[hsl(151_70%_28%)]" />
-          </div>
-          <div>
-            <h3 className="font-semibold">All clear — no dues this month</h3>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Every flat with an invoice has paid in full.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const changeMonth = (m: string) => {
+    startTransition(() => {
+      router.push(`/admin/maintenance?tab=dues&duesMonth=${m}`, { scroll: false });
+    });
+  };
 
   return (
-    <div className="card-soft space-y-4">
+    <div className="card-soft space-y-4" aria-busy={isPending}>
+      {/* Header: month + headline numbers, with the month navigator */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
-            <AlertCircle className="h-5 w-5 text-destructive" />
-          </div>
-          <div>
-            <h3 className="font-semibold">
-              {month === "all"
-                ? "Maintenance dues — not paid"
-                : `Maintenance dues — ${formatMonthLabel(month)}`}
-            </h3>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {filtered.length} {filtered.length === 1 ? "invoice" : "invoices"}{" "}
-              • {formatCurrency(totalDue)} still due
-            </p>
-          </div>
+        <div>
+          <h3 className="font-semibold">
+            {month ? `Maintenance — ${formatMonthLabel(month)}` : "Maintenance dues"}
+          </h3>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {counts.all} {counts.all === 1 ? "invoice" : "invoices"}
+            {totalDue > 0 && <> · {formatCurrency(totalDue)} still due</>}
+          </p>
         </div>
+        {month && availableMonths && availableMonths.length > 0 && (
+          <Select value={month} onValueChange={changeMonth}>
+            <SelectTrigger className="h-9 w-full sm:w-44 shrink-0" aria-label="Month">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {availableMonths.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {formatMonthLabel(m)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
+      {/* Status filters with live counts + search */}
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-        <div className="inline-flex gap-1 rounded-md bg-muted p-1 shrink-0">
-          <FilterChip
-            active={filter === "not_paid"}
-            onClick={() => setFilter("not_paid")}
-          >
-            Not paid
-          </FilterChip>
-          <FilterChip
-            active={filter === "overdue"}
-            onClick={() => setFilter("overdue")}
-          >
-            Overdue only
-          </FilterChip>
-          <FilterChip
-            active={filter === "all"}
-            onClick={() => setFilter("all")}
-          >
+        <div className="inline-flex flex-wrap gap-1 rounded-md bg-muted p-1">
+          <FilterChip active={filter === "all"} onClick={() => setFilter("all")} count={counts.all}>
             All
           </FilterChip>
+          <FilterChip active={filter === "paid"} onClick={() => setFilter("paid")} count={counts.paid} tone="paid">
+            Paid
+          </FilterChip>
+          <FilterChip active={filter === "unpaid"} onClick={() => setFilter("unpaid")} count={counts.unpaid} tone="unpaid">
+            Unpaid
+          </FilterChip>
+          <FilterChip active={filter === "partial"} onClick={() => setFilter("partial")} count={counts.partial} tone="partial">
+            Partial
+          </FilterChip>
         </div>
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="shrink-0 sm:w-48">
-            <SelectValue placeholder="Month" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All months</SelectItem>
-            {months.map((m) => (
-              <SelectItem key={m} value={m}>
-                {formatMonthLabel(m)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Input
           placeholder="Search by flat or resident"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="sm:max-w-xs"
+          className="h-9 sm:max-w-xs sm:ml-auto"
         />
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-2">
+      {defaulters.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          No invoices for {month ? formatMonthLabel(month) : "this period"}.
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
           No flats match this filter.
         </p>
       ) : (
         <div className="overflow-x-auto -mx-4 sm:mx-0">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left border-b border-border">
-                <th className="px-4 sm:px-2 py-2 font-medium">Flat</th>
-                <th className="px-4 sm:px-2 py-2 font-medium hidden md:table-cell">
-                  Month
-                </th>
-                <th className="px-4 sm:px-2 py-2 font-medium text-right">
-                  Still due
-                </th>
-                <th className="px-4 sm:px-2 py-2 font-medium hidden sm:table-cell">
-                  Status
-                </th>
-                <th className="px-4 sm:px-2 py-2 font-medium text-right">
-                  Actions
-                </th>
+              <tr className="text-left border-b border-border text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 sm:px-2 py-2">Flat</th>
+                <th className="px-4 sm:px-2 py-2 text-right">Total</th>
+                <th className="px-4 sm:px-2 py-2 text-right hidden sm:table-cell">Received</th>
+                <th className="px-4 sm:px-2 py-2 text-right">Still due</th>
+                <th className="px-4 sm:px-2 py-2">Status</th>
+                <th className="px-4 sm:px-2 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -186,7 +174,7 @@ export function DuesDefaultersPanel({
                   key={d.invoice_id}
                   row={d}
                   buildingName={buildingName}
-                  onRecord={buildingId ? () => setRecordRow(d) : undefined}
+                  onRecord={buildingId && d.amount_due > 0 ? () => setRecordRow(d) : undefined}
                 />
               ))}
             </tbody>
@@ -220,24 +208,56 @@ export function DuesDefaultersPanel({
 function FilterChip({
   active,
   onClick,
+  count,
+  tone,
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  count: number;
+  tone?: PayStatus;
   children: React.ReactNode;
 }) {
+  const countTone = active
+    ? "bg-background/20"
+    : tone === "paid"
+      ? "bg-[hsl(151_70%_55%/0.15)] text-[hsl(151_70%_55%)]"
+      : tone === "partial"
+        ? "bg-info/15 text-info"
+        : tone === "unpaid"
+          ? "bg-destructive/15 text-destructive"
+          : "bg-background/60 text-muted-foreground";
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1.5 rounded text-sm font-medium transition ${
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition",
+        active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+      )}
     >
       {children}
+      <span className={cn("inline-flex min-w-[1.25rem] justify-center rounded px-1 text-[11px] tabular-nums", countTone)}>
+        {count}
+      </span>
     </button>
+  );
+}
+
+function StatusBadge({ row }: { row: DefaulterRow }) {
+  const s = statusOf(row);
+  if (s === "paid") {
+    return <span className="status-paid inline-flex px-2 py-0.5 rounded-full text-xs font-medium">Paid</span>;
+  }
+  if (s === "partial") {
+    return <span className="status-info inline-flex px-2 py-0.5 rounded-full text-xs font-medium">Partial</span>;
+  }
+  return row.days_late > 0 ? (
+    <span className="status-overdue inline-flex px-2 py-0.5 rounded-full text-xs font-medium">
+      {row.days_late}d late
+    </span>
+  ) : (
+    <span className="status-pending inline-flex px-2 py-0.5 rounded-full text-xs font-medium">Pending</span>
   );
 }
 
@@ -277,66 +297,55 @@ function DefaulterRowCard({
     ? `https://wa.me/${intl}?text=${encodeURIComponent(waText)}`
     : `https://wa.me/?text=${encodeURIComponent(waText)}`;
 
+  const hasDue = row.amount_due > 0;
+
   return (
-    <tr className="border-b border-border last:border-0">
-      <td className="px-4 sm:px-2 py-3 align-top">
+    <tr className="border-b border-border last:border-0 hover:bg-secondary/40">
+      <td className="px-4 sm:px-2 py-2.5 align-top">
         <div className="font-semibold">{row.flat_number}</div>
         <div className="text-xs text-muted-foreground">
           {row.resident_name ?? "No resident"}
         </div>
-        <div className="md:hidden text-xs text-muted-foreground mt-0.5">
-          {monthLabel}
-        </div>
       </td>
-      <td className="px-4 sm:px-2 py-3 align-top hidden md:table-cell">
-        <div>{monthLabel}</div>
-        {row.due_date && (
-          <div className="text-xs text-muted-foreground">
-            Due {formatDate(row.due_date)}
-          </div>
-        )}
+      <td className="px-4 sm:px-2 py-2.5 align-top text-right tabular-nums">
+        {formatCurrency(row.amount_total)}
       </td>
-      <td className="px-4 sm:px-2 py-3 align-top text-right">
-        <div className="font-bold text-destructive">
-          {formatCurrency(row.amount_due)}
-        </div>
-        {row.amount_paid > 0 && (
-          <div className="text-xs text-muted-foreground">
-            Paid {formatCurrency(row.amount_paid)} of {formatCurrency(row.amount_total)}
-          </div>
-        )}
+      <td className="px-4 sm:px-2 py-2.5 align-top text-right tabular-nums hidden sm:table-cell text-muted-foreground">
+        {row.amount_paid > 0 ? formatCurrency(row.amount_paid) : "—"}
       </td>
-      <td className="px-4 sm:px-2 py-3 align-top hidden sm:table-cell">
-        {row.days_late > 0 ? (
-          <span className="text-xs font-medium text-destructive">
-            {row.days_late} {row.days_late === 1 ? "day" : "days"} late
-          </span>
+      <td className="px-4 sm:px-2 py-2.5 align-top text-right tabular-nums">
+        {hasDue ? (
+          <span className="font-semibold text-destructive">{formatCurrency(row.amount_due)}</span>
         ) : (
-          <span className="text-xs text-muted-foreground">Within due date</span>
+          <span className="text-muted-foreground">—</span>
         )}
       </td>
-      <td className="px-4 sm:px-2 py-3 align-top">
+      <td className="px-4 sm:px-2 py-2.5 align-top">
+        <StatusBadge row={row} />
+      </td>
+      <td className="px-4 sm:px-2 py-2.5 align-top">
         <div className="flex flex-col sm:flex-row gap-1.5 justify-end">
-          {intl ? (
-            <a
-              href={waHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[hsl(151_70%_28%)] hover:bg-[hsl(151_70%_24%)] transition"
-              title={`Send reminder to ${row.resident_name ?? "resident"}`}
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-              WhatsApp
-            </a>
-          ) : (
-            <span
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground bg-muted"
-              title="No phone number on file"
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-              No phone
-            </span>
-          )}
+          {hasDue &&
+            (intl ? (
+              <a
+                href={waHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[hsl(151_70%_38%)] hover:bg-[hsl(151_70%_32%)] transition"
+                title={`Send reminder to ${row.resident_name ?? "resident"}`}
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                WhatsApp
+              </a>
+            ) : (
+              <span
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground bg-muted"
+                title="No phone number on file"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                No phone
+              </span>
+            ))}
           {onRecord && (
             <Button variant="outline" size="sm" onClick={onRecord}>
               <Receipt className="h-3.5 w-3.5" />
