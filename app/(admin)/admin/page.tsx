@@ -321,13 +321,13 @@ async function ActionCenter({
           {actions.map((a, i) => {
             const ring =
               a.tone === "danger"
-                ? "border-l-destructive"
+                ? "border-l-[hsl(350_80%_68%)]"
                 : a.tone === "warning"
                   ? "border-l-primary"
                   : "border-l-[hsl(210_90%_60%)]";
             const iconColor =
               a.tone === "danger"
-                ? "text-destructive"
+                ? "text-[hsl(350_80%_68%)]"
                 : a.tone === "warning"
                   ? "text-primary"
                   : "text-[hsl(210_90%_70%)]";
@@ -766,7 +766,7 @@ async function StatusTiles({
     <div className="grid grid-cols-2 gap-3">
       <StatCard
         icon={ShieldAlert}
-        tone={defaulterFlats.length === 0 ? "success" : "danger"}
+        tone={defaulterFlats.length === 0 ? "success" : "warning"}
         label={`Defaulters · ${cutoff}+ months`}
         value={
           defaulterFlats.length === 0
@@ -934,7 +934,7 @@ async function ActivityFeed({
     items.push({
       ts: e.created_at,
       icon: <Receipt className="w-3.5 h-3.5" />,
-      iconColor: "text-destructive bg-destructive/10",
+      iconColor: "text-[hsl(350_80%_68%)] bg-[hsl(350_80%_68%/0.1)]",
       title: (
         <>
           <span className="text-foreground font-medium">{e.description}</span>
@@ -953,7 +953,7 @@ async function ActivityFeed({
     items.push({
       ts: s.created_at,
       icon: <Wallet className="w-3.5 h-3.5" />,
-      iconColor: "text-destructive bg-destructive/10",
+      iconColor: "text-[hsl(350_80%_68%)] bg-[hsl(350_80%_68%/0.1)]",
       title: (
         <>
           Salary paid ·{" "}
@@ -983,7 +983,7 @@ async function ActivityFeed({
       iconColor: resolved
         ? "text-[hsl(151_70%_55%)] bg-[hsl(151_70%_55%/0.1)]"
         : c.priority === "urgent" || c.priority === "high"
-          ? "text-destructive bg-destructive/10"
+          ? "text-[hsl(350_80%_68%)] bg-[hsl(350_80%_68%/0.1)]"
           : "text-[hsl(210_90%_70%)] bg-[hsl(210_90%_60%/0.1)]",
       title: (
         <>
@@ -1122,7 +1122,7 @@ async function ActivityFeed({
                             "text-xs font-medium tabular-nums shrink-0",
                             it.amountSign === "+"
                               ? "text-[hsl(151_70%_55%)]"
-                              : "text-destructive",
+                              : "text-[hsl(350_80%_68%)]",
                           )}
                         >
                           {it.amountSign}

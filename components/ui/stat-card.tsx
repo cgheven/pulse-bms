@@ -39,10 +39,14 @@ const TONE: Record<StatTone, { value: string; chip: string; hover: string }> = {
     chip: "bg-[hsl(151_70%_55%)]/12 text-[hsl(151_70%_55%)]",
     hover: "hover:border-[hsl(151_70%_55%/0.45)]",
   },
+  // Refined rose — money-out / risk on a KPI tile. Deliberately softer and
+  // lighter than --destructive (which stays loud for delete/error actions):
+  // a saturated maroon red on the dark navy reads as an alarm and cheapens
+  // the dashboard. This muted coral-rose matches the HMS card palette.
   danger: {
-    value: "text-destructive",
-    chip: "bg-destructive/15 text-destructive",
-    hover: "hover:border-destructive/45",
+    value: "text-[hsl(350_80%_68%)]",
+    chip: "bg-[hsl(350_80%_68%)]/12 text-[hsl(350_80%_68%)]",
+    hover: "hover:border-[hsl(350_80%_68%/0.45)]",
   },
   warning: {
     value: "text-primary",
