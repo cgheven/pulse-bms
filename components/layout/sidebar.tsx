@@ -41,6 +41,7 @@ import {
   Landmark,
   IdCard,
   ArrowUpDown,
+  Rocket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
@@ -241,6 +242,8 @@ interface NavLinkProps {
   pathname: string;
   onClose: () => void;
   isHome: boolean;
+  /** Amber-tinted pinned link (e.g. Quick Setup) that stands apart from the nav groups. */
+  highlight?: boolean;
 }
 
 const NavLink = memo(function NavLink({
@@ -250,9 +253,29 @@ const NavLink = memo(function NavLink({
   pathname,
   onClose,
   isHome,
+  highlight,
 }: NavLinkProps) {
   // Home/dashboard routes only match exactly; nested routes match by prefix.
   const active = isHome ? pathname === href : pathname === href || pathname.startsWith(href + "/");
+
+  if (highlight) {
+    return (
+      <Link
+        href={href}
+        onClick={onClose}
+        prefetch={true}
+        className={cn(
+          "relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-150 group border",
+          active
+            ? "bg-primary/15 border-primary/40 text-primary"
+            : "bg-primary/10 border-primary/20 text-primary hover:bg-primary/15 hover:border-primary/35",
+        )}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        <span>{label}</span>
+      </Link>
+    );
+  }
 
   return (
     <Link
@@ -344,6 +367,19 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto overscroll-contain py-3 px-2.5 space-y-3">
+          {/* Quick Setup — a pinned shortcut to the guided checklist so new
+              admins never have to hunt through the app to get running. */}
+          {role === "admin" && (
+            <NavLink
+              href="/admin/setup"
+              label="Quick Setup"
+              icon={Rocket}
+              highlight
+              pathname={pathname}
+              onClose={onClose}
+              isHome={false}
+            />
+          )}
           {groups.map((group) => (
             <div key={group.label}>
               <p className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest px-3 mb-1 mt-1">

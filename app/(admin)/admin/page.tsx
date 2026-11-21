@@ -14,6 +14,8 @@ import {
 import { StatCard } from "@/components/ui/stat-card";
 import { getCashTotals, cashBalanceFrom } from "@/lib/finance-totals";
 import { KpiRowSkeleton, TableSkeleton } from "@/components/layout/table-skeleton";
+import { getSetupStatus } from "@/app/actions/setup";
+import { SetupBannerCard } from "@/components/admin/setup/setup-banner-card";
 import {
   ArrowRight,
   AlertTriangle,
@@ -96,6 +98,12 @@ export default async function AdminDashboardPage() {
           Sunrise · {monthLabel} · Today is {todayLabel}
         </p>
       </header>
+
+      {/* Streams in its own boundary so the setup check never blocks the
+          financial cards; renders nothing once setup is complete. */}
+      <Suspense fallback={null}>
+        <SetupBanner />
+      </Suspense>
 
       <Suspense fallback={<FinancialCardsSkeleton />}>
         <FinancialCards
@@ -386,6 +394,21 @@ function ActionCenterSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ═══════════════  Quick Setup banner  ═══════════════ */
+
+// Shown until every required setup step is done. Streamed in its own Suspense
+// boundary so the status counts never delay the financial cards.
+async function SetupBanner() {
+  const status = await getSetupStatus();
+  if (status.setupComplete) return null;
+  return (
+    <SetupBannerCard
+      requiredDone={status.requiredDone}
+      requiredTotal={status.requiredTotal}
+    />
   );
 }
 
