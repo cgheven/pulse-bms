@@ -36,12 +36,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   trials: "Buildings",
 };
 
-/** True for a role's top-level/home route (e.g. "/admin"), where the building
- *  switcher alone heads the bar. */
-function isHomeRoute(pathname: string): boolean {
-  return pathname.split("/").filter(Boolean).length <= 1;
-}
-
 function deriveTitle(pathname: string, role: Role): string {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length <= 1) {
@@ -66,10 +60,9 @@ export function AppShell({ role, navbarUser, demoBanner, trialBanner, navbarBuil
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const title = deriveTitle(pathname, role);
-  const home = isHomeRoute(pathname);
-  // With a building switcher present, the page title becomes a breadcrumb that
-  // only shows on inner pages. Without one, the title heads the bar as before.
-  const showTitle = !navbarBuilding || !home;
+  // The building switcher heads the bar when present (admin) — no page-title
+  // breadcrumb, the bar stays clean. Other roles fall back to the page title.
+  const showTitle = !navbarBuilding;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -90,15 +83,10 @@ export function AppShell({ role, navbarUser, demoBanner, trialBanner, navbarBuil
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Left: building switcher (HMS-style), then the page title as a
-              breadcrumb on inner pages. Title alone when there's no switcher. */}
+          {/* Left: building switcher (HMS-style) heads the bar; other roles
+              fall back to the page title. No breadcrumb — keeps it clean. */}
           <div className="flex items-center gap-2.5 min-w-0">
             {navbarBuilding}
-            {navbarBuilding && showTitle && (
-              <span className="text-muted-foreground/40 shrink-0" aria-hidden>
-                /
-              </span>
-            )}
             {showTitle && (
               <p className="font-semibold text-base text-foreground leading-none truncate">
                 {title}
@@ -157,10 +145,6 @@ export function NavbarUserClient({
           {buildingName}
         </span>
       )}
-
-      <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 border border-primary/20">
-        {ROLE_LABELS[profile.role]}
-      </span>
 
       <div className="relative">
         <button

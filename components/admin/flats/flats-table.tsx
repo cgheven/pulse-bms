@@ -290,7 +290,7 @@ export function FlatsTable({
                 <div className="mt-3 flex items-end justify-between gap-2 border-t border-border/60 pt-2.5">
                   <div className="flex gap-4 text-xs">
                     <div>
-                      <p className="text-muted-foreground">Monthly fee</p>
+                      <p className="text-muted-foreground">Maintenance</p>
                       <p className="mt-0.5 tabular-nums">
                         {formatCurrency(fee)}
                         {f.monthly_fee == null && (
@@ -348,7 +348,7 @@ export function FlatsTable({
                   Status
                 </th>
                 <th className="px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Monthly fee
+                  Maintenance
                 </th>
                 <th className="px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                   Outstanding

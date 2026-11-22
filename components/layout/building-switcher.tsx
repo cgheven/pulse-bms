@@ -25,11 +25,11 @@ export function BuildingSwitcher({
   // Single building — the building name with its icon chip, no dropdown.
   if (buildings.length <= 1) {
     return (
-      <div className="inline-flex items-center gap-2.5 min-w-0">
-        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
-          <Building2 className="w-4 h-4 text-primary" />
+      <div className="inline-flex items-center gap-2 sm:gap-2.5 min-w-0">
+        <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+          <Building2 className="w-3.5 h-3.5 text-primary" />
         </span>
-        <span className="font-semibold text-base text-foreground truncate max-w-[160px] sm:max-w-[260px]">
+        <span className="font-semibold text-sm sm:text-base text-foreground truncate max-w-[150px] sm:max-w-[260px]">
           {activeBuildingName}
         </span>
       </div>
@@ -58,19 +58,19 @@ export function BuildingSwitcher({
         onClick={() => { setSwitchError(null); setOpen((p) => !p); }}
         disabled={pending}
         className={cn(
-          "inline-flex items-center gap-2.5 min-w-0 rounded-lg px-1.5 py-1 -ml-1.5",
+          "inline-flex items-center gap-2 sm:gap-2.5 min-w-0 rounded-lg px-1.5 py-1 -ml-1.5",
           "hover:bg-white/5 transition-colors disabled:opacity-60 group",
         )}
       >
-        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
-          <Building2 className="w-4 h-4 text-primary" />
+        <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+          <Building2 className="w-3.5 h-3.5 text-primary" />
         </span>
-        <span className="font-semibold text-base text-foreground group-hover:text-primary transition-colors truncate max-w-[150px] sm:max-w-[240px]">
+        <span className="font-semibold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors truncate max-w-[140px] sm:max-w-[240px]">
           {pending ? "Switching…" : activeBuildingName}
         </span>
         <ChevronDown
           className={cn(
-            "w-4 h-4 shrink-0 text-muted-foreground transition-transform duration-200",
+            "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-muted-foreground transition-transform duration-200",
             open && "rotate-180",
           )}
         />
