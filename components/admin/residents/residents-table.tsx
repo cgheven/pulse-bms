@@ -24,7 +24,6 @@ import { friendlyErrorMessage } from "@/lib/toast-error";
 import {
   Plus,
   Search,
-  Star,
   KeyRound,
   UserX,
   Pencil,
@@ -231,6 +230,62 @@ export function ResidentsTable({
     });
   }
 
+  // Row action buttons — shared by the desktop table and the mobile cards so
+  // both stay in sync. Labels collapse to icons on narrow screens.
+  function renderActions(r: ResidentRow) {
+    const hasLogin = Boolean(r.profile_id);
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+          onClick={() =>
+            setLoginTarget({ resident: r, mode: hasLogin ? "reset" : "create" })
+          }
+          title={hasLogin ? "Reset password" : "Create login"}
+        >
+          <KeyRound className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">{hasLogin ? "Reset PW" : "Add Login"}</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "h-8 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10",
+            !hasLogin && "invisible pointer-events-none",
+          )}
+          onClick={() => setRevokeTarget(r)}
+          title="Revoke login access"
+        >
+          <UserX className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Revoke</span>
+        </Button>
+        <div className="w-px h-4 bg-border mx-0.5" />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
+          onClick={() => setEditTarget(r)}
+          title="Edit resident"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Edit</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={() => setDeleteTarget(r)}
+          title="Delete resident"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Delete</span>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {/* Toolbar — search, filters and the add action share one full-width row */}
@@ -315,7 +370,7 @@ export function ResidentsTable({
           </DropdownMenu>
 
           <Button
-            className="btn-big flex-1 shrink-0 lg:flex-none"
+            className="btn-big flex-1 lg:flex-none"
             onClick={() => setAddOpen(true)}
           >
             <Plus className="w-5 h-5" />
@@ -330,18 +385,75 @@ export function ResidentsTable({
         />
       </div>
 
-      {/* Thin meta strip — legend on the left, live count on the right */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <Star className="w-3 h-3 text-warning fill-warning" />
-          = Main contact for the flat
-        </span>
+      {/* Live count */}
+      <div className="flex items-center justify-end text-xs text-muted-foreground">
         <span className="tabular-nums">
           {filtered.length} of {residents.length}
         </span>
       </div>
 
-      <div className="card-soft p-0 overflow-hidden">
+      {/* Mobile card list — the table is too wide for a phone */}
+      <div className="space-y-2 sm:hidden">
+        {filtered.length === 0 ? (
+          <div className="rounded-lg border border-border bg-card px-3 py-10 text-center text-sm text-muted-foreground">
+            No residents found.
+          </div>
+        ) : (
+          filtered.map((r) => (
+            <div key={r.id} className="rounded-lg border border-border bg-card p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Link
+                    href={`/admin/residents/${r.id}`}
+                    prefetch
+                    className="text-base font-semibold text-primary hover:underline"
+                  >
+                    {r.full_name}
+                  </Link>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    <Link
+                      href={`/admin/flats/${r.flat_id}`}
+                      className="text-primary/90 hover:underline tabular-nums"
+                    >
+                      {r.flat_number}
+                    </Link>
+                    <span className="mx-1 text-muted-foreground/40">·</span>
+                    <span className="capitalize">{r.relationship}</span>
+                  </p>
+                </div>
+                {r.is_active ? (
+                  <span className="status-paid inline-flex shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider">
+                    Active
+                  </span>
+                ) : (
+                  <span className="status-pending inline-flex shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider">
+                    Inactive
+                  </span>
+                )}
+              </div>
+
+              {(r.phone || r.cnic) && (
+                <p className="mt-2 text-xs text-muted-foreground tabular-nums">
+                  {r.phone ? formatPhone(r.phone) : "—"}
+                  {r.cnic && (
+                    <>
+                      <span className="mx-1 text-muted-foreground/40">·</span>
+                      {formatCNIC(r.cnic)}
+                    </>
+                  )}
+                </p>
+              )}
+
+              <div className="mt-2.5 flex items-center justify-end border-t border-border/60 pt-2">
+                {renderActions(r)}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden sm:block card-soft p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/60 border-b border-border">
@@ -364,9 +476,7 @@ export function ResidentsTable({
                   </td>
                 </tr>
               )}
-              {filtered.map((r) => {
-                const hasLogin = Boolean(r.profile_id);
-                return (
+              {filtered.map((r) => (
                   <tr
                     key={r.id}
                     className="border-b border-border last:border-0 hover:bg-secondary/50"
@@ -379,14 +489,6 @@ export function ResidentsTable({
                       >
                         {r.full_name}
                       </Link>
-                      {r.is_primary && (
-                        <span
-                          title="Main contact for this flat"
-                          aria-label="Primary contact"
-                        >
-                          <Star className="inline-block w-3.5 h-3.5 ml-1.5 -mt-0.5 text-warning fill-warning" />
-                        </span>
-                      )}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
                       <Link
@@ -413,69 +515,9 @@ export function ResidentsTable({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* Adaptive login action */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
-                          onClick={() =>
-                            setLoginTarget({
-                              resident: r,
-                              mode: hasLogin ? "reset" : "create",
-                            })
-                          }
-                          title={hasLogin ? "Reset password" : "Create login"}
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">
-                            {hasLogin ? "Reset PW" : "Add Login"}
-                          </span>
-                        </Button>
-                        {/* Revoke — invisible when no login so column width stays consistent */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={cn(
-                            "h-8 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10",
-                            !hasLogin && "invisible pointer-events-none",
-                          )}
-                          onClick={() => setRevokeTarget(r)}
-                          title="Revoke login access"
-                        >
-                          <UserX className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Revoke</span>
-                        </Button>
-                        {/* Divider */}
-                        <div className="w-px h-4 bg-border mx-0.5" />
-                        {/* Edit */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                          onClick={() => setEditTarget(r)}
-                          title="Edit resident"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Edit</span>
-                        </Button>
-                        {/* Delete */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => setDeleteTarget(r)}
-                          title="Delete resident"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Delete</span>
-                        </Button>
-                      </div>
-                    </td>
+                    <td className="px-4 py-2.5">{renderActions(r)}</td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>

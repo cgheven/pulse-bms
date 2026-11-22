@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { getActiveBuilding } from "@/lib/building-context";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, formatCNIC, formatDate, formatPhone, formatReceiptNo } from "@/lib/utils";
-import { ArrowLeft, Car, FileText, Pencil, Star } from "lucide-react";
+import { ArrowLeft, Car, FileText, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResidentFormDialog } from "@/components/admin/residents/resident-form-dialog";
 import { KpiRowSkeleton, TableSkeleton } from "@/components/layout/table-skeleton";
@@ -92,12 +92,7 @@ async function ResidentName({ id }: { id: string }) {
 
   return (
     <>
-      <h1 className="flex items-center gap-2">
-        {r.full_name}
-        {r.is_primary && (
-          <Star className="w-4 h-4 text-warning fill-warning shrink-0" />
-        )}
-      </h1>
+      <h1>{r.full_name}</h1>
       <ResidentFormDialog
         initial={{
           id: r.id,
@@ -153,44 +148,46 @@ async function DetailsCard({ id }: { id: string }) {
     .maybeSingle();
 
   return (
-    <div className="card-soft space-y-3">
-      <h3>Details</h3>
-      <Detail
-        label="Flat"
-        value={
-          flat?.flat_number ? (
-            <Link
-              href={`/admin/flats/${flat.id}`}
-              prefetch
-              className="text-primary hover:underline"
-            >
-              {flat.flat_number}
-            </Link>
-          ) : (
-            "—"
-          )
-        }
-      />
-      <Detail label="Relationship" value={r.relationship} />
-      <Detail label="Phone" value={r.phone ? formatPhone(r.phone) : "—"} />
-      <Detail label="Email" value={r.email ?? "—"} />
-      <Detail label="CNIC" value={r.cnic ? formatCNIC(r.cnic) : "—"} />
-      <Detail
-        label="Move-in"
-        value={r.move_in_date ? formatDate(r.move_in_date) : "—"}
-      />
-      <Detail
-        label="Move-out"
-        value={r.move_out_date ? formatDate(r.move_out_date) : "—"}
-      />
-      <Detail
-        label="Entry fee paid"
-        value={formatCurrency(Number(r.entry_fee_paid ?? 0))}
-      />
-      <Detail
-        label="Portal user"
-        value={r.profile_id ? "Linked" : "Not invited"}
-      />
+    <div className="card-soft">
+      <h3 className="mb-1">Details</h3>
+      <dl className="divide-y divide-border/60">
+        <Detail
+          label="Flat"
+          value={
+            flat?.flat_number ? (
+              <Link
+                href={`/admin/flats/${flat.id}`}
+                prefetch
+                className="text-primary hover:underline"
+              >
+                {flat.flat_number}
+              </Link>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <Detail label="Relationship" value={<span className="capitalize">{r.relationship}</span>} />
+        <Detail label="Phone" value={r.phone ? formatPhone(r.phone) : "—"} />
+        <Detail label="Email" value={r.email ?? "—"} />
+        <Detail label="CNIC" value={r.cnic ? formatCNIC(r.cnic) : "—"} />
+        <Detail
+          label="Move-in"
+          value={r.move_in_date ? formatDate(r.move_in_date) : "—"}
+        />
+        <Detail
+          label="Move-out"
+          value={r.move_out_date ? formatDate(r.move_out_date) : "—"}
+        />
+        <Detail
+          label="Entry fee paid"
+          value={formatCurrency(Number(r.entry_fee_paid ?? 0))}
+        />
+        <Detail
+          label="Portal user"
+          value={r.profile_id ? "Linked" : "Not invited"}
+        />
+      </dl>
     </div>
   );
 }
@@ -213,32 +210,66 @@ async function PaymentsCard({ id }: { id: string }) {
     <div className="card-soft">
       <h3 className="mb-3">Recent payments</h3>
       {payments?.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left border-b border-border">
-                <th className="py-2">Date</th>
-                <th className="py-2">Receipt</th>
-                <th className="py-2">Category</th>
-                <th className="py-2 text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((p) => (
-                <tr key={p.id} className="border-b border-border last:border-0">
-                  <td className="py-2">
-                    {p.payment_date ? formatDate(p.payment_date) : "—"}
-                  </td>
-                  <td className="py-2 font-mono text-xs">{formatReceiptNo(p.receipt_no as number | null) || "—"}</td>
-                  <td className="py-2">{p.category}</td>
-                  <td className="py-2 text-right font-semibold">
+        <>
+          {/* Mobile — compact rows (the table is too wide for a phone) */}
+          <div className="space-y-2 sm:hidden">
+            {payments.map((p) => {
+              const receipt = formatReceiptNo(p.receipt_no as number | null);
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/40 px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium tabular-nums">
+                      {p.payment_date ? formatDate(p.payment_date) : "—"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground capitalize">
+                      {p.category}
+                      {receipt && (
+                        <>
+                          <span className="mx-1 text-muted-foreground/40">·</span>
+                          <span className="font-mono normal-case">#{receipt}</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
                     {formatCurrency(Number(p.amount))}
-                  </td>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b border-border">
+                  <th className="py-2">Date</th>
+                  <th className="py-2">Receipt</th>
+                  <th className="py-2">Category</th>
+                  <th className="py-2 text-right">Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {payments.map((p) => (
+                  <tr key={p.id} className="border-b border-border last:border-0">
+                    <td className="py-2 whitespace-nowrap">
+                      {p.payment_date ? formatDate(p.payment_date) : "—"}
+                    </td>
+                    <td className="py-2 font-mono text-xs">{formatReceiptNo(p.receipt_no as number | null) || "—"}</td>
+                    <td className="py-2 capitalize">{p.category}</td>
+                    <td className="py-2 text-right font-semibold">
+                      {formatCurrency(Number(p.amount))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <p className="text-muted-foreground">No payments recorded.</p>
       )}
@@ -277,38 +308,73 @@ async function VehiclesCard({ id }: { id: string }) {
         </Link>
       </div>
       {vehicles?.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left border-b border-border">
-                <th className="py-2">Plate</th>
-                <th className="py-2">Type</th>
-                <th className="py-2">Make / Model</th>
-                <th className="py-2">Color</th>
-                <th className="py-2">Primary</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vehicles.map((v) => (
-                <tr key={v.id} className="border-b border-border last:border-0">
-                  <td className="py-2 font-mono">{v.plate_number}</td>
-                  <td className="py-2 capitalize">{v.vehicle_type}</td>
-                  <td className="py-2">
-                    {[v.make, v.model].filter(Boolean).join(" ") || "—"}
-                  </td>
-                  <td className="py-2 capitalize">{v.color ?? "—"}</td>
-                  <td className="py-2">
-                    {v.is_primary ? (
-                      <Star className="w-4 h-4 text-warning fill-warning" />
-                    ) : (
-                      "—"
+        <>
+          {/* Mobile — one card per vehicle */}
+          <div className="space-y-2 sm:hidden">
+            {vehicles.map((v) => {
+              const makeModel = [v.make, v.model].filter(Boolean).join(" ");
+              const sub = [
+                v.vehicle_type,
+                makeModel || null,
+                v.color ?? null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <div
+                  key={v.id}
+                  className="rounded-lg border border-border bg-background/40 px-3 py-2.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-semibold">{v.plate_number}</span>
+                    {v.is_primary && (
+                      <span className="shrink-0 rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
+                        Primary
+                      </span>
                     )}
-                  </td>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground capitalize">{sub || "—"}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b border-border">
+                  <th className="py-2">Plate</th>
+                  <th className="py-2">Type</th>
+                  <th className="py-2">Make / Model</th>
+                  <th className="py-2">Color</th>
+                  <th className="py-2">Primary</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {vehicles.map((v) => (
+                  <tr key={v.id} className="border-b border-border last:border-0">
+                    <td className="py-2 font-mono whitespace-nowrap">{v.plate_number}</td>
+                    <td className="py-2 capitalize">{v.vehicle_type}</td>
+                    <td className="py-2">
+                      {[v.make, v.model].filter(Boolean).join(" ") || "—"}
+                    </td>
+                    <td className="py-2 capitalize">{v.color ?? "—"}</td>
+                    <td className="py-2">
+                      {v.is_primary ? (
+                        <span className="rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
+                          Primary
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <p className="text-muted-foreground">No vehicles registered.</p>
       )}
@@ -346,9 +412,11 @@ async function DocumentsCard({ id }: { id: string }) {
 
 function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="text-sm font-medium">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-2.5">
+      <dt className="shrink-0 text-sm text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-right text-sm font-medium text-foreground break-words">
+        {value}
+      </dd>
     </div>
   );
 }
