@@ -22,18 +22,19 @@ export function BuildingSwitcher({
   const [switchError, setSwitchError] = useState<string | null>(null);
   const router = useRouter();
 
-  // Single building — show name only, no switcher needed
+  // Single building — the building name with its icon chip, no dropdown.
   if (buildings.length <= 1) {
     return (
-      <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground truncate max-w-[180px]">
-        <Building2 className="w-3.5 h-3.5 shrink-0 text-primary/70" />
-        <span className="truncate">{activeBuildingName}</span>
-      </span>
+      <div className="inline-flex items-center gap-2.5 min-w-0">
+        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+          <Building2 className="w-4 h-4 text-primary" />
+        </span>
+        <span className="font-semibold text-base text-foreground truncate max-w-[160px] sm:max-w-[260px]">
+          {activeBuildingName}
+        </span>
+      </div>
     );
   }
-
-  const activeIndex = buildings.findIndex((b) => b.id === activeBuildingId);
-  const displayIndex = activeIndex === -1 ? 1 : activeIndex + 1;
 
   function handleSwitch(buildingId: string) {
     if (buildingId === activeBuildingId) {
@@ -57,21 +58,19 @@ export function BuildingSwitcher({
         onClick={() => { setSwitchError(null); setOpen((p) => !p); }}
         disabled={pending}
         className={cn(
-          "hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg",
-          "text-xs text-muted-foreground hover:text-foreground hover:bg-white/5",
-          "transition-colors max-w-[220px] disabled:opacity-60",
+          "inline-flex items-center gap-2.5 min-w-0 rounded-lg px-1.5 py-1 -ml-1.5",
+          "hover:bg-white/5 transition-colors disabled:opacity-60 group",
         )}
       >
-        <Building2 className="w-3.5 h-3.5 shrink-0 text-primary" />
-        <span className="truncate font-medium">
-          {pending ? "Switching…" : activeBuildingName}
+        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+          <Building2 className="w-4 h-4 text-primary" />
         </span>
-        <span className="text-[10px] text-muted-foreground/50 tabular-nums shrink-0">
-          {displayIndex} / {buildings.length}
+        <span className="font-semibold text-base text-foreground group-hover:text-primary transition-colors truncate max-w-[150px] sm:max-w-[240px]">
+          {pending ? "Switching…" : activeBuildingName}
         </span>
         <ChevronDown
           className={cn(
-            "w-3 h-3 shrink-0 transition-transform duration-200",
+            "w-4 h-4 shrink-0 text-muted-foreground transition-transform duration-200",
             open && "rotate-180",
           )}
         />

@@ -19,44 +19,53 @@ export type StatTone =
   | "success" // green — money in, healthy
   | "danger" // red — money out, overdue, risk
   | "warning" // amber — needs a look
-  | "info"; // cyan — informational
+  | "info" // cyan — informational
+  | "violet"; // violet — payroll / a distinct money-out accent (HMS uses it for salaries)
 
 type LucideIcon = React.ComponentType<{ className?: string }>;
 
+// Each tone drives the icon CHIP (always coloured) and, only when a card opts
+// in via `vividValue`, the value text too. Values are otherwise white
+// (text-foreground) — the HMS look: a clean white figure with a coloured chip,
+// colour reserved for the money / semantic tiles.
 const TONE: Record<StatTone, { value: string; chip: string; hover: string }> = {
   default: {
     value: "text-foreground",
-    chip: "bg-primary/10 text-primary",
+    chip: "bg-primary/10 border-primary/20 text-primary",
     hover: "hover:border-primary/40",
   },
   primary: {
     value: "text-primary",
-    chip: "bg-primary/15 text-primary",
+    chip: "bg-primary/10 border-primary/20 text-primary",
     hover: "hover:border-primary/50",
   },
   success: {
     value: "text-[hsl(151_70%_55%)]",
-    chip: "bg-[hsl(151_70%_55%)]/12 text-[hsl(151_70%_55%)]",
+    chip: "bg-[hsl(151_70%_55%)]/12 border-[hsl(151_70%_55%/0.25)] text-[hsl(151_70%_55%)]",
     hover: "hover:border-[hsl(151_70%_55%/0.45)]",
   },
-  // Refined rose — money-out / risk on a KPI tile. Deliberately softer and
-  // lighter than --destructive (which stays loud for delete/error actions):
-  // a saturated maroon red on the dark navy reads as an alarm and cheapens
-  // the dashboard. This muted coral-rose matches the HMS card palette.
+  // Muted coral-rose — money-out / risk. Softer than --destructive (which stays
+  // loud for delete/error actions); matches the HMS "General Expenses" tile.
   danger: {
     value: "text-[hsl(350_80%_68%)]",
-    chip: "bg-[hsl(350_80%_68%)]/12 text-[hsl(350_80%_68%)]",
+    chip: "bg-[hsl(350_80%_68%)]/12 border-[hsl(350_80%_68%/0.25)] text-[hsl(350_80%_68%)]",
     hover: "hover:border-[hsl(350_80%_68%/0.45)]",
   },
   warning: {
-    value: "text-primary",
-    chip: "bg-warning/15 text-warning",
-    hover: "hover:border-primary/45",
+    value: "text-warning",
+    chip: "bg-warning/15 border-warning/25 text-warning",
+    hover: "hover:border-warning/45",
   },
   info: {
     value: "text-info",
-    chip: "bg-info/15 text-info",
+    chip: "bg-info/15 border-info/25 text-info",
     hover: "hover:border-info/45",
+  },
+  // Muted violet — matches HMS's purple "Staff Salaries" tile.
+  violet: {
+    value: "text-[hsl(255_85%_76%)]",
+    chip: "bg-[hsl(255_85%_76%)]/12 border-[hsl(255_85%_76%/0.25)] text-[hsl(255_85%_76%)]",
+    hover: "hover:border-[hsl(255_85%_76%/0.45)]",
   },
 };
 
@@ -75,10 +84,16 @@ export type StatCardProps = {
    * where a rise is bad and should read red.
    */
   trend?: { value: number; suffix?: string; goodWhenUp?: boolean };
-  /** The lead card: amber glow + a slightly larger value. */
+  /** The lead card: a slightly larger value and a subtle highlighted border. */
   hero?: boolean;
-  /** Amber glow + primary accent at the normal value size — an "attention" state. */
+  /** Subtle highlighted border at the normal value size — an "attention" state. */
   glow?: boolean;
+  /**
+   * Colour the value text with the tone instead of white. Reserve for money /
+   * semantic tiles (expenses, salaries, surplus/deficit); primary KPIs keep a
+   * clean white figure, matching HMS.
+   */
+  vividValue?: boolean;
   /** Extra grid/positioning classes (e.g. `col-span-2`). */
   className?: string;
 };
@@ -93,10 +108,11 @@ export function StatCard({
   trend,
   hero,
   glow,
+  vividValue,
   className,
 }: StatCardProps) {
   const highlight = hero || glow;
-  const t = TONE[highlight ? "primary" : tone];
+  const t = TONE[tone];
 
   const trendPositive = trend
     ? trend.goodWhenUp === false
@@ -113,7 +129,7 @@ export function StatCard({
         {Icon && (
           <span
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border",
               t.chip,
             )}
           >
@@ -124,9 +140,9 @@ export function StatCard({
 
       <div
         className={cn(
-          "mt-2 font-bold tracking-tight tabular-nums",
+          "mt-2.5 font-bold tracking-tight tabular-nums leading-none",
           hero ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl",
-          t.value,
+          vividValue ? t.value : "text-foreground",
         )}
       >
         {value}
@@ -164,8 +180,8 @@ export function StatCard({
   );
 
   const surface = cn(
-    "rounded-xl border bg-card p-4 transition-colors",
-    highlight ? "border-primary/30 glow-amber" : "border-border",
+    "rounded-2xl border bg-card p-4 sm:p-5 transition-colors",
+    highlight ? "border-primary/30" : "border-border",
     href && cn("block", t.hover, "hover:bg-secondary/20"),
     className,
   );

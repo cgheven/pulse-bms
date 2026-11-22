@@ -13,31 +13,33 @@ import {
 } from "@/lib/utils";
 import { StatCard } from "@/components/ui/stat-card";
 import { getCashTotals, cashBalanceFrom } from "@/lib/finance-totals";
-import { KpiRowSkeleton, TableSkeleton } from "@/components/layout/table-skeleton";
 import { getSetupStatus } from "@/app/actions/setup";
 import { SetupBannerCard } from "@/components/admin/setup/setup-banner-card";
+import {
+  RevenueExpensesChart,
+  type RevExpPoint,
+} from "@/components/admin/dashboard/revenue-expenses-chart";
 import {
   ArrowRight,
   AlertTriangle,
   CheckCircle2,
   CreditCard,
   FileText,
-  Megaphone,
   MessageSquareWarning,
   Receipt,
   Scale,
   ShieldAlert,
   TrendingDown,
   TrendingUp,
-  UserPlus,
+  UserCog,
   Vote,
   Wallet,
   Wrench,
+  Zap,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-const ACTIVITY_DAYS = 7;
 
 /** First day of a month, N months offset from "YYYY-MM", as YYYY-MM-DD. */
 function monthStartIso(ym: string, offset = 0): string {
@@ -46,6 +48,19 @@ function monthStartIso(ym: string, offset = 0): string {
   // date with `new Date(y, m, 1)` then calling toISOString() shifts a day
   // backwards on any server east of UTC (e.g. a machine set to PKT).
   return new Date(Date.UTC(y, m - 1 + offset, 1)).toISOString().slice(0, 10);
+}
+
+/** Six consecutive month buckets starting at `startIso` (a YYYY-MM-DD first of
+ *  month), each with its "YYYY-MM" key and short label (Jun, Jul, …). */
+function sixMonthBuckets(startIso: string): { ym: string; label: string }[] {
+  const [y, m] = startIso.split("-").map(Number);
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(Date.UTC(y, m - 1 + i, 1));
+    return {
+      ym: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`,
+      label: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }),
+    };
+  });
 }
 
 export default async function AdminDashboardPage() {
@@ -77,26 +92,14 @@ export default async function AdminDashboardPage() {
     .slice(0, 10);
   const prevMonthStart = monthStartIso(ym, -1);
   const sixMonthsAgo = monthStartIso(ym, -5);
-  const sevenDaysAgo = new Date(pkNow.getTime() - ACTIVITY_DAYS * 86400_000)
-    .toISOString();
-
-  // Recent activity is a live 7-day feed.
-  const feedSince = sevenDaysAgo;
-  const feedUntil = `${nextMonthStart}T00:00:00.000Z`;
 
   const monthLabel = formatMonthLabel(ym);
-  const todayLabel = new Date(pkNow).toLocaleDateString("en-PK", {
-    day: "2-digit",
-    month: "long",
-  });
 
   return (
     <div className="space-y-4 animate-fade-up max-w-6xl">
       <header>
-        <h1>Admin Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Sunrise · {monthLabel} · Today is {todayLabel}
-        </p>
+        <h1>Dashboard</h1>
+        <p className="text-muted-foreground mt-1">{monthLabel} overview</p>
       </header>
 
       {/* Streams in its own boundary so the setup check never blocks the
@@ -105,25 +108,36 @@ export default async function AdminDashboardPage() {
         <SetupBanner />
       </Suspense>
 
-      <Suspense fallback={<FinancialCardsSkeleton />}>
-        <FinancialCards
-          buildingId={buildingId}
-          monthStart={monthStart}
-          nextMonthStart={nextMonthStart}
-          monthEnd={monthEnd}
-          prevMonthStart={prevMonthStart}
-          sixMonthsAgo={sixMonthsAgo}
-          monthLabel={monthLabel}
-          isCurrentMonth
-        />
-      </Suspense>
+      {/* All 8 KPI tiles share one 4-column grid so they sit as two even rows
+          of four, while each group still streams in its own Suspense boundary. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+        <Suspense fallback={<CardSkeletons count={6} heroFirst />}>
+          <FinancialCards
+            buildingId={buildingId}
+            monthStart={monthStart}
+            nextMonthStart={nextMonthStart}
+            monthEnd={monthEnd}
+            prevMonthStart={prevMonthStart}
+            sixMonthsAgo={sixMonthsAgo}
+            monthLabel={monthLabel}
+            isCurrentMonth
+          />
+        </Suspense>
+        <Suspense fallback={<CardSkeletons count={2} />}>
+          <StatusTiles
+            buildingId={buildingId}
+            monthStart={monthStart}
+            prevMonthStart={prevMonthStart}
+            todayIso={todayIso}
+          />
+        </Suspense>
+      </div>
 
-      <Suspense fallback={<KpiRowSkeleton count={2} />}>
-        <StatusTiles
+      <Suspense fallback={<DashboardInsightsSkeleton />}>
+        <DashboardInsights
           buildingId={buildingId}
           monthStart={monthStart}
-          prevMonthStart={prevMonthStart}
-          todayIso={todayIso}
+          sixMonthsAgo={sixMonthsAgo}
         />
       </Suspense>
 
@@ -132,16 +146,6 @@ export default async function AdminDashboardPage() {
           buildingId={buildingId}
           monthStart={monthStart}
           todayIso={todayIso}
-        />
-      </Suspense>
-
-      <Suspense fallback={<TableSkeleton rows={6} />}>
-        <ActivityFeed
-          buildingId={buildingId}
-          sinceIso={feedSince}
-          untilIso={feedUntil}
-          monthScoped={false}
-          rangeLabel={`Last ${ACTIVITY_DAYS} days`}
         />
       </Suspense>
 
@@ -461,7 +465,7 @@ async function FinancialCards({
       .lt("payment_date", nextMonthStart),
     supabase
       .from("bms_expenses")
-      .select("amount")
+      .select("amount, is_bill")
       .eq("building_id", buildingId)
       .gte("expense_date", monthStart)
       .lt("expense_date", nextMonthStart),
@@ -503,9 +507,15 @@ async function FinancialCards({
   const sum = (rows: { amount: number | string | null }[] | null) =>
     (rows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
 
-  // This-month flow
+  // This-month flow. Expenses split into utility bills (is_bill) and general
+  // operations so each gets its own tile; `expenses` stays the total for the
+  // net calc, so Remaining still reconciles (collection − bills − general −
+  // salaries = net).
   const inflow = sum(monthPayments ?? null);
-  const expenses = sum(monthExpenses ?? null);
+  const expenseRows = (monthExpenses ?? []) as { amount: number | string | null; is_bill: boolean | null }[];
+  const bills = expenseRows.filter((e) => e.is_bill).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const expenses = expenseRows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const generalExpenses = expenses - bills;
   const salaries = sum(monthSalaries ?? null);
   const outflow = expenses + salaries;
   const net = inflow - outflow;
@@ -539,23 +549,13 @@ async function FinancialCards({
   let paidCount = 0;
   let totalInvCount = 0;
   const monthInvoiceIds: string[] = [];
-  const paidFlatNumbers: string[] = [];
   for (const i of (monthInvoices ?? []) as InvRow[]) {
     if (i.status === "waived") continue;
     billedTotal += Number(i.amount ?? 0);
     totalInvCount += 1;
     monthInvoiceIds.push(i.id);
-    if (i.status === "paid") {
-      paidCount += 1;
-      const flatNum = i.bms_flats
-        ? Array.isArray(i.bms_flats)
-          ? i.bms_flats[0]?.flat_number
-          : i.bms_flats.flat_number
-        : null;
-      if (flatNum) paidFlatNumbers.push(flatNum);
-    }
+    if (i.status === "paid") paidCount += 1;
   }
-  paidFlatNumbers.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   let collected = 0;
   if (monthInvoiceIds.length > 0) {
     const { data: invPay } = await supabase
@@ -590,11 +590,8 @@ async function FinancialCards({
   const collectionDelta =
     prevBilled > 0 ? Math.round(collectionRate - prevRate) : null;
 
-  const paidSample = paidFlatNumbers.slice(0, 5).join(" · ");
-  const paidOverflow = paidFlatNumbers.length > 5 ? ` +${paidFlatNumbers.length - 5} more` : "";
-
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <>
       {/* Card 1 · Cash available (hero) — full width on mobile, leads the row */}
       <StatCard
         className="col-span-2 lg:col-span-1"
@@ -610,39 +607,38 @@ async function FinancialCards({
         }
       />
 
-      {/* Card 2 · Maintenance collection */}
+      {/* Card 2 · Collection */}
       <StatCard
         href="/admin/maintenance"
         icon={CreditCard}
         tone="success"
-        label="Maintenance collection"
+        vividValue
+        label="Collection"
         value={formatCurrency(collected)}
         sub={`${paidCount} of ${totalInvCount} paid`}
         trend={collectionDelta != null ? { value: collectionDelta, suffix: "pp" } : undefined}
       />
 
-      {/* Card 3 · Paid this month */}
+      {/* Card 3 · Remaining (this month) */}
       <StatCard
-        href="/admin/payments"
-        icon={CheckCircle2}
-        tone="success"
-        label={isCurrentMonth ? "Paid this month" : `Paid · ${monthLabel}`}
-        value={paidCount === 0 ? "0 flats" : `${paidCount} flat${paidCount === 1 ? "" : "s"}`}
-        sub={
-          paidFlatNumbers.length === 0
-            ? "No payments recorded this month"
-            : `${paidSample}${paidOverflow}`
-        }
+        href="/admin/reports"
+        icon={Scale}
+        tone={net >= 0 ? "success" : "danger"}
+        vividValue
+        label="Remaining"
+        value={`${net < 0 ? "−" : ""}${formatCurrency(Math.abs(net))}`}
+        sub={net > 0 ? "Surplus this month" : net < 0 ? "Deficit this month" : "Even this month"}
       />
 
-      {/* Card 4 · Expenses — clickable, navigates to full expenses ledger */}
+      {/* Card 4 · Expenses — general operations only (bills shown separately) */}
       <StatCard
         href="/admin/expenses"
         icon={TrendingDown}
         tone="danger"
+        vividValue
         label="Expenses"
-        value={formatCurrency(outflow)}
-        sub={`Ops ${formatLakh(expenses)} · Salary ${formatLakh(salaries)}`}
+        value={formatCurrency(generalExpenses)}
+        sub="Repairs, supplies & upkeep"
         trend={
           expenseDeltaPct != null
             ? { value: expenseDeltaPct, suffix: "%", goodWhenUp: false }
@@ -650,28 +646,42 @@ async function FinancialCards({
         }
       />
 
-      {/* Card 5 · Remaining (this month) */}
+      {/* Card 5 · Bills — utility bills (electricity, water, gas) */}
       <StatCard
-        href="/admin/reports"
-        icon={Scale}
-        tone={net >= 0 ? "success" : "danger"}
-        label={`Remaining · ${monthLabel}`}
-        value={`${net > 0 ? "+" : net < 0 ? "−" : ""}${formatCurrency(Math.abs(net))}`}
-        sub={net > 0 ? "Surplus this month" : net < 0 ? "Deficit this month" : "Even this month"}
+        href="/admin/expenses"
+        icon={Zap}
+        tone="info"
+        vividValue
+        label="Bills Paid"
+        value={formatCurrency(bills)}
+        sub="Electricity, water & gas"
       />
-    </div>
+
+      {/* Card 6 · Salaries */}
+      <StatCard
+        href="/admin/staff"
+        icon={UserCog}
+        tone="violet"
+        vividValue
+        label="Salaries"
+        value={formatCurrency(salaries)}
+        sub="Staff payroll"
+      />
+    </>
   );
 }
 
-function FinancialCardsSkeleton() {
+// Skeleton tiles rendered as a bare fragment so they slot straight into the
+// shared KPI grid as individual cells (matching the real cards' positions).
+function CardSkeletons({ count, heroFirst = false }: { count: number; heroFirst?: boolean }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 animate-fade-in">
-      {Array.from({ length: 5 }).map((_, i) => (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
           className={cn(
-            "rounded-xl border border-border bg-card p-4",
-            i === 0 && "col-span-2 lg:col-span-1",
+            "rounded-2xl border border-border bg-card p-4 sm:p-5",
+            heroFirst && i === 0 && "col-span-2 lg:col-span-1",
           )}
         >
           <div className="h-3 w-20 rounded bg-secondary/50 animate-pulse" />
@@ -679,7 +689,7 @@ function FinancialCardsSkeleton() {
           <div className="mt-2 h-3 w-24 rounded bg-secondary/40 animate-pulse" />
         </div>
       ))}
-    </div>
+    </>
   );
 }
 
@@ -765,31 +775,17 @@ async function StatusTiles({
   const urgentOpen = openComplaints.filter(
     (c) => c.priority === "urgent" || c.priority === "high",
   ).length;
-  const resolved = complaints.filter(
-    (c) => (c.status === "resolved" || c.status === "closed") && c.resolved_at,
-  );
-  const avgResolveDays =
-    resolved.length > 0
-      ? Math.round(
-          resolved.reduce((s, c) => {
-            const ms =
-              new Date(c.resolved_at as string).getTime() -
-              new Date(c.created_at).getTime();
-            return s + ms / 86400_000;
-          }, 0) / resolved.length,
-        )
-      : null;
-
   // Props still used elsewhere; explicit void to satisfy strict TS unused checks.
   void monthStart;
   void prevMonthStart;
   void todayIso;
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <>
       <StatCard
         icon={ShieldAlert}
         tone={defaulterFlats.length === 0 ? "success" : "warning"}
+        vividValue
         label={`Defaulters · ${cutoff}+ months`}
         value={
           defaulterFlats.length === 0
@@ -799,368 +795,229 @@ async function StatusTiles({
         sub={
           defaulterFlats.length === 0
             ? "No long-term arrears"
-            : `${defaulterFlats.slice(0, 4).join(" · ")}${defaulterFlats.length > 4 ? " …" : ""} · ${formatLakh(totalDefaulterOwed)} owed`
+            : `${formatLakh(totalDefaulterOwed)} owed`
         }
         href="/admin/maintenance"
       />
       <StatCard
         icon={MessageSquareWarning}
-        tone={
-          openComplaints.length === 0
-            ? "success"
-            : urgentOpen > 0
-              ? "danger"
-              : "warning"
-        }
+        // Cyan (info), not rose — the dashboard reserves rose for the single
+        // Expenses card (matching HMS, where each tile carries its own accent
+        // and only General Expenses is rose). Open complaints are an
+        // informational count here, not an alarm.
+        tone={openComplaints.length === 0 ? "success" : "info"}
+        vividValue
         label="Complaints"
         value={openComplaints.length === 0 ? "Clear" : `${openComplaints.length} open`}
         sub={
           openComplaints.length === 0
             ? "No issues reported"
-            : `${urgentOpen} urgent${avgResolveDays !== null ? ` · avg resolve ${avgResolveDays}d` : ""}`
+            : `${urgentOpen} urgent`
         }
         href="/admin/facility"
       />
+    </>
+  );
+}
+
+/* ═══════════════  4. Insights — pending payments + rev/exp trend  ═══════════════ */
+
+async function DashboardInsights({
+  buildingId,
+  monthStart,
+  sixMonthsAgo,
+}: {
+  buildingId: string;
+  monthStart: string;
+  sixMonthsAgo: string;
+}) {
+  const supabase = await createClient();
+
+  const [payRes, expRes, salRes, pendingRes] = await Promise.all([
+    supabase
+      .from("bms_payments")
+      .select("amount, payment_date")
+      .eq("building_id", buildingId)
+      .gte("payment_date", sixMonthsAgo),
+    supabase
+      .from("bms_expenses")
+      .select("amount, expense_date")
+      .eq("building_id", buildingId)
+      .gte("expense_date", sixMonthsAgo),
+    supabase
+      .from("bms_salary_payments")
+      .select("amount, payment_date")
+      .eq("building_id", buildingId)
+      .gte("payment_date", sixMonthsAgo),
+    supabase
+      .from("bms_invoices")
+      .select("id, amount, status, flat_id, bms_flats!flat_id(flat_number)")
+      .eq("building_id", buildingId)
+      .eq("billing_month", monthStart)
+      .in("status", ["pending", "partial"])
+      .limit(50),
+  ]);
+
+  // ── 6-month revenue (payments) vs spend (expenses + salaries) ──
+  const rev = new Map<string, number>();
+  const spend = new Map<string, number>();
+  for (const r of (payRes.data ?? []) as { amount: number | string | null; payment_date: string | null }[]) {
+    const ym = String(r.payment_date ?? "").slice(0, 7);
+    rev.set(ym, (rev.get(ym) ?? 0) + Number(r.amount ?? 0));
+  }
+  for (const r of (expRes.data ?? []) as { amount: number | string | null; expense_date: string | null }[]) {
+    const ym = String(r.expense_date ?? "").slice(0, 7);
+    spend.set(ym, (spend.get(ym) ?? 0) + Number(r.amount ?? 0));
+  }
+  for (const r of (salRes.data ?? []) as { amount: number | string | null; payment_date: string | null }[]) {
+    const ym = String(r.payment_date ?? "").slice(0, 7);
+    spend.set(ym, (spend.get(ym) ?? 0) + Number(r.amount ?? 0));
+  }
+  const chartData: RevExpPoint[] = sixMonthBuckets(sixMonthsAgo).map((b) => ({
+    month: b.label,
+    revenue: rev.get(b.ym) ?? 0,
+    spend: spend.get(b.ym) ?? 0,
+  }));
+
+  // ── Pending payments this month (resident name + amount still owed) ──
+  type PendInv = {
+    id: string;
+    amount: number | string | null;
+    status: string;
+    flat_id: string | null;
+    bms_flats: { flat_number: string } | { flat_number: string }[] | null;
+  };
+  const pendingInv = (pendingRes.data ?? []) as PendInv[];
+  const flatIds = Array.from(
+    new Set(pendingInv.map((i) => i.flat_id).filter(Boolean)),
+  ) as string[];
+  const invIds = pendingInv.map((i) => i.id);
+
+  const [resRes, payForInv] = await Promise.all([
+    flatIds.length
+      ? supabase.from("bms_residents").select("flat_id, full_name").eq("building_id", buildingId).in("flat_id", flatIds)
+      : Promise.resolve({ data: [] as { flat_id: string; full_name: string }[] }),
+    invIds.length
+      ? supabase.from("bms_payments").select("invoice_id, amount").in("invoice_id", invIds)
+      : Promise.resolve({ data: [] as { invoice_id: string; amount: number | string | null }[] }),
+  ]);
+
+  const nameByFlat = new Map<string, string>();
+  for (const r of (resRes.data ?? []) as { flat_id: string; full_name: string }[]) {
+    if (r.flat_id && !nameByFlat.has(r.flat_id)) nameByFlat.set(r.flat_id, r.full_name);
+  }
+  const paidByInv = new Map<string, number>();
+  for (const p of (payForInv.data ?? []) as { invoice_id: string; amount: number | string | null }[]) {
+    paidByInv.set(p.invoice_id, (paidByInv.get(p.invoice_id) ?? 0) + Number(p.amount ?? 0));
+  }
+  function flatNumberOf(i: PendInv): string | null {
+    const f = i.bms_flats;
+    if (!f) return null;
+    const obj = Array.isArray(f) ? f[0] : f;
+    return (obj as { flat_number?: string })?.flat_number ?? null;
+  }
+  const pending = pendingInv
+    .map((i) => {
+      const flatNum = flatNumberOf(i);
+      return {
+        id: i.id,
+        name: (i.flat_id && nameByFlat.get(i.flat_id)) || (flatNum ? `Flat ${flatNum}` : "Resident"),
+        flatNum,
+        status: i.status,
+        amount: Number(i.amount ?? 0) - (paidByInv.get(i.id) ?? 0),
+      };
+    })
+    .filter((p) => p.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+
+  const STATUS_LABEL: Record<string, string> = { pending: "Pending", partial: "Partially paid" };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      {/* Pending Payments */}
+      <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 shadow-lg">
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Pending Payments</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Who hasn&apos;t paid this month</p>
+          </div>
+          {pending.length > 0 && (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[hsl(350_80%_68%/0.3)] bg-[hsl(350_80%_68%)]/15 px-1.5 text-[11px] font-bold tabular-nums text-[hsl(350_80%_68%)]">
+              {pending.length}
+            </span>
+          )}
+        </div>
+
+        {pending.length === 0 ? (
+          <div className="flex h-[180px] flex-col items-center justify-center gap-2 text-center">
+            <CheckCircle2 className="h-10 w-10 text-[hsl(151_70%_55%)] opacity-30" />
+            <p className="text-sm font-medium text-[hsl(151_70%_55%)]">All caught up</p>
+            <p className="text-xs text-muted-foreground">Every flat paid this month</p>
+          </div>
+        ) : (
+          <div className="max-h-[280px] space-y-2 overflow-y-auto">
+            {pending.map((p) => (
+              <Link
+                key={p.id}
+                href="/admin/maintenance"
+                className="flex items-center gap-3 rounded-xl border border-border bg-secondary/40 px-3 py-2.5 transition-colors hover:bg-secondary/60"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-xs font-bold text-primary">
+                  {p.name.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      p.status === "partial" ? "text-primary" : "text-[hsl(350_80%_68%)]",
+                    )}
+                  >
+                    {STATUS_LABEL[p.status] ?? p.status}
+                    {p.flatNum ? ` · Flat ${p.flatNum}` : ""}
+                  </span>
+                </div>
+                <p className="shrink-0 text-sm font-bold tabular-nums text-foreground">
+                  {formatCurrency(p.amount)}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Revenue vs Expenses */}
+      <div className="lg:col-span-3 rounded-2xl border border-border bg-card p-5 shadow-lg">
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Revenue vs Expenses</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              6-month trend — green above red = surplus
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-0.5 w-2.5 rounded-full" style={{ background: "hsl(151 70% 55%)" }} />
+              Revenue
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-0.5 w-2.5 rounded-full" style={{ background: "hsl(350 80% 68%)" }} />
+              Spend
+            </span>
+          </div>
+        </div>
+        <RevenueExpensesChart data={chartData} />
+      </div>
     </div>
   );
 }
 
-/* ═══════════════  4. Activity feed (last 7 days)  ═══════════════ */
-
-type FeedItem = {
-  ts: string;
-  icon: React.ReactNode;
-  iconColor: string;
-  title: React.ReactNode;
-  amount?: number;
-  amountSign?: "+" | "−";
-};
-
-async function ActivityFeed({
-  buildingId,
-  sinceIso,
-  untilIso,
-  monthScoped,
-  rangeLabel,
-}: {
-  buildingId: string;
-  sinceIso: string;
-  untilIso: string;
-  /** True when viewing a past month — trims the feed to that month exactly. */
-  monthScoped: boolean;
-  rangeLabel: string;
-}) {
-  const supabase = await createClient();
-
-  const [
-    { data: payments },
-    { data: expenses },
-    { data: salaries },
-    { data: complaints },
-    { data: proposals },
-    { data: notices },
-    { data: moveIns },
-  ] = await Promise.all([
-    supabase
-      .from("bms_payments")
-      .select(
-        "id, amount, payment_date, created_at, payment_mode, flat_id, bms_flats(flat_number)",
-      )
-      .eq("building_id", buildingId)
-      .gte("created_at", sinceIso)
-      .lt("created_at", untilIso)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("bms_expenses")
-      .select("id, amount, expense_date, created_at, description, vendor, category")
-      .eq("building_id", buildingId)
-      .gte("created_at", sinceIso)
-      .lt("created_at", untilIso)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("bms_salary_payments")
-      .select(
-        "id, amount, payment_date, created_at, staff_id, bms_staff(full_name, role)",
-      )
-      .eq("building_id", buildingId)
-      .gte("created_at", sinceIso)
-      .lt("created_at", untilIso)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("bms_complaints")
-      .select("id, title, priority, created_at, status, resolved_at")
-      .eq("building_id", buildingId)
-      .or(`created_at.gte.${sinceIso},resolved_at.gte.${sinceIso}`)
-      .limit(20),
-    supabase
-      .from("bms_proposals")
-      .select("id, title, proposal_type, status, created_at")
-      .eq("building_id", buildingId)
-      .gte("created_at", sinceIso)
-      .lt("created_at", untilIso)
-      .order("created_at", { ascending: false })
-      .limit(10),
-    supabase
-      .from("bms_notices")
-      .select("id, title, notice_type, pinned, created_at")
-      .eq("building_id", buildingId)
-      .gte("created_at", sinceIso)
-      .lt("created_at", untilIso)
-      .order("created_at", { ascending: false })
-      .limit(10),
-    supabase
-      .from("bms_residents")
-      .select(
-        "id, full_name, move_in_date, created_at, bms_flats(flat_number)",
-      )
-      .eq("building_id", buildingId)
-      .gte("move_in_date", sinceIso.slice(0, 10))
-      .lt("move_in_date", untilIso.slice(0, 10))
-      .order("move_in_date", { ascending: false })
-      .limit(10),
-  ]);
-
-  const items: FeedItem[] = [];
-
-  type FlatRel = { flat_number: string } | { flat_number: string }[] | null;
-  const flatOf = (rel: FlatRel) =>
-    rel ? (Array.isArray(rel) ? rel[0]?.flat_number : rel.flat_number) : null;
-  type StaffRel =
-    | { full_name: string; role: string }
-    | { full_name: string; role: string }[]
-    | null;
-  const staffOf = (rel: StaffRel) =>
-    rel ? (Array.isArray(rel) ? rel[0] : rel) : null;
-
-  for (const p of payments ?? []) {
-    items.push({
-      ts: p.created_at,
-      icon: <CreditCard className="w-3.5 h-3.5" />,
-      iconColor: "text-[hsl(151_70%_55%)] bg-[hsl(151_70%_55%/0.1)]",
-      title: (
-        <>
-          Maintenance paid · Flat{" "}
-          <span className="font-medium text-foreground">
-            {flatOf(p.bms_flats as FlatRel) ?? "—"}
-          </span>
-          <span className="text-muted-foreground"> · {p.payment_mode ?? "—"}</span>
-        </>
-      ),
-      amount: Number(p.amount ?? 0),
-      amountSign: "+",
-    });
-  }
-  for (const e of expenses ?? []) {
-    items.push({
-      ts: e.created_at,
-      icon: <Receipt className="w-3.5 h-3.5" />,
-      iconColor: "text-[hsl(350_80%_68%)] bg-[hsl(350_80%_68%/0.1)]",
-      title: (
-        <>
-          <span className="text-foreground font-medium">{e.description}</span>
-          {e.vendor && (
-            <span className="text-muted-foreground"> · {e.vendor}</span>
-          )}
-          <span className="text-muted-foreground"> · {e.category}</span>
-        </>
-      ),
-      amount: Number(e.amount ?? 0),
-      amountSign: "−",
-    });
-  }
-  for (const s of salaries ?? []) {
-    const staff = staffOf(s.bms_staff as StaffRel);
-    items.push({
-      ts: s.created_at,
-      icon: <Wallet className="w-3.5 h-3.5" />,
-      iconColor: "text-[hsl(350_80%_68%)] bg-[hsl(350_80%_68%/0.1)]",
-      title: (
-        <>
-          Salary paid ·{" "}
-          <span className="font-medium text-foreground">
-            {staff?.full_name ?? "Staff"}
-          </span>
-          {staff?.role && (
-            <span className="text-muted-foreground"> · {staff.role.replace("_", " ")}</span>
-          )}
-        </>
-      ),
-      amount: Number(s.amount ?? 0),
-      amountSign: "−",
-    });
-  }
-  for (const c of complaints ?? []) {
-    const resolved =
-      c.resolved_at &&
-      new Date(c.resolved_at).getTime() >= new Date(sinceIso).getTime();
-    items.push({
-      ts: resolved ? (c.resolved_at as string) : c.created_at,
-      icon: resolved ? (
-        <CheckCircle2 className="w-3.5 h-3.5" />
-      ) : (
-        <MessageSquareWarning className="w-3.5 h-3.5" />
-      ),
-      iconColor: resolved
-        ? "text-[hsl(151_70%_55%)] bg-[hsl(151_70%_55%/0.1)]"
-        : c.priority === "urgent" || c.priority === "high"
-          ? "text-[hsl(350_80%_68%)] bg-[hsl(350_80%_68%/0.1)]"
-          : "text-[hsl(210_90%_70%)] bg-[hsl(210_90%_60%/0.1)]",
-      title: (
-        <>
-          {resolved ? "Complaint resolved" : "New complaint"} ·{" "}
-          <span className="font-medium text-foreground">{c.title}</span>
-          {!resolved && c.priority && (
-            <span className="text-muted-foreground"> · {c.priority}</span>
-          )}
-        </>
-      ),
-    });
-  }
-  for (const p of proposals ?? []) {
-    items.push({
-      ts: p.created_at,
-      icon: <Vote className="w-3.5 h-3.5" />,
-      iconColor: "text-primary bg-primary/10",
-      title: (
-        <>
-          Proposal raised ·{" "}
-          <span className="font-medium text-foreground">{p.title}</span>
-          {p.proposal_type && (
-            <span className="text-muted-foreground"> · {p.proposal_type}</span>
-          )}
-        </>
-      ),
-    });
-  }
-  for (const n of notices ?? []) {
-    items.push({
-      ts: n.created_at,
-      icon: <Megaphone className="w-3.5 h-3.5" />,
-      iconColor: "text-primary bg-primary/10",
-      title: (
-        <>
-          {n.pinned ? "Pinned notice" : "Notice posted"} ·{" "}
-          <span className="font-medium text-foreground">{n.title}</span>
-          {n.notice_type && (
-            <span className="text-muted-foreground"> · {n.notice_type}</span>
-          )}
-        </>
-      ),
-    });
-  }
-  for (const m of moveIns ?? []) {
-    items.push({
-      ts: m.created_at,
-      icon: <UserPlus className="w-3.5 h-3.5" />,
-      iconColor: "text-[hsl(210_90%_70%)] bg-[hsl(210_90%_60%/0.1)]",
-      title: (
-        <>
-          Move-in ·{" "}
-          <span className="font-medium text-foreground">{m.full_name}</span>
-          <span className="text-muted-foreground">
-            {" "}
-            → Flat {flatOf(m.bms_flats as FlatRel) ?? "—"}
-          </span>
-        </>
-      ),
-    });
-  }
-
-  items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-  // Complaints are fetched with an OR on created_at/resolved_at, so a row can
-  // land outside the window. Trim precisely here rather than contorting that
-  // query. Only applied for a past month — the current month keeps the live
-  // 7-day feed exactly as it behaved before.
-  const windowed = monthScoped
-    ? items.filter((it) => it.ts >= sinceIso && it.ts < untilIso)
-    : items;
-  const top = windowed.slice(0, 18);
-
-  // Group by day (today/yesterday/date)
-  const byDay = new Map<string, FeedItem[]>();
-  for (const it of top) {
-    const d = new Date(it.ts);
-    const key = d.toISOString().slice(0, 10);
-    if (!byDay.has(key)) byDay.set(key, []);
-    byDay.get(key)!.push(it);
-  }
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const yesterdayKey = new Date(Date.now() - 86400_000)
-    .toISOString()
-    .slice(0, 10);
-
+function DashboardInsightsSkeleton() {
   return (
-    <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-2 mb-3 pb-3 border-b border-border">
-        <h2 className="text-sm font-semibold tracking-tight flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-primary" />
-          Recent activity
-        </h2>
-        <span className="text-[11px] text-muted-foreground">{rangeLabel}</span>
-      </div>
-
-      {top.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {monthScoped
-            ? `No activity recorded in ${rangeLabel}.`
-            : "No activity in the last week."}
-        </p>
-      ) : (
-        <div className="space-y-4">
-          {Array.from(byDay.entries()).map(([day, dayItems]) => {
-            const label =
-              day === todayKey
-                ? "Today"
-                : day === yesterdayKey
-                  ? "Yesterday"
-                  : formatDate(day);
-            return (
-              <div key={day}>
-                <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
-                  {label}
-                </div>
-                <ul className="space-y-1.5">
-                  {dayItems.map((it, i) => (
-                    <li
-                      key={i}
-                      className="flex items-start gap-2.5 px-2 py-1.5 rounded-md hover:bg-secondary/30 transition-colors"
-                    >
-                      <span
-                        className={cn(
-                          "flex w-6 h-6 items-center justify-center rounded-md shrink-0 mt-0.5",
-                          it.iconColor,
-                        )}
-                      >
-                        {it.icon}
-                      </span>
-                      <span className="text-xs text-foreground/90 min-w-0 flex-1 line-clamp-1">
-                        {it.title}
-                      </span>
-                      {it.amount != null && (
-                        <span
-                          className={cn(
-                            "text-xs font-medium tabular-nums shrink-0",
-                            it.amountSign === "+"
-                              ? "text-[hsl(151_70%_55%)]"
-                              : "text-[hsl(350_80%_68%)]",
-                          )}
-                        >
-                          {it.amountSign}
-                          {formatCurrency(it.amount).replace("Rs. ", "Rs ")}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="lg:col-span-2 h-[320px] rounded-2xl border border-border bg-card animate-pulse" />
+      <div className="lg:col-span-3 h-[320px] rounded-2xl border border-border bg-card animate-pulse" />
+    </div>
   );
 }
 

@@ -23,12 +23,24 @@ interface AppShellProps {
    * Renders null for non-trial buildings, so we slot it unconditionally after demoBanner.
    */
   trialBanner?: React.ReactNode;
+  /**
+   * Left-of-header building identity (HMS-style switcher: icon chip + name +
+   * chevron). Streams from the layout. When present it anchors the header; the
+   * page title then shows only on inner routes, as a breadcrumb after it.
+   */
+  navbarBuilding?: React.ReactNode;
   children: React.ReactNode;
 }
 
 const SEGMENT_LABELS: Record<string, string> = {
   trials: "Buildings",
 };
+
+/** True for a role's top-level/home route (e.g. "/admin"), where the building
+ *  switcher alone heads the bar. */
+function isHomeRoute(pathname: string): boolean {
+  return pathname.split("/").filter(Boolean).length <= 1;
+}
 
 function deriveTitle(pathname: string, role: Role): string {
   const segments = pathname.split("/").filter(Boolean);
@@ -50,10 +62,14 @@ function deriveTitle(pathname: string, role: Role): string {
  * Profile + building name are streamed into the `navbarUser` slot via Suspense
  * at the layout level.
  */
-export function AppShell({ role, navbarUser, demoBanner, trialBanner, children }: AppShellProps) {
+export function AppShell({ role, navbarUser, demoBanner, trialBanner, navbarBuilding, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const title = deriveTitle(pathname, role);
+  const home = isHomeRoute(pathname);
+  // With a building switcher present, the page title becomes a breadcrumb that
+  // only shows on inner pages. Without one, the title heads the bar as before.
+  const showTitle = !navbarBuilding || !home;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -74,12 +90,20 @@ export function AppShell({ role, navbarUser, demoBanner, trialBanner, children }
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Static title from pathname — renders instantly, no auth wait */}
-          <div className="flex flex-col min-w-0">
-            <p className="font-semibold text-base text-foreground leading-none truncate">
-              {title}
-            </p>
-            {/* building name streams in via the navbarUser slot's NavbarBuildingName */}
+          {/* Left: building switcher (HMS-style), then the page title as a
+              breadcrumb on inner pages. Title alone when there's no switcher. */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            {navbarBuilding}
+            {navbarBuilding && showTitle && (
+              <span className="text-muted-foreground/40 shrink-0" aria-hidden>
+                /
+              </span>
+            )}
+            {showTitle && (
+              <p className="font-semibold text-base text-foreground leading-none truncate">
+                {title}
+              </p>
+            )}
           </div>
 
           {/* User info streams in here — server slot wrapped in Suspense at layout */}

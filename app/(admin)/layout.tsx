@@ -4,6 +4,7 @@ import { NavbarUserServer } from "@/components/layout/navbar-user-server";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { TrialBanner } from "@/components/layout/trial-banner";
 import { getSession } from "@/lib/auth";
+import { NavbarBuildingServer } from "@/components/layout/navbar-building-server";
 
 /**
  * Adapts the shell's sidebar to the LOGGED-IN profile's role rather than
@@ -18,6 +19,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <AppShell
       role={role}
+      navbarBuilding={
+        <Suspense fallback={<div className="h-8 w-40 rounded-lg bg-secondary/50 animate-pulse" />}>
+          <NavbarBuildingServer />
+        </Suspense>
+      }
       navbarUser={
         <Suspense fallback={<NavbarUserSkeleton />}>
           <NavbarUserServer />
