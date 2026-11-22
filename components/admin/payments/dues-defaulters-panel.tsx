@@ -188,8 +188,9 @@ export function DuesDefaultersPanel({
 
   return (
     <div className="space-y-3">
-      {/* View switcher on the left, ledger link + exports on the right */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* View switcher on the left, ledger link + exports on the right — one
+          row on every width (PDF/Excel collapse to icons on mobile). */}
+      <div className="flex items-center justify-between gap-2">
         <div className="inline-flex items-center gap-0.5 rounded-lg border border-sidebar-border bg-white/5 p-1">
           <ViewTab active={!dueTodayOnly} onClick={() => setDueTodayOnly(false)} icon={CalendarDays}>
             Monthly
@@ -204,10 +205,11 @@ export function DuesDefaultersPanel({
           </ViewTab>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {month && (
             <Link
               href="/admin/payments"
+              title="All payments"
               className="inline-flex items-center gap-1.5 px-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <FileText className="w-4 h-4" />
@@ -219,20 +221,22 @@ export function DuesDefaultersPanel({
             size="sm"
             onClick={exportPdf}
             disabled={filtered.length === 0}
-            className="h-9 gap-1.5"
+            title="Export PDF"
+            className="h-9 gap-1.5 px-2.5 sm:px-3"
           >
             <FileText className="w-4 h-4 text-destructive" />
-            PDF
+            <span className="hidden sm:inline">PDF</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={exportExcel}
             disabled={filtered.length === 0}
-            className="h-9 gap-1.5"
+            title="Export Excel"
+            className="h-9 gap-1.5 px-2.5 sm:px-3"
           >
             <FileSpreadsheet className="w-4 h-4 text-[hsl(151_70%_55%)]" />
-            Excel
+            <span className="hidden sm:inline">Excel</span>
           </Button>
         </div>
       </div>
@@ -241,7 +245,7 @@ export function DuesDefaultersPanel({
       <div className="card-soft space-y-4">
         {/* Filters: status chips + flat picker on the left, search on the right */}
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="grid grid-cols-4 gap-1.5 sm:inline-flex sm:gap-1">
           <FilterChip active={filter === "all"} onClick={() => setFilter("all")} count={counts.all}>
             All
           </FilterChip>
@@ -290,30 +294,45 @@ export function DuesDefaultersPanel({
           No flats match this filter.
         </p>
       ) : (
-        <div className="overflow-x-auto -mx-4 sm:mx-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left border-b border-border text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 sm:px-2 py-2">Flat</th>
-                <th className="px-4 sm:px-2 py-2">Resident</th>
-                <th className="px-4 sm:px-2 py-2">Phone</th>
-                <th className="px-4 sm:px-2 py-2 text-right">Total</th>
-                <th className="px-4 sm:px-2 py-2 text-right hidden sm:table-cell">Received</th>
-                <th className="px-4 sm:px-2 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((d) => (
-                <DefaulterRowCard
-                  key={d.invoice_id}
-                  row={d}
-                  buildingName={buildingName}
-                  onRecord={buildingId && d.amount_due > 0 ? () => setRecordRow(d) : undefined}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Mobile card list */}
+          <div className="space-y-2 sm:hidden">
+            {filtered.map((d) => (
+              <DefaulterCard
+                key={d.invoice_id}
+                row={d}
+                buildingName={buildingName}
+                onRecord={buildingId && d.amount_due > 0 ? () => setRecordRow(d) : undefined}
+              />
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b border-border text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 sm:px-2 py-2">Flat</th>
+                  <th className="px-4 sm:px-2 py-2">Resident</th>
+                  <th className="px-4 sm:px-2 py-2">Phone</th>
+                  <th className="px-4 sm:px-2 py-2 text-right">Total</th>
+                  <th className="px-4 sm:px-2 py-2 text-right hidden sm:table-cell">Received</th>
+                  <th className="px-4 sm:px-2 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((d) => (
+                  <DefaulterRowCard
+                    key={d.invoice_id}
+                    row={d}
+                    buildingName={buildingName}
+                    onRecord={buildingId && d.amount_due > 0 ? () => setRecordRow(d) : undefined}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
       </div>
 
@@ -402,7 +421,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-7 px-3 rounded-full text-xs font-medium border transition-all",
+        "inline-flex items-center justify-center whitespace-nowrap h-7 px-2 sm:px-3 rounded-full text-xs font-medium border transition-all",
         active
           ? activeCls
           : "border-transparent text-muted-foreground hover:text-foreground hover:border-sidebar-border",
@@ -413,7 +432,9 @@ function FilterChip({
   );
 }
 
-function DefaulterRowCard({
+// Per-row actions (Receipt / Remind / Pay / Preview) — shared by the desktop
+// table row and the mobile card so both behave identically.
+function RowActions({
   row,
   buildingName,
   onRecord,
@@ -453,6 +474,171 @@ function DefaulterRowCard({
   const hasDue = row.amount_due > 0;
 
   return (
+    <div className="flex flex-wrap items-center gap-1.5 justify-end">
+      {row.amount_paid > 0 && row.receipt_payment_id && (
+        <Link
+          href={`/admin/payments/${row.receipt_payment_id}/receipt`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          title="View / download receipt"
+        >
+          <Receipt className="h-3 w-3" />
+          Receipt
+        </Link>
+      )}
+      {hasDue &&
+        (intl ? (
+          <a
+            href={waHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-[#25D366]/25 px-3 text-xs font-medium text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10 hover:border-[#25D366]/50 transition-colors"
+            title={`Send reminder to ${row.resident_name ?? "resident"}`}
+          >
+            <MessageCircle className="h-3 w-3" />
+            Remind
+          </a>
+        ) : (
+          <span
+            className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground"
+            title="No phone number on file"
+          >
+            <MessageCircle className="h-3 w-3" />
+            No phone
+          </span>
+        ))}
+      {onRecord && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRecord}
+          className="h-8 px-3 text-xs gap-1.5 shrink-0 text-emerald-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40"
+        >
+          <CheckCircle2 className="h-3 w-3" />
+          Pay
+        </Button>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-foreground"
+            title="More"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem
+            className="gap-2"
+            onSelect={(e) => {
+              e.preventDefault();
+              setPreviewOpen(true);
+            }}
+          >
+            <FileText className="h-4 w-4" />
+            Preview Invoice
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <InvoicePreviewDialog
+        invoiceId={row.invoice_id}
+        subtitle={`${row.resident_name ?? row.flat_number} · ${String(row.billing_month).slice(0, 7)}`}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
+    </div>
+  );
+}
+
+const STATUS_PILL: Record<PayStatus, string> = {
+  paid: "status-paid",
+  partial: "status-pending",
+  unpaid: "status-overdue",
+};
+
+// Mobile card — the table has too many columns for a phone.
+function DefaulterCard({
+  row,
+  buildingName,
+  onRecord,
+}: {
+  row: DefaulterRow;
+  buildingName: string;
+  onRecord?: () => void;
+}) {
+  const status = statusOf(row);
+  return (
+    <div className="rounded-xl border border-border bg-card p-3.5">
+      {/* Identity */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-base font-semibold tabular-nums leading-tight">{row.flat_number}</p>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+            {row.resident_name ?? "No resident"}
+          </p>
+        </div>
+        <span
+          className={cn(
+            "inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+            STATUS_PILL[status],
+          )}
+        >
+          {STATUS_LABEL[status]}
+        </span>
+      </div>
+
+      {/* Amounts — labelled rows so the key figure (Due) is unmistakable */}
+      <dl className="mt-3 space-y-1 border-t border-border/60 pt-2.5 text-sm">
+        <div className="flex items-center justify-between">
+          <dt className="text-muted-foreground">Total</dt>
+          <dd className="font-medium tabular-nums">{formatCurrency(row.amount_total)}</dd>
+        </div>
+        {row.amount_paid > 0 && (
+          <div className="flex items-center justify-between">
+            <dt className="text-muted-foreground">Paid</dt>
+            <dd className="tabular-nums text-[hsl(151_70%_55%)]">{formatCurrency(row.amount_paid)}</dd>
+          </div>
+        )}
+        {row.amount_due > 0 && (
+          <div className="flex items-center justify-between">
+            <dt className="text-muted-foreground">Due</dt>
+            <dd className="font-semibold tabular-nums text-[hsl(350_80%_68%)]">
+              {formatCurrency(row.amount_due)}
+            </dd>
+          </div>
+        )}
+      </dl>
+
+      {row.resident_phone && (
+        <a
+          href={`tel:${row.resident_phone.replace(/[^\d+]/g, "")}`}
+          className="mt-2.5 inline-flex items-center gap-1.5 text-sm text-primary tabular-nums"
+        >
+          <Phone className="h-3.5 w-3.5 shrink-0" />
+          {formatPhone(row.resident_phone)}
+        </a>
+      )}
+
+      <div className="mt-3 border-t border-border/60 pt-2.5">
+        <RowActions row={row} buildingName={buildingName} onRecord={onRecord} />
+      </div>
+    </div>
+  );
+}
+
+function DefaulterRowCard({
+  row,
+  buildingName,
+  onRecord,
+}: {
+  row: DefaulterRow;
+  buildingName: string;
+  onRecord?: () => void;
+}) {
+  return (
     <tr className="border-b border-border last:border-0 hover:bg-secondary/40">
       <td className="px-4 sm:px-2 py-2.5 align-top font-semibold whitespace-nowrap">
         {row.flat_number}
@@ -481,82 +667,7 @@ function DefaulterRowCard({
         {row.amount_paid > 0 ? formatCurrency(row.amount_paid) : "—"}
       </td>
       <td className="px-4 sm:px-2 py-2.5 align-top">
-        <div className="flex flex-col sm:flex-row gap-1.5 justify-end">
-          {row.amount_paid > 0 && row.receipt_payment_id && (
-            <Link
-              href={`/admin/payments/${row.receipt_payment_id}/receipt`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              title="View / download receipt"
-            >
-              <Receipt className="h-3 w-3" />
-              Receipt
-            </Link>
-          )}
-          {hasDue &&
-            (intl ? (
-              <a
-                href={waHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-[#25D366]/25 px-3 text-xs font-medium text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10 hover:border-[#25D366]/50 transition-colors"
-                title={`Send reminder to ${row.resident_name ?? "resident"}`}
-              >
-                <MessageCircle className="h-3 w-3" />
-                Remind
-              </a>
-            ) : (
-              <span
-                className="inline-flex h-8 items-center justify-center gap-1.5 shrink-0 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground"
-                title="No phone number on file"
-              >
-                <MessageCircle className="h-3 w-3" />
-                No phone
-              </span>
-            ))}
-          {onRecord && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onRecord}
-              className="h-8 px-3 text-xs gap-1.5 shrink-0 text-emerald-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40"
-            >
-              <CheckCircle2 className="h-3 w-3" />
-              Pay
-            </Button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-foreground"
-                title="More"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem
-                className="gap-2"
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setPreviewOpen(true);
-                }}
-              >
-                <FileText className="h-4 w-4" />
-                Preview Invoice
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <InvoicePreviewDialog
-            invoiceId={row.invoice_id}
-            subtitle={`${row.resident_name ?? row.flat_number} · ${String(row.billing_month).slice(0, 7)}`}
-            open={previewOpen}
-            onOpenChange={setPreviewOpen}
-          />
-        </div>
+        <RowActions row={row} buildingName={buildingName} onRecord={onRecord} />
       </td>
     </tr>
   );

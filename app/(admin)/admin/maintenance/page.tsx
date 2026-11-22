@@ -31,15 +31,11 @@ export default function MaintenancePage({
 }) {
   return (
     <div className="space-y-4 animate-fade-up">
-      {/* Title row — the month stepper sits here, next to the title (HMS). */}
-      <div className="flex items-start justify-between gap-3">
-        <header>
-          <h1>Maintenance</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Bills, payments, and defaulters in one place.
-          </p>
-        </header>
-        <Suspense fallback={<div className="h-9 w-44 rounded-lg bg-secondary/40 animate-pulse shrink-0" />}>
+      {/* Title row — the month stepper sits beside the title on desktop and
+          drops to its own full-width row on mobile. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1>Maintenance</h1>
+        <Suspense fallback={<div className="h-9 w-full sm:w-56 rounded-lg bg-secondary/40 animate-pulse" />}>
           <MonthNavSection searchParams={searchParams} />
         </Suspense>
       </div>
@@ -261,22 +257,22 @@ async function MaintenanceKpis() {
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <StatCard icon={Receipt} label="This month total" value={formatCurrency(monthTotal)} />
+      <StatCard icon={Receipt} label="Billed" value={formatCurrency(monthTotal)} />
       <StatCard
         icon={Wallet}
-        label="Collected (this month)"
+        label="Collected"
         value={formatCurrency(collected)}
         tone="success"
       />
       <StatCard
         icon={Users}
-        label="Defaulters (flats)"
+        label="Defaulters"
         value={String(defaulterCount)}
         tone={defaulterCount > 0 ? "danger" : "default"}
       />
       <StatCard
         icon={AlertCircle}
-        label="Total outstanding"
+        label="Outstanding"
         value={formatCurrency(outstandingTotal)}
         tone={outstandingTotal > 0 ? "danger" : "default"}
       />

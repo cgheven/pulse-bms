@@ -33,7 +33,7 @@ export function MonthNavigator({
 
   return (
     <div
-      className="inline-flex items-center rounded-lg border border-border bg-secondary/40 shrink-0"
+      className="flex w-full sm:inline-flex sm:w-auto items-center justify-between rounded-lg border border-border bg-secondary/40"
       aria-busy={isPending}
     >
       <button
@@ -45,7 +45,7 @@ export function MonthNavigator({
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-      <span className="px-2 min-w-[8.5rem] text-center text-sm font-medium tabular-nums">
+      <span className="flex-1 sm:flex-none px-2 sm:min-w-[8.5rem] text-center text-sm font-medium tabular-nums">
         {formatMonthLabel(month)}
       </span>
       <button
