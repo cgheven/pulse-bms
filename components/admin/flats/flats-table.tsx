@@ -109,38 +109,14 @@ export function FlatsTable({
     setStatus("all");
   };
 
-  // Tiny aggregate row so the page header earns its space.
-  const occupied = flats.filter((f) => f.ownership_type !== "vacant").length;
-  const totalOutstanding = flats.reduce((s, f) => s + f.outstanding_dues, 0);
   // 0 means unlimited (reserved for ops use via direct SQL)
   const isAtLimit = flatLimit > 0 && flats.length >= flatLimit;
 
   return (
     <>
-      {/* Header — h1 + meta inline with Add Flat. No standalone subtitle. */}
+      {/* Header — h1 inline with Add Flat. */}
       <header className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <h1>Flats</h1>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {occupied} / {flats.length} occupied
-            {flatLimit > 0 && (
-              <>
-                <span className="mx-1 text-muted-foreground/40">·</span>
-                <span className={isAtLimit ? "text-amber-700 font-semibold" : ""}>
-                  {flats.length} of {flatLimit} flats allowed
-                </span>
-              </>
-            )}
-            {totalOutstanding > 0 && (
-              <>
-                <span className="mx-1 text-muted-foreground/40">·</span>
-                <span className="text-destructive">
-                  {formatLakh(totalOutstanding)} outstanding
-                </span>
-              </>
-            )}
-          </p>
-        </div>
+        <h1>Flats</h1>
         <Button
           size="sm"
           onClick={() => !isAtLimit && setAddOpen(true)}
@@ -164,88 +140,86 @@ export function FlatsTable({
         </div>
       )}
 
-      {/* Search + filters — stacks cleanly on mobile */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search flat / block / resident…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="h-10 pl-9 text-sm"
-            />
-          </div>
-          <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-            {filtered.length} of {flats.length}
-          </span>
+      {/* Search + filters on one row — search is capped so the filters and the
+          result count share the space; wraps cleanly on mobile. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search flat / block / resident…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-10 pl-9 text-sm"
+          />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {blockOptions.length > 0 && (
-            <Select value={block} onValueChange={setBlock}>
-              <SelectTrigger
-                className="h-10 flex-1 min-w-[7.5rem] sm:flex-none sm:w-[8rem]"
-                aria-label="Filter by block"
-              >
-                <SelectValue placeholder="Block" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All blocks</SelectItem>
-                {blockOptions.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    Block {b}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {floorOptions.length > 0 && (
-            <Select value={floor} onValueChange={setFloor}>
-              <SelectTrigger
-                className="h-10 flex-1 min-w-[7.5rem] sm:flex-none sm:w-[8rem]"
-                aria-label="Filter by floor"
-              >
-                <SelectValue placeholder="Floor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All floors</SelectItem>
-                {floorOptions.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    Floor {n}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          <Select value={status} onValueChange={setStatus}>
+        {blockOptions.length > 0 && (
+          <Select value={block} onValueChange={setBlock}>
             <SelectTrigger
-              className="h-10 flex-1 min-w-[7.5rem] sm:flex-none sm:w-[8.5rem]"
-              aria-label="Filter by status"
+              className="h-10 flex-1 min-w-[7.5rem] sm:flex-none sm:w-[8rem]"
+              aria-label="Filter by block"
             >
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder="Block" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="owner">Owner</SelectItem>
-              <SelectItem value="tenant">Tenant</SelectItem>
-              <SelectItem value="vacant">Vacant</SelectItem>
+              <SelectItem value="all">All blocks</SelectItem>
+              {blockOptions.map((b) => (
+                <SelectItem key={b} value={b}>
+                  Block {b}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+        )}
 
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="h-10 text-xs text-muted-foreground shrink-0"
+        {floorOptions.length > 0 && (
+          <Select value={floor} onValueChange={setFloor}>
+            <SelectTrigger
+              className="h-10 flex-1 min-w-[7.5rem] sm:flex-none sm:w-[8rem]"
+              aria-label="Filter by floor"
             >
-              Clear
-            </Button>
-          )}
-        </div>
+              <SelectValue placeholder="Floor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All floors</SelectItem>
+              {floorOptions.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  Floor {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger
+            className="h-10 flex-1 min-w-[7.5rem] sm:flex-none sm:w-[8.5rem]"
+            aria-label="Filter by status"
+          >
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="owner">Owner</SelectItem>
+            <SelectItem value="tenant">Tenant</SelectItem>
+            <SelectItem value="vacant">Vacant</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="h-10 text-xs text-muted-foreground shrink-0"
+          >
+            Clear
+          </Button>
+        )}
+
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0 sm:ml-auto">
+          {filtered.length} of {flats.length}
+        </span>
       </div>
 
       <FlatFormDialog

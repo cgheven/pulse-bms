@@ -6,10 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import {
   cn,
   formatCurrency,
-  formatDate,
   formatLakh,
   formatMonthLabel,
-  formatRelative,
 } from "@/lib/utils";
 import { StatCard } from "@/components/ui/stat-card";
 import { getCashTotals, cashBalanceFrom } from "@/lib/finance-totals";
@@ -20,21 +18,14 @@ import {
   type RevExpPoint,
 } from "@/components/admin/dashboard/revenue-expenses-chart";
 import {
-  ArrowRight,
-  AlertTriangle,
   CheckCircle2,
   CreditCard,
-  FileText,
   MessageSquareWarning,
-  Receipt,
   Scale,
   ShieldAlert,
   TrendingDown,
-  TrendingUp,
   UserCog,
-  Vote,
   Wallet,
-  Wrench,
   Zap,
 } from "lucide-react";
 
@@ -140,263 +131,6 @@ export default async function AdminDashboardPage() {
           sixMonthsAgo={sixMonthsAgo}
         />
       </Suspense>
-
-      <Suspense fallback={<ActionCenterSkeleton />}>
-        <ActionCenter
-          buildingId={buildingId}
-          monthStart={monthStart}
-          todayIso={todayIso}
-        />
-      </Suspense>
-
-      <ActionFooter />
-    </div>
-  );
-}
-
-/* ═══════════════  1. Action Center  ═══════════════ */
-
-async function ActionCenter({
-  buildingId,
-  monthStart,
-  todayIso,
-}: {
-  buildingId: string;
-  monthStart: string;
-  todayIso: string;
-}) {
-  const supabase = await createClient();
-
-  const [
-    { data: unpaidInvoices },
-    { data: flats },
-    { data: openComplaints },
-    { data: openProposals },
-    { data: openFacilityTasks },
-  ] = await Promise.all([
-    supabase
-      .from("bms_invoices")
-      .select("id, flat_id, amount, status, due_date")
-      .eq("building_id", buildingId)
-      .eq("billing_month", monthStart)
-      .in("status", ["pending", "partial", "overdue"]),
-    supabase
-      .from("bms_flats")
-      .select("id, flat_number, outstanding_dues")
-      .eq("building_id", buildingId),
-    supabase
-      .from("bms_complaints")
-      .select("id, title, priority, status, created_at")
-      .eq("building_id", buildingId)
-      .in("status", ["open", "in_progress"])
-      .order("priority", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(3),
-    supabase
-      .from("bms_proposals")
-      .select("id, title, proposal_type, created_at")
-      .eq("building_id", buildingId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(3),
-    supabase
-      .from("bms_facility_tasks")
-      .select("id, title, priority, status, due_date")
-      .eq("building_id", buildingId)
-      .in("status", ["pending", "in_progress"])
-      .order("priority", { ascending: false })
-      .order("due_date", { ascending: true })
-      .limit(2),
-  ]);
-
-  type FlatRow = { id: string; flat_number: string; outstanding_dues: number | null };
-  const flatById = new Map(
-    (flats ?? []).map((f) => [f.id, f as FlatRow] as const),
-  );
-
-  // Unpaid this month — surface with flat numbers + amount owed.
-  const unpaidSorted = (unpaidInvoices ?? [])
-    .map((i) => {
-      const f = i.flat_id ? flatById.get(i.flat_id) : null;
-      return {
-        flat_number: f?.flat_number ?? "—",
-        amount: Number(i.amount ?? 0),
-        overdue:
-          i.status === "overdue" ||
-          Boolean(i.due_date && i.due_date < todayIso),
-      };
-    })
-    .sort((a, b) =>
-      a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true }),
-    );
-  const unpaidTotal = unpaidSorted.reduce((s, u) => s + u.amount, 0);
-
-  // Items array drives the rendering. Empty = "all clear" state.
-  type Action = {
-    icon: React.ReactNode;
-    tone: "warning" | "danger" | "info";
-    title: string;
-    body: string;
-    href: string;
-    cta: string;
-  };
-  const actions: Action[] = [];
-
-  if (unpaidSorted.length > 0) {
-    const sample = unpaidSorted.slice(0, 4).map((u) => u.flat_number).join(" · ");
-    const moreSuffix =
-      unpaidSorted.length > 4 ? ` +${unpaidSorted.length - 4} more` : "";
-    const overdueCount = unpaidSorted.filter((u) => u.overdue).length;
-    actions.push({
-      icon: <CreditCard className="w-4 h-4" />,
-      tone: overdueCount > 0 ? "danger" : "warning",
-      title: `${unpaidSorted.length} ${unpaidSorted.length === 1 ? "flat" : "flats"} unpaid · ${formatCurrency(unpaidTotal)} pending`,
-      body: `${sample}${moreSuffix}${overdueCount > 0 ? ` · ${overdueCount} overdue` : ""}`,
-      href: "/admin/maintenance",
-      cta: "Send reminder",
-    });
-  }
-
-  for (const c of openComplaints ?? []) {
-    const isUrgent = c.priority === "urgent" || c.priority === "high";
-    actions.push({
-      icon: <MessageSquareWarning className="w-4 h-4" />,
-      tone: isUrgent ? "danger" : "info",
-      title: `Complaint · ${c.title}`,
-      body: `${(c.priority ?? "normal").toString()} priority · ${formatRelative(c.created_at)}`,
-      href: `/admin/facility`,
-      cta: "Open complaint",
-    });
-    if (actions.length >= 6) break;
-  }
-
-  for (const p of openProposals ?? []) {
-    actions.push({
-      icon: <Vote className="w-4 h-4" />,
-      tone: "info",
-      title: `Vote needed · ${p.title}`,
-      body: `${(p.proposal_type ?? "other")} · raised ${formatRelative(p.created_at)}`,
-      href: `/admin/union`,
-      cta: "Review",
-    });
-    if (actions.length >= 6) break;
-  }
-
-  for (const t of openFacilityTasks ?? []) {
-    const isUrgent = t.priority === "urgent" || t.priority === "high";
-    actions.push({
-      icon: <Wrench className="w-4 h-4" />,
-      tone: isUrgent ? "danger" : "info",
-      title: `Task · ${t.title}`,
-      body: t.due_date
-        ? `due ${formatDate(t.due_date)} · ${(t.priority ?? "normal").toString()} priority`
-        : `${(t.priority ?? "normal").toString()} priority`,
-      href: `/admin/facility`,
-      cta: "Open task",
-    });
-    if (actions.length >= 6) break;
-  }
-
-  const isEmpty = actions.length === 0;
-
-  return (
-    <div
-      className={cn(
-        "rounded-xl border bg-card p-4 sm:p-5",
-        isEmpty
-          ? "border-[hsl(151_70%_55%/0.25)]"
-          : "border-border",
-      )}
-    >
-      <div className="flex items-center justify-between gap-2 mb-3 pb-3 border-b border-border">
-        <h2 className="text-sm font-semibold tracking-tight flex items-center gap-2">
-          {isEmpty ? (
-            <CheckCircle2 className="w-4 h-4 text-[hsl(151_70%_55%)]" />
-          ) : (
-            <AlertTriangle className="w-4 h-4 text-primary" />
-          )}
-          {isEmpty ? "Nothing on your plate today" : "Needs your attention"}
-        </h2>
-        {!isEmpty && (
-          <span className="text-[11px] text-muted-foreground tabular-nums">
-            {actions.length} {actions.length === 1 ? "item" : "items"}
-          </span>
-        )}
-      </div>
-
-      {isEmpty ? (
-        <p className="text-xs text-muted-foreground">
-          No unpaid flats, no open complaints, no pending votes. Building is running smoothly.
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {actions.map((a, i) => {
-            const ring =
-              a.tone === "danger"
-                ? "border-l-[hsl(350_80%_68%)]"
-                : a.tone === "warning"
-                  ? "border-l-primary"
-                  : "border-l-[hsl(210_90%_60%)]";
-            const iconColor =
-              a.tone === "danger"
-                ? "text-[hsl(350_80%_68%)]"
-                : a.tone === "warning"
-                  ? "text-primary"
-                  : "text-[hsl(210_90%_70%)]";
-            return (
-              <li
-                key={i}
-                className={cn(
-                  "rounded-md border border-border border-l-2 bg-secondary/20 hover:bg-secondary/40 transition-colors",
-                  ring,
-                )}
-              >
-                <Link
-                  href={a.href}
-                  className="flex items-start gap-3 px-3 py-2.5"
-                >
-                  <span
-                    className={cn(
-                      "flex w-7 h-7 items-center justify-center rounded-md bg-card border border-border shrink-0",
-                      iconColor,
-                    )}
-                  >
-                    {a.icon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-foreground line-clamp-1">
-                      {a.title}
-                    </span>
-                    <span className="block text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                      {a.body}
-                    </span>
-                  </span>
-                  <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary shrink-0">
-                    {a.cta}
-                    <ArrowRight className="w-3 h-3" />
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function ActionCenterSkeleton() {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5 animate-fade-in">
-      <div className="h-4 w-40 rounded bg-secondary/50 animate-pulse mb-3 pb-3 border-b border-border" />
-      <div className="space-y-2">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-md border border-border bg-secondary/20 h-12 animate-pulse"
-          />
-        ))}
-      </div>
     </div>
   );
 }
@@ -786,7 +520,7 @@ async function StatusTiles({
         icon={ShieldAlert}
         tone={defaulterFlats.length === 0 ? "success" : "warning"}
         vividValue
-        label={`Defaulters · ${cutoff}+ months`}
+        label="Defaulters"
         value={
           defaulterFlats.length === 0
             ? "None"
@@ -1018,64 +752,5 @@ function DashboardInsightsSkeleton() {
       <div className="lg:col-span-2 h-[320px] rounded-2xl border border-border bg-card animate-pulse" />
       <div className="lg:col-span-3 h-[320px] rounded-2xl border border-border bg-card animate-pulse" />
     </div>
-  );
-}
-
-/* ═══════════════  5. Action footer  ═══════════════ */
-
-function ActionFooter() {
-  return (
-    <nav className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-      <ActionLink
-        href="/admin/reports"
-        icon={<TrendingUp className="w-4 h-4" />}
-        title="Reports"
-        sub="P&L · ledger · CSV / PDF download"
-      />
-      <ActionLink
-        href="/admin/maintenance"
-        icon={<FileText className="w-4 h-4" />}
-        title="Maintenance"
-        sub="Generate · waive · review invoices"
-      />
-      <ActionLink
-        href="/admin/payments"
-        icon={<Receipt className="w-4 h-4" />}
-        title="Record payment"
-        sub="Mark a flat as paid"
-      />
-    </nav>
-  );
-}
-
-function ActionLink({
-  href,
-  icon,
-  title,
-  sub,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  title: string;
-  sub: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="group rounded-lg border border-border bg-card p-3.5 flex items-start gap-2.5 transition-colors hover:border-primary/40 hover:bg-secondary/30"
-    >
-      <div className="flex w-8 h-8 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0 group-hover:bg-primary/15">
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold flex items-center gap-1">
-          {title}
-          <ArrowRight className="w-3 h-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-        </div>
-        <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-          {sub}
-        </div>
-      </div>
-    </Link>
   );
 }
