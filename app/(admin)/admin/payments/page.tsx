@@ -35,12 +35,7 @@ export default async function PaymentsLedgerPage() {
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
-            <h1>Payments</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Every maintenance payment recorded — view a receipt or undo a mistake.
-            </p>
-          </div>
+          <h1>Payments</h1>
         </div>
         {header && header.flatPickerOptions.length > 0 && (
           <RecordPaymentButton

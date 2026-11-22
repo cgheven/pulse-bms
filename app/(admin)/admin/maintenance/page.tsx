@@ -257,7 +257,7 @@ async function MaintenanceKpis() {
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <StatCard icon={Receipt} label="Total Amount" value={formatCurrency(monthTotal)} />
+      <StatCard icon={Receipt} label="Total" value={formatCurrency(monthTotal)} />
       <StatCard
         icon={Wallet}
         label="Collected"
@@ -265,16 +265,16 @@ async function MaintenanceKpis() {
         tone="success"
       />
       <StatCard
-        icon={Users}
-        label="Defaulters"
-        value={String(defaulterCount)}
-        tone={defaulterCount > 0 ? "danger" : "default"}
-      />
-      <StatCard
         icon={AlertCircle}
         label="Outstanding"
         value={formatCurrency(outstandingTotal)}
         tone={outstandingTotal > 0 ? "danger" : "default"}
+      />
+      <StatCard
+        icon={Users}
+        label="Defaulters"
+        value={String(defaulterCount)}
+        tone={defaulterCount > 0 ? "danger" : "default"}
       />
     </div>
   );

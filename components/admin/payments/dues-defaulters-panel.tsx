@@ -206,16 +206,6 @@ export function DuesDefaultersPanel({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {month && (
-            <Link
-              href="/admin/payments"
-              title="All payments"
-              className="inline-flex items-center gap-1.5 px-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">All payments</span>
-            </Link>
-          )}
           <Button
             variant="outline"
             size="sm"
@@ -472,10 +462,13 @@ function RowActions({
     : `https://wa.me/?text=${encodeURIComponent(waText)}`;
 
   const hasDue = row.amount_due > 0;
+  const hasReceipt = row.amount_paid > 0 && Boolean(row.receipt_payment_id);
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 justify-end">
-      {row.amount_paid > 0 && row.receipt_payment_id && (
+      {/* Inline Receipt only when there's nothing left to collect — on rows
+          with Remind/Pay it moves into the ⋯ menu to keep the row tidy. */}
+      {!hasDue && hasReceipt && (
         <Link
           href={`/admin/payments/${row.receipt_payment_id}/receipt`}
           target="_blank"
@@ -531,6 +524,18 @@ function RowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
+          {hasDue && hasReceipt && (
+            <DropdownMenuItem asChild className="gap-2">
+              <Link
+                href={`/admin/payments/${row.receipt_payment_id}/receipt`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Receipt className="h-4 w-4" />
+                View Receipt
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             className="gap-2"
             onSelect={(e) => {

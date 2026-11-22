@@ -77,22 +77,6 @@ export type PaymentRow = {
   payment_group_id?: string | null;
 };
 
-/**
- * "Jan 2026" — a billing month has no meaningful day, and rendering one
- * ("01-Jan-2026") is noise in a column whose whole job is to say which month
- * the money was for. Ranges especially: "01-Jan-2026 – 01-Feb-2027" reads
- * like two dates rather than a span of months.
- */
-function monthCell(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat("en-PK", {
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(d);
-}
-
 /** One physical collection: the rows it produced, folded into a single line. */
 type Collection = {
   /** The row the receipt belongs to — the one carrying receipt_no. */
@@ -227,41 +211,45 @@ export function PaymentsList({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Search full-width on mobile; the three filters share one row (and go
+          inline with the search on desktop via sm:contents). */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Input
           placeholder="Search receipt / flat / resident / ref..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="max-w-xs"
+          className="h-10 w-full sm:w-auto sm:max-w-xs"
         />
-        <Select value={monthFilter} onValueChange={setMonthFilter}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Month" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All months</SelectItem>
-            {months.map((m) => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={modeFilter} onValueChange={setModeFilter}>
-          <SelectTrigger className="w-56"><SelectValue placeholder="Mode" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All modes</SelectItem>
-            <SelectItem value="cash">Cash</SelectItem>
-            <SelectItem value="bank">Bank</SelectItem>
-            <SelectItem value={PAYMENT_MODE.CREDIT_CARRYFORWARD}>Credit carry-forward</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={catFilter} onValueChange={setCatFilter}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Category" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            <SelectItem value="maintenance">Maintenance</SelectItem>
-            <SelectItem value="entry_fee">Entry fee</SelectItem>
-            <SelectItem value="fine">Fine</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="grid grid-cols-3 gap-2 sm:contents">
+          <Select value={monthFilter} onValueChange={setMonthFilter}>
+            <SelectTrigger className="h-10 w-full sm:w-44"><SelectValue placeholder="Month" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All months</SelectItem>
+              {months.map((m) => (
+                <SelectItem key={m} value={m}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={modeFilter} onValueChange={setModeFilter}>
+            <SelectTrigger className="h-10 w-full sm:w-56"><SelectValue placeholder="Mode" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All modes</SelectItem>
+              <SelectItem value="cash">Cash</SelectItem>
+              <SelectItem value="bank">Bank</SelectItem>
+              <SelectItem value={PAYMENT_MODE.CREDIT_CARRYFORWARD}>Credit carry-forward</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={catFilter} onValueChange={setCatFilter}>
+            <SelectTrigger className="h-10 w-full sm:w-44"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="maintenance">Maintenance</SelectItem>
+              <SelectItem value="entry_fee">Entry fee</SelectItem>
+              <SelectItem value="fine">Fine</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Mobile card list — HMS-style: identity + meta on the left, amount on
@@ -274,16 +262,6 @@ export function PaymentsList({
         ) : (
           filtered.map((c) => {
             const p = c.anchor;
-            const forInvoice =
-              c.months.length > 1
-                ? `${monthCell(c.months[0])} – ${monthCell(c.months[c.months.length - 1])}`
-                : c.months.length === 1
-                  ? monthCell(c.months[0])
-                  : p.category === "entry_fee"
-                    ? "Entry fee"
-                    : c.rows.length > 0
-                      ? "Held on account"
-                      : null;
             return (
               <div key={p.id} className="rounded-xl border border-border bg-card p-3.5 shadow-lg">
                 <div className="flex items-start justify-between gap-3">
@@ -324,17 +302,9 @@ export function PaymentsList({
                     )}
                   </div>
 
-                  {/* Right: amount + what it was for */}
+                  {/* Right: the amount */}
                   <div className="shrink-0 text-right">
                     <p className="text-lg font-bold tabular-nums">{formatCurrency(c.total)}</p>
-                    {forInvoice && (
-                      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">{forInvoice}</p>
-                    )}
-                    {p.receipt_no != null && (
-                      <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/70">
-                        {formatReceiptNo(p.receipt_no)}
-                      </p>
-                    )}
                   </div>
                 </div>
 
@@ -384,11 +354,9 @@ export function PaymentsList({
               <tr className="text-left">
                 <th className="px-3 py-3 font-semibold">Flat</th>
                 <th className="px-3 py-3 font-semibold">Date</th>
-                <th className="px-3 py-3 font-semibold">For invoice</th>
                 <th className="px-3 py-3 font-semibold">Mode</th>
                 <th className="px-3 py-3 font-semibold text-right">Amount</th>
                 <th className="px-3 py-3 font-semibold">Received by</th>
-                <th className="px-3 py-3 font-semibold">Receipt #</th>
                 <th className="px-3 py-3" />
                 {canDelete && <th className="px-3 py-3" />}
               </tr>
@@ -396,7 +364,7 @@ export function PaymentsList({
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={canDelete ? 9 : 8} className="px-3 py-12 text-center text-muted-foreground">
+                  <td colSpan={canDelete ? 7 : 6} className="px-3 py-12 text-center text-muted-foreground">
                     No payments match the filters.
                   </td>
                 </tr>
@@ -429,27 +397,6 @@ export function PaymentsList({
                     )}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">{p.payment_date ? formatDate(p.payment_date) : "—"}</td>
-                  <td className="px-3 py-3 text-muted-foreground tabular-nums">
-                    {c.months.length > 1 ? (
-                      <div>
-                        <div>
-                          {monthCell(c.months[0])} – {monthCell(c.months[c.months.length - 1])}
-                        </div>
-                        <div className="text-xs text-muted-foreground/70 mt-0.5">
-                          {c.months.length} months
-                          {c.rows.length > c.months.length && " + advance"}
-                        </div>
-                      </div>
-                    ) : c.months.length === 1 ? (
-                      monthCell(c.months[0])
-                    ) : p.category === "entry_fee" ? (
-                      "Entry fee"
-                    ) : c.rows.length > 0 ? (
-                      "Held on account"
-                    ) : (
-                      "—"
-                    )}
-                  </td>
                   <td className="px-3 py-3">
                     {MODE_LABEL[p.payment_mode ?? ""] ?? p.payment_mode ?? "—"}
                   </td>
@@ -466,14 +413,6 @@ export function PaymentsList({
                       </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                    <div>{formatReceiptNo(p.receipt_no) || "—"}</div>
-                    {p.legacy_receipt_no && (
-                      <div className="text-[10px] text-muted-foreground/70 mt-0.5 font-normal normal-case">
-                        Legacy: {p.legacy_receipt_no}
-                      </div>
                     )}
                   </td>
                   <td className="px-3 py-3 text-right">
