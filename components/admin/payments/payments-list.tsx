@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Trash2, Receipt } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
@@ -264,7 +264,120 @@ export function PaymentsList({
         </Select>
       </div>
 
-      <div className="rounded-xl border border-border bg-card shadow-lg overflow-hidden">
+      {/* Mobile card list — HMS-style: identity + meta on the left, amount on
+          the right, actions below. The wide ledger table is desktop-only. */}
+      <div className="space-y-2.5 sm:hidden">
+        {filtered.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card px-3 py-10 text-center text-sm text-muted-foreground">
+            No payments match the filters.
+          </div>
+        ) : (
+          filtered.map((c) => {
+            const p = c.anchor;
+            const forInvoice =
+              c.months.length > 1
+                ? `${monthCell(c.months[0])} – ${monthCell(c.months[c.months.length - 1])}`
+                : c.months.length === 1
+                  ? monthCell(c.months[0])
+                  : p.category === "entry_fee"
+                    ? "Entry fee"
+                    : c.rows.length > 0
+                      ? "Held on account"
+                      : null;
+            return (
+              <div key={p.id} className="rounded-xl border border-border bg-card p-3.5 shadow-lg">
+                <div className="flex items-start justify-between gap-3">
+                  {/* Left: who + how/when */}
+                  <div className="min-w-0">
+                    <p className="text-base font-semibold leading-tight">
+                      {p.resident_name ?? `Flat ${p.flat_number}`}
+                    </p>
+                    {onFlatClick ? (
+                      <button
+                        type="button"
+                        onClick={() => onFlatClick({ id: p.flat_id, flat_number: p.flat_number })}
+                        className="mt-0.5 text-xs font-medium text-primary tabular-nums hover:underline"
+                      >
+                        Flat {p.flat_number}
+                      </button>
+                    ) : (
+                      <Link
+                        href={`/admin/flats/${p.flat_id}`}
+                        className="mt-0.5 block w-fit text-xs font-medium text-primary tabular-nums hover:underline"
+                      >
+                        Flat {p.flat_number}
+                      </Link>
+                    )}
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      {MODE_LABEL[p.payment_mode ?? ""] ?? p.payment_mode ?? "—"}
+                      {p.payment_date && (
+                        <>
+                          <span className="mx-1 text-muted-foreground/40">·</span>
+                          {formatDate(p.payment_date)}
+                        </>
+                      )}
+                    </p>
+                    {p.received_by_name && (
+                      <p className="text-xs text-muted-foreground">
+                        Received by {p.received_by_name}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Right: amount + what it was for */}
+                  <div className="shrink-0 text-right">
+                    <p className="text-lg font-bold tabular-nums">{formatCurrency(c.total)}</p>
+                    {forInvoice && (
+                      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">{forInvoice}</p>
+                    )}
+                    {p.receipt_no != null && (
+                      <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/70">
+                        {formatReceiptNo(p.receipt_no)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2.5">
+                  {p.receipt_no != null ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreview({
+                          id: p.id,
+                          href: `${receiptRoutePrefix}/${p.id}/receipt`,
+                          subtitle: `${p.resident_name ? `${p.resident_name} · ` : ""}Flat ${p.flat_number}`,
+                        })
+                      }
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    >
+                      <Receipt className="h-3.5 w-3.5" />
+                      Receipt
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => setConfirming(c)}
+                      disabled={pending}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-40"
+                      title="Reverse this payment"
+                      aria-label="Reverse payment"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop ledger table */}
+      <div className="hidden sm:block rounded-xl border border-border bg-card shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary border-b border-border">

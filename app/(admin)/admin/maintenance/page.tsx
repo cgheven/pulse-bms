@@ -257,7 +257,7 @@ async function MaintenanceKpis() {
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <StatCard icon={Receipt} label="Billed" value={formatCurrency(monthTotal)} />
+      <StatCard icon={Receipt} label="Total Amount" value={formatCurrency(monthTotal)} />
       <StatCard
         icon={Wallet}
         label="Collected"
