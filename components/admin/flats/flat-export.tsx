@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { friendlyErrorMessage } from "@/lib/toast-error";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { ReportColumn } from "@/lib/reports/types";
 import { downloadReportXlsx } from "@/lib/reports/xlsx-export";
 import { downloadReportPdf } from "@/lib/reports/pdf-export";
@@ -60,11 +60,13 @@ export function FlatExport({
   buildingName,
   invoices,
   payments,
+  className,
 }: {
   flatNumber: string;
   buildingName: string;
   invoices: InvoiceExportRow[];
   payments: PaymentExportRow[];
+  className?: string;
 }) {
   const { toast } = useToast();
   const base = `flat-${flatNumber}-${new Date().toISOString().slice(0, 10)}`;
@@ -88,7 +90,7 @@ export function FlatExport({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-2" disabled={noInvoices && noPayments}>
+        <Button variant="outline" className={cn("gap-2", className)} disabled={noInvoices && noPayments}>
           <Download className="w-4 h-4" />
           Export
         </Button>

@@ -141,12 +141,13 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
             {flat.ownership_type}
           </span>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:shrink-0">
           <FlatExport
             flatNumber={flat.flat_number}
             buildingName={buildingName}
             invoices={invoiceRows}
             payments={paymentRows}
+            className="w-full sm:w-auto"
           />
           <FlatFormDialog
             initial={{
@@ -160,7 +161,7 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
               notes: flat.notes,
             }}
             trigger={
-              <Button variant="outline">
+              <Button variant="outline" className="w-full sm:w-auto">
                 <Pencil className="w-4 h-4" />
                 Edit Flat
               </Button>
@@ -171,15 +172,18 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
+          compact
           label="Floor / Block"
           value={`${flat.floor != null ? `Floor ${flat.floor}` : "—"}${flat.block ? ` · ${flat.block}` : ""}`}
         />
         <StatCard
+          compact
           label="Size"
           value={flat.size_sqft ? `${flat.size_sqft} sqft` : "—"}
         />
         <StatCard
-          label="Monthly fee"
+          compact
+          label="Maintenance"
           value={
             flat.monthly_fee != null
               ? formatCurrency(Number(flat.monthly_fee))
@@ -187,6 +191,7 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
           }
         />
         <StatCard
+          compact
           label="Outstanding"
           tone={Number(flat.outstanding_dues ?? 0) > 0 ? "danger" : "success"}
           value={formatLakh(Number(flat.outstanding_dues ?? 0))}
@@ -197,14 +202,16 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {paidThrough && (
             <StatCard
+              compact
               label="Paid through"
               tone="success"
               value={formatMonthLabel(paidThrough.slice(0, 7))}
-              sub="Every month up to here is settled."
+              sub="All settled up to here"
             />
           )}
           {thisMonth && (
             <StatCard
+              compact
               label="This month"
               value={
                 <InvoiceStatusPill
@@ -218,6 +225,7 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
           )}
           {openCredits > 0 && (
             <StatCard
+              compact
               label="Advance held"
               tone="success"
               value={formatCurrency(openCredits)}
@@ -234,9 +242,13 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
             {residents.map((r) => (
               <div key={r.id} className="py-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-medium truncate">
-                    {r.full_name}{" "}
-                    {r.is_primary && <span className="text-xs text-primary">★ primary</span>}
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium truncate">{r.full_name}</span>
+                    {r.is_primary && (
+                      <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                        Primary
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     <span className="capitalize">{r.relationship}</span>
@@ -261,7 +273,49 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
       <div className="rounded-xl border border-border bg-card p-4">
         <h3 className="mb-3 text-sm">Last 12 Invoices</h3>
         {invoiceRows.length ? (
-          <div className="overflow-x-auto">
+          <>
+            {/* Mobile cards */}
+            <div className="space-y-2 sm:hidden">
+              {invoiceRows.map((inv) => (
+                <div key={inv.id} className="rounded-lg border border-border bg-background/40 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold tabular-nums">{formatDate(inv.month)}</p>
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider",
+                        inv.status === "Cleared" && "status-paid",
+                        inv.status === "Waived" && "status-waived",
+                        inv.status === "Due" && "status-overdue",
+                      )}
+                    >
+                      {inv.status}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{inv.invoiceNumber}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                    <span>
+                      <span className="text-muted-foreground">Amount </span>
+                      <span className="font-medium tabular-nums">{formatCurrency(inv.amount)}</span>
+                    </span>
+                    <span>
+                      <span className="text-muted-foreground">Paid </span>
+                      <span className="tabular-nums">{formatCurrency(inv.paid)}</span>
+                    </span>
+                    {inv.balance > 0 && (
+                      <span>
+                        <span className="text-muted-foreground">Due </span>
+                        <span className="font-semibold tabular-nums text-[hsl(350_80%_68%)]">
+                          {formatCurrency(inv.balance)}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left border-b border-border text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -305,43 +359,13 @@ export default async function FlatDetailPage(props: { params: Promise<{ id: stri
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">No invoices yet.</p>
         )}
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm">Payment history</h3>
-        {paymentRows.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left border-b border-border text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  <th className="py-2 pr-3">Date</th>
-                  <th className="py-2 pr-3">Receipt #</th>
-                  <th className="py-2 pr-3">Mode</th>
-                  <th className="py-2 pr-3">Category</th>
-                  <th className="py-2 text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paymentRows.map((p, i) => (
-                  <tr key={i} className="border-b border-border last:border-0">
-                    <td className="py-2 pr-3 whitespace-nowrap tabular-nums">{p.date ? formatDate(p.date) : "—"}</td>
-                    <td className="py-2 pr-3 font-mono text-xs">{p.receipt || "—"}</td>
-                    <td className="py-2 pr-3 capitalize">{p.mode}</td>
-                    <td className="py-2 pr-3 capitalize">{p.category}</td>
-                    <td className="py-2 text-right font-semibold tabular-nums">{formatCurrency(p.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No payments recorded.</p>
-        )}
-      </div>
 
       {flat.notes && (
         <div className="rounded-xl border border-border bg-card p-4">

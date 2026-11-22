@@ -94,6 +94,8 @@ export type StatCardProps = {
    * clean white figure, matching HMS.
    */
   vividValue?: boolean;
+  /** Denser tile for detail pages: tighter padding and a smaller value. */
+  compact?: boolean;
   /** Extra grid/positioning classes (e.g. `col-span-2`). */
   className?: string;
 };
@@ -109,6 +111,7 @@ export function StatCard({
   hero,
   glow,
   vividValue,
+  compact,
   className,
 }: StatCardProps) {
   const highlight = hero || glow;
@@ -141,7 +144,7 @@ export function StatCard({
       <div
         className={cn(
           "mt-2.5 font-bold tracking-tight tabular-nums leading-none",
-          hero ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl",
+          compact ? "text-base sm:text-lg" : hero ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl",
           vividValue ? t.value : "text-foreground",
         )}
       >
@@ -180,7 +183,7 @@ export function StatCard({
   );
 
   const surface = cn(
-    "rounded-2xl border bg-card p-4 sm:p-5 transition-colors",
+    compact ? "rounded-xl border bg-card p-3.5 transition-colors" : "rounded-2xl border bg-card p-4 sm:p-5 transition-colors",
     highlight ? "border-primary/30" : "border-border",
     href && cn("block", t.hover, "hover:bg-secondary/20"),
     className,
