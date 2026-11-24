@@ -67,8 +67,13 @@ export async function updateSession(request: NextRequest) {
   // fetch, so a redirect to /login here silently kills every invoice we send.
   // Tight match: only /invoice/* (not /invoices or similar).
   const isInvoiceShare = pathname.startsWith("/invoice/");
+  // Crawl/SEO endpoints: robots.txt and sitemap.xml are generated metadata routes,
+  // llms.txt is a static public file. Search engines and AI crawlers fetch these
+  // with no cookies — a redirect to /login here would hide the whole site.
+  const isSeo =
+    pathname === "/robots.txt" || pathname === "/sitemap.xml" || pathname === "/llms.txt";
   const isPublic =
-    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword || isLanding || isOgImage || isInvoiceShare;
+    isAuthRoute || pathname.startsWith("/api/") || isFind || isPricing || isRegister || isResetPassword || isLanding || isOgImage || isInvoiceShare || isSeo;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

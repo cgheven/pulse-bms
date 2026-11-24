@@ -91,6 +91,54 @@ export async function submitInquiry(input: InquiryInput): Promise<void> {
   }
 }
 
+export type ContactInput = {
+  name: string;
+  email: string;
+  phone?: string;
+  message: string;
+};
+
+/**
+ * General "Contact us" message from the public site. Reuses the same
+ * bms_website_inquiries inbox (anon INSERT policy) that the super-admin already
+ * reviews, flagged with package = "contact" and num_flats = 0 so it reads as a
+ * contact message rather than a pricing lead. Required building columns are
+ * filled with a placeholder since a contact message has no building context.
+ */
+export async function submitContact(input: ContactInput): Promise<void> {
+  const name    = input.name?.trim()    ?? "";
+  const email   = input.email?.trim()   ?? "";
+  const phone   = input.phone?.trim()   ?? "";
+  const message = input.message?.trim() ?? "";
+
+  if (name.length < 2 || name.length > 100)
+    throw new Error("Name must be between 2 and 100 characters.");
+  if (!EMAIL_RE.test(email) || email.length > 254)
+    throw new Error("Please enter a valid email address.");
+  if (phone && !PHONE_RE.test(phone))
+    throw new Error("Please enter a valid phone number (digits, spaces, +, - only).");
+  if (message.length < 5 || message.length > 1000)
+    throw new Error("Message must be between 5 and 1000 characters.");
+
+  const anon = createAnonClient();
+
+  const { error } = await anon.from("bms_website_inquiries").insert({
+    president_name: name,
+    building_name:  "—",
+    num_flats:      0,
+    package:        "contact",
+    phone:          phone || "—",
+    email,
+    message,
+    status:         "new",
+  });
+
+  if (error) {
+    console.error("[submitContact] insert failed:", error.message);
+    throw new Error("Unable to send your message. Please try again later.");
+  }
+}
+
 export async function updateInquiryStatus(
   id: string,
   status: "new" | "contacted" | "converted",

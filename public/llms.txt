@@ -1,0 +1,34 @@
+# Pulse BMS
+
+> Building management software for apartment buildings and housing societies in Pakistan. Pulse BMS brings maintenance billing, payment collection, resident and flat records, staff payroll, expenses and transparent building finances into one platform.
+
+Pulse BMS is part of the Pulse suite (https://www.yourpulse.io). It is built for Pakistani apartment buildings and societies: amounts in PKR, CNIC and +92 phone fields, WhatsApp-first reminders, and workflows for owners, tenants, unions and guards.
+
+## Core features
+- Maintenance billing & collection: generate a monthly invoice for every flat; track paid, partial and overdue; send WhatsApp reminders; export to PDF or Excel.
+- Payments & receipts: record payments and auto-generate receipts with a clean, searchable ledger.
+- Residents, flats & vehicles: owners and tenants with CNIC, phone, move-in date and portal logins; registered vehicles.
+- Staff & payroll: attendance and salaries for chowkidars, lift operators and cleaning staff.
+- Expenses, bills & finances: log every expense and utility bill, keep cash vs bank straight, and show residents transparent building finances.
+- Union & governance: proposals, digital voting, meetings and building notices.
+- Reports & exports: month-by-month finance and dues reports to PDF or Excel.
+- Built-in marketplace: residents list flats for rent or sale and offer local services on a public directory.
+
+## Roles
+- Admin: manage flats, residents, invoices, staff and payroll with a full audit log.
+- Union: create and vote on proposals, schedule meetings, approve expenses, post notices.
+- Resident: view dues and receipts, see building finances, log complaints, vote.
+- Guard: verify resident vehicles, scan visitor passes, see expected visitors.
+
+## Key pages
+- Home: https://building.yourpulse.io/
+- Pricing: https://building.yourpulse.io/pricing
+- Public listings directory: https://building.yourpulse.io/find
+- Sign up (free): https://building.yourpulse.io/register
+- Log in: https://building.yourpulse.io/login
+
+## Getting started
+Free to start, no credit card required. Import existing flats and residents from an Excel template and go live in under 15 minutes. Karachi-based onboarding support.
+
+## Contact
+WhatsApp: +92 332 7857333

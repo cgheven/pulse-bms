@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PACKAGES, getPackageForFlats, type PackageId } from "@/lib/packages";
+import { getPackageForFlats, type PackageId } from "@/lib/packages";
 import { submitInquiry } from "@/app/actions/website-inquiry";
 
 interface InquiryFormProps {
@@ -75,6 +75,11 @@ export function InquiryForm({ dark = false }: InquiryFormProps) {
     "block text-sm font-semibold",
     d("text-foreground", "text-gray-700"),
   );
+
+  // One simple rate, per flat — matches the pricing page.
+  const PER_FLAT_MONTHLY = 50;
+  const PER_FLAT_ANNUAL = 480; // vs 600 monthly → save 20%
+  const flatsNum = Math.max(0, parseInt(numFlats, 10) || 0);
 
   if (success) {
     return (
@@ -206,55 +211,46 @@ export function InquiryForm({ dark = false }: InquiryFormProps) {
           className={inputCls}
           placeholder="e.g. 40"
         />
-        {numFlats && !isNaN(parseInt(numFlats, 10)) && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Package auto-selected based on flat count — you can change it below.
-          </p>
-        )}
       </div>
 
-      {/* Package selection */}
+      {/* Your estimated cost — single flat rate, PKR 50/flat/mo (480/yr) */}
       <div className="space-y-2">
         <p className={cn("text-sm font-semibold", d("text-foreground", "text-gray-700"))}>
-          Package <span className="text-red-500">*</span>
+          Your estimated cost
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {PACKAGES.map((pkg) => {
-            const isSelected = selectedPackage === pkg.id;
-            return (
-              <button
-                key={pkg.id}
-                type="button"
-                onClick={() => setSelectedPackage(pkg.id)}
-                className={cn(
-                  "relative text-left rounded-xl border-2 p-4 transition-all duration-150 focus:outline-none",
-                  isSelected
-                    ? d(
-                        "border-primary bg-primary/10",
-                        "border-primary bg-primary/5 shadow-sm",
-                      )
-                    : d(
-                        "border-sidebar-border bg-background hover:border-primary/40",
-                        "border-gray-200 bg-white hover:border-gray-300",
-                      ),
-                )}
-              >
-                <p className={cn("font-bold text-sm mb-1", isSelected ? "text-primary" : d("text-foreground", "text-gray-900"))}>
-                  {pkg.label}
-                </p>
-                <p className={cn("text-xs font-semibold", isSelected ? "text-primary/80" : "text-muted-foreground")}>
-                  {pkg.priceLabel}
-                </p>
-                {/* Radio dot */}
-                <div className={cn(
-                  "absolute top-3 right-3 w-3.5 h-3.5 rounded-full border-2 transition-all",
-                  isSelected ? "border-primary bg-primary" : d("border-muted-foreground/40 bg-background", "border-gray-300 bg-white"),
-                )}>
-                  {isSelected && <div className="absolute inset-[2px] rounded-full bg-card" />}
-                </div>
-              </button>
-            );
-          })}
+        <div className={cn(
+          "rounded-xl border p-4",
+          d("bg-background border-sidebar-border", "bg-gray-50 border-gray-200"),
+        )}>
+          {flatsNum > 0 ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className={cn("text-sm", d("text-muted-foreground", "text-gray-600"))}>
+                  {flatsNum.toLocaleString("en-PK")} flats × PKR {PER_FLAT_MONTHLY}/flat
+                </span>
+                <span className={cn("text-lg font-bold tabular-nums", d("text-foreground", "text-gray-900"))}>
+                  PKR {(flatsNum * PER_FLAT_MONTHLY).toLocaleString("en-PK")}
+                  <span className="text-sm font-medium text-muted-foreground"> / mo</span>
+                </span>
+              </div>
+              <div className={cn(
+                "flex items-center justify-between gap-3 pt-3 border-t",
+                d("border-sidebar-border", "border-gray-200"),
+              )}>
+                <span className={cn("text-sm", d("text-muted-foreground", "text-gray-600"))}>
+                  Billed yearly · save 20%
+                </span>
+                <span className="text-lg font-bold tabular-nums text-primary">
+                  PKR {(flatsNum * PER_FLAT_ANNUAL).toLocaleString("en-PK")}
+                  <span className="text-sm font-medium text-primary/70"> / yr</span>
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className={cn("text-sm", d("text-muted-foreground", "text-gray-500"))}>
+              Enter your number of flats above to see your price — just PKR {PER_FLAT_MONTHLY} per flat each month, every feature included.
+            </p>
+          )}
         </div>
       </div>
 
