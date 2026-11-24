@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,10 +26,30 @@ const TITLE = "Building Management Software for Apartments & Societies | Pulse B
 const DESCRIPTION =
   "Pulse BMS is building management software for apartment buildings and housing societies in Pakistan — maintenance billing, payment collection, residents, staff, expenses and transparent building finances in one platform.";
 
-export const metadata: Metadata = {
+// Resolve the public origin from the actual request host so OG/canonical URLs
+// (and therefore the WhatsApp/Slack link-preview image) always point at the
+// domain that served the page — e.g. https://building.yourpulse.io — regardless
+// of the NEXT_PUBLIC_SITE_URL env value. Falls back to SITE_URL off-request.
+async function resolveOrigin(): Promise<string> {
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host");
+    if (host) {
+      const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+      return `${proto}://${host}`;
+    }
+  } catch {
+    // headers() unavailable (e.g. static context) — fall back below.
+  }
+  return SITE_URL;
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const origin = await resolveOrigin();
+  return {
   // Required for link previews: Next.js resolves relative OG image paths
   // against this, and WhatsApp/Slack reject anything but absolute URLs.
-  metadataBase: new URL(SITE_URL),
+  metadataBase: new URL(origin),
   title: {
     default: TITLE,
     template: "%s | Pulse BMS",
@@ -48,7 +69,7 @@ export const metadata: Metadata = {
     "Pulse BMS",
   ],
   authors: [{ name: "Pulse BMS" }],
-  alternates: { canonical: SITE_URL },
+  alternates: { canonical: origin },
   icons: {
     icon: "/logo.jpeg",
     apple: "/logo.jpeg",
@@ -62,7 +83,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "Pulse BMS",
     locale: "en_PK",
-    url: SITE_URL,
+    url: origin,
     title: TITLE,
     description: DESCRIPTION,
   },
@@ -71,7 +92,8 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
   },
-};
+  };
+}
 
 export const viewport: Viewport = {
   width: "device-width",

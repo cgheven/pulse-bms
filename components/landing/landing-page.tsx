@@ -242,7 +242,10 @@ export function LandingPage({ appHref = null }: { appHref?: string | null }) {
         .wrap { width: 100%; max-width: 1200px; margin: 0 auto; padding-left: 20px; padding-right: 20px; }
         @media (min-width: 640px) { .wrap { padding-left: 24px; padding-right: 24px; } }
         .hero-grid { display: grid; grid-template-columns: 1fr; gap: 40px; align-items: center; }
-        @media (min-width: 1024px) { .hero-grid { grid-template-columns: 1fr 1.25fr; gap: 56px; } }
+        @media (min-width: 1024px) { .hero-grid { grid-template-columns: 1fr 1.45fr; gap: 44px; } }
+        .hero-shot { margin-right: 0; }
+        @media (min-width: 1024px) { .hero-shot { margin-right: -28px; } }
+        @media (min-width: 1280px) { .hero-shot { margin-right: -72px; } }
         .show-grid { display: grid; grid-template-columns: 1fr; gap: 32px; align-items: center; }
         @media (min-width: 900px) { .show-grid { grid-template-columns: 1fr 1.2fr; gap: 56px; } .show-grid.flip .show-copy { order: 2; } }
         .feat-grid { display: grid; grid-template-columns: 1fr; gap: 1px; background: ${C.border}; border: 1px solid ${C.border}; border-radius: 18px; overflow: hidden; }
@@ -338,12 +341,12 @@ export function LandingPage({ appHref = null }: { appHref?: string | null }) {
             </p>
           </div>
 
-          <Reveal delay={120}>
+          <Reveal delay={120} className="hero-shot">
             <ProductShot
               src={SHOTS.dashboard.src} w={SHOTS.dashboard.w} h={SHOTS.dashboard.h}
               label="building.yourpulse.io — Dashboard"
               alt="Pulse BMS admin dashboard showing cash available, maintenance collection, expenses and a revenue versus expenses chart"
-              priority sizes="(max-width: 1023px) calc(100vw - 2rem), 680px"
+              priority sizes="(max-width: 1023px) calc(100vw - 2rem), (max-width: 1279px) 55vw, 820px"
             />
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 18px", marginTop: 16, justifyContent: "center" }}>
               {["Collections", "Expenses", "Defaulters", "Bills", "Reports"].map((t) => (

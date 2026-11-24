@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Fraunces, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
-import { ArrowRight, Calculator, Check } from "lucide-react";
+import { ArrowRight, Calculator, Check, Sparkles } from "lucide-react";
 import { ContactForm } from "@/components/public/contact-form";
 
 // ─── Typography — shared PulseHub brand system ───────────────────────────────
@@ -44,6 +44,11 @@ const PER_FLAT_ANNUAL = 480;        // PKR / flat / year  (vs 600 monthly → 20
 const ANNUAL_MONTHLY_EQUIV = Math.round(PER_FLAT_ANNUAL / 12); // 40 / flat / month
 const SAVE_PER_FLAT_YEAR = PER_FLAT_MONTHLY * 12 - PER_FLAT_ANNUAL; // 120 / flat / year
 const pkr = (n: number) => `PKR ${n.toLocaleString("en-PK")}`;
+
+// ── Lifetime deal — limited founding offer ───────────────────────────────────
+// TODO: confirm the real one-time price with the client. Placeholder below.
+const LIFETIME_PRICE = 99999; // one-time, per building
+const LIFETIME_SLOTS = 10;
 
 const ALL_FEATURES = [
   "One-tap WhatsApp reminders to defaulters",
@@ -171,6 +176,7 @@ function PricingCard({ annual }: { annual: boolean }) {
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [interest, setInterest] = useState<"general" | "lifetime">("general");
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", fn, { passive: true });
@@ -192,6 +198,9 @@ export default function PricingPage() {
         .feature-row { display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid ${"oklch(0.90 0.008 70)"}; }
         .feature-row:last-child { border-bottom:none; }
         @media (min-width:640px){ .feature-row { padding:15px 32px; } .feature-row:nth-child(odd){ border-right:1px solid ${"oklch(0.90 0.008 70)"}; } .feature-row:nth-last-child(-n+2){ border-bottom:none; } }
+        .lifetime-grid { display:grid; grid-template-columns:1fr; }
+        .lifetime-price { border-top:1px solid ${"oklch(1 0 0 / 0.12)"}; }
+        @media (min-width:860px){ .lifetime-grid { grid-template-columns:1.5fr 1fr; } .lifetime-price { border-top:0; border-left:1px solid ${"oklch(1 0 0 / 0.12)"}; } }
         .nav-links { display:none; }
         @media (min-width:880px){ .nav-links { display:flex; } }
         .login-link { display:none; }
@@ -278,9 +287,78 @@ export default function PricingPage() {
       </section>
 
       {/* Single pricing card */}
-      <section style={{ padding: "0 0 56px" }}>
+      <section style={{ padding: "0 0 36px" }}>
         <div className="wrap">
           <PricingCard annual={annual} />
+        </div>
+      </section>
+
+      {/* Lifetime deal — limited founding slots */}
+      <section style={{ padding: "0 0 56px" }}>
+        <div className="wrap">
+          <div style={{ borderRadius: 24, background: C.ink, color: C.inkText, overflow: "hidden", border: `1px solid ${C.primaryBorder}`, boxShadow: "0 32px 80px -36px rgba(40,24,10,0.5)" }}>
+            <div className="lifetime-grid">
+              {/* Left — offer */}
+              <div style={{ padding: "clamp(28px, 4.5vw, 44px)" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 12px", borderRadius: 20, background: "oklch(0.80 0.15 68 / 0.14)", border: `1px solid oklch(0.80 0.15 68 / 0.30)`, fontFamily: MONO, fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: C.inkAccent }}>
+                  <Sparkles style={{ width: 13, height: 13 }} /> Limited · Lifetime deal
+                </span>
+                <h2 style={{ fontFamily: SERIF, fontSize: "clamp(1.7rem, 3.2vw, 2.5rem)", fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.08, margin: "16px 0 12px" }}>
+                  Pay once. Use Pulse forever.
+                </h2>
+                <p style={{ fontSize: 16, lineHeight: 1.7, color: C.inkMuted, margin: "0 0 20px", maxWidth: 440 }}>
+                  A one-time payment for lifetime access to Pulse BMS — every feature, every future
+                  update, no monthly or yearly fees ever. Offered to our first founding buildings only.
+                </p>
+                <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 18px" }}>
+                  {["Lifetime access — no renewals", "All 10 features included", "All future updates, free", "Priority onboarding & support"].map((p) => (
+                    <li key={p} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5, color: C.inkText }}>
+                      <Check style={{ width: 15, height: 15, color: C.inkAccent, flexShrink: 0, marginTop: 1 }} /> {p}
+                    </li>
+                  ))}
+                </ul>
+                {/* Scarcity */}
+                <div>
+                  <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
+                    {Array.from({ length: LIFETIME_SLOTS }).map((_, i) => (
+                      <span key={i} style={{ flex: 1, height: 6, borderRadius: 3, background: C.inkAccent, opacity: 0.85 }} />
+                    ))}
+                  </div>
+                  <p style={{ fontFamily: MONO, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", color: C.inkAccent, margin: 0 }}>
+                    Only {LIFETIME_SLOTS} slots available
+                  </p>
+                </div>
+              </div>
+
+              {/* Right — price + CTA */}
+              <div className="lifetime-price" style={{ padding: "clamp(28px, 4.5vw, 44px)", background: "oklch(1 0 0 / 0.04)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <p style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, color: C.inkFaint, letterSpacing: "0.16em", textTransform: "uppercase", margin: "0 0 10px" }}>
+                  One-time payment
+                </p>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+                  <span style={{ fontSize: 16, color: C.inkMuted, paddingBottom: 12, fontWeight: 500 }}>PKR</span>
+                  <span style={{ fontFamily: SERIF, fontSize: "clamp(2.8rem, 7vw, 4rem)", fontWeight: 500, color: C.inkAccent, letterSpacing: "-0.02em", lineHeight: 0.95, fontVariantNumeric: "tabular-nums" }}>
+                    {LIFETIME_PRICE.toLocaleString("en-PK")}
+                  </span>
+                </div>
+                <p style={{ fontSize: 14, color: C.inkMuted, margin: "10px 0 22px" }}>
+                  per building · forever · no recurring charges
+                </p>
+                <a
+                  href="#contact"
+                  onClick={() => setInterest("lifetime")}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "14px 0", borderRadius: 12, fontSize: 15, fontWeight: 600, textDecoration: "none", background: C.primary, color: "#fff", boxShadow: "0 2px 12px oklch(0.54 0.167 45 / 0.35)", transition: "background 0.15s" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = C.primaryHover; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = C.primary; }}
+                >
+                  Claim your slot <ArrowRight style={{ width: 16, height: 16 }} />
+                </a>
+                <p style={{ fontFamily: MONO, fontSize: 11, textAlign: "center", color: C.inkFaint, margin: "14px 0 0", letterSpacing: "0.04em" }}>
+                  Once the {LIFETIME_SLOTS} slots are gone, they&apos;re gone
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -319,13 +397,19 @@ export default function PricingPage() {
       <section id="contact" style={{ padding: "0 0 88px" }}>
         <div className="wrap" style={{ maxWidth: 640 }}>
           <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <p style={{ fontFamily: MONO, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.2em", color: C.primary, margin: "0 0 14px" }}>Contact us</p>
-            <h2 style={{ fontFamily: SERIF, fontSize: "clamp(1.6rem, 3vw, 2.4rem)", fontWeight: 500, letterSpacing: "-0.02em", color: C.fg, margin: "0 0 12px" }}>Have a question? Get in touch.</h2>
+            <p style={{ fontFamily: MONO, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.2em", color: C.primary, margin: "0 0 14px" }}>
+              {interest === "lifetime" ? "Lifetime deal" : "Contact us"}
+            </p>
+            <h2 style={{ fontFamily: SERIF, fontSize: "clamp(1.6rem, 3vw, 2.4rem)", fontWeight: 500, letterSpacing: "-0.02em", color: C.fg, margin: "0 0 12px" }}>
+              {interest === "lifetime" ? "Claim your founding lifetime slot." : "Have a question? Get in touch."}
+            </h2>
             <p style={{ fontSize: 16, color: C.fgSoft, margin: "0 auto", maxWidth: 460, lineHeight: 1.6 }}>
-              Ready to start? <Link href="/register" style={{ color: C.primary, fontWeight: 600, textDecoration: "none" }}>Sign up free</Link> — or send us a message and we&apos;ll get back to you.
+              {interest === "lifetime"
+                ? "Tell us about your building and we'll confirm one of the 10 lifetime slots."
+                : <>Ready to start? <Link href="/register" style={{ color: C.primary, fontWeight: 600, textDecoration: "none" }}>Sign up free</Link> — or send us a message and we&apos;ll get back to you.</>}
             </p>
           </div>
-          <ContactForm />
+          <ContactForm interest={interest} onInterestChange={setInterest} />
         </div>
       </section>
 

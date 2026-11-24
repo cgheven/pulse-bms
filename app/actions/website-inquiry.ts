@@ -95,41 +95,85 @@ export type ContactInput = {
   name: string;
   email: string;
   phone?: string;
-  message: string;
+  message?: string;
+  /** "general" = a plain contact message; "lifetime" = claiming a founding lifetime slot. */
+  interest?: "general" | "lifetime";
+  // Lifetime-deal building details (required when interest === "lifetime").
+  building_name?: string;
+  num_flats?: number;
+  position?: string;
+  contact_timing?: string;
 };
 
 /**
- * General "Contact us" message from the public site. Reuses the same
- * bms_website_inquiries inbox (anon INSERT policy) that the super-admin already
- * reviews, flagged with package = "contact" and num_flats = 0 so it reads as a
- * contact message rather than a pricing lead. Required building columns are
- * filled with a placeholder since a contact message has no building context.
+ * Public "Contact us" message. Reuses the same bms_website_inquiries inbox
+ * (anon INSERT policy) the super-admin already reviews. A general message is
+ * flagged package = "contact"; a lifetime-deal enquiry is package = "lifetime"
+ * and carries the building name, flat count, the sender's position and their
+ * preferred contact time.
  */
 export async function submitContact(input: ContactInput): Promise<void> {
-  const name    = input.name?.trim()    ?? "";
-  const email   = input.email?.trim()   ?? "";
-  const phone   = input.phone?.trim()   ?? "";
-  const message = input.message?.trim() ?? "";
+  const interest = input.interest === "lifetime" ? "lifetime" : "general";
+  const lifetime = interest === "lifetime";
 
+  const name          = input.name?.trim()           ?? "";
+  const email         = input.email?.trim()          ?? "";
+  const phone         = input.phone?.trim()           ?? "";
+  const message       = input.message?.trim()         ?? "";
+  const buildingName  = input.building_name?.trim()   ?? "";
+  const position      = input.position?.trim()        ?? "";
+  const contactTiming = input.contact_timing?.trim()  ?? "";
+  const numFlats      = Number.isFinite(input.num_flats) ? Math.floor(input.num_flats as number) : 0;
+
+  // ── Always required ──
   if (name.length < 2 || name.length > 100)
     throw new Error("Name must be between 2 and 100 characters.");
   if (!EMAIL_RE.test(email) || email.length > 254)
     throw new Error("Please enter a valid email address.");
   if (phone && !PHONE_RE.test(phone))
     throw new Error("Please enter a valid phone number (digits, spaces, +, - only).");
-  if (message.length < 5 || message.length > 1000)
-    throw new Error("Message must be between 5 and 1000 characters.");
+  if (position && position.length > 100)
+    throw new Error("Position is too long.");
+  if (contactTiming && contactTiming.length > 100)
+    throw new Error("Contact time is too long.");
+  if (message && message.length > 1000)
+    throw new Error("Message must be 1000 characters or fewer.");
+
+  if (lifetime) {
+    // ── Lifetime deal: building details required ──
+    if (buildingName.length < 2 || buildingName.length > 100)
+      throw new Error("Please enter your building / society name.");
+    if (!Number.isInteger(numFlats) || numFlats < 1 || numFlats > 2000)
+      throw new Error("Please enter the number of flats (1–2000).");
+    if (!PHONE_RE.test(phone))
+      throw new Error("Please enter a valid contact number.");
+  } else {
+    // ── General enquiry: a message is required ──
+    if (message.length < 5)
+      throw new Error("Message must be at least 5 characters.");
+  }
+
+  // Compose the message with any extra context so nothing is lost in the inbox.
+  const composed = lifetime
+    ? [
+        "[Lifetime deal enquiry]",
+        position ? `Position: ${position}.` : "",
+        contactTiming ? `Best time to reach: ${contactTiming}.` : "",
+        message,
+      ].filter(Boolean).join(" ")
+    : message;
 
   const anon = createAnonClient();
 
   const { error } = await anon.from("bms_website_inquiries").insert({
     president_name: name,
-    building_name:  "—",
-    num_flats:      0,
-    package:        "contact",
+    building_name:  lifetime ? buildingName : "—",
+    num_flats:      lifetime ? numFlats : 0,
+    package:        lifetime ? "lifetime" : "contact",
     phone:          phone || "—",
     email,
-    message,
+    contact_timing: contactTiming || null,
+    message:        composed || null,
     status:         "new",
   });
 
