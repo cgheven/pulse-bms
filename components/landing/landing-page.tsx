@@ -193,9 +193,11 @@ function PrimaryBtn({ href, children, large = false }: { href: string; children:
 }
 
 function GhostBtn({ href, children, large = false }: { href: string; children: React.ReactNode; large?: boolean }) {
+  const external = /^https?:/.test(href);
   return (
     <a
       href={href}
+      {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       style={{
         display: "inline-flex", alignItems: "center", gap: 7,
         fontSize: large ? 15 : 14, fontWeight: 600,
@@ -329,7 +331,7 @@ export function LandingPage({ appHref = null }: { appHref?: string | null }) {
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
               <PrimaryBtn href="/register" large>Start free trial <ArrowRight style={{ width: 16, height: 16 }} /></PrimaryBtn>
-              <GhostBtn href="#tour" large>See it in action <ChevronRight style={{ width: 15, height: 15 }} /></GhostBtn>
+              <GhostBtn href="https://youtu.be/Rowmc-JO49M?list=PLXMdsGVuByPE" large>See it in action <ChevronRight style={{ width: 15, height: 15 }} /></GhostBtn>
             </div>
             <p style={{ fontFamily: MONO, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.1em", color: C.fgFaint, margin: 0 }}>
               Free to start · No card required · Live in 15 minutes
